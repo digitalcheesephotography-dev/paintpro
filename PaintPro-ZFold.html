@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="theme-color" content="#0d1117"/>
+<title>PaintPro — Ingersoll Painting</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --blue:   #2baae1;
+  --green:  #2e8b1e;
+  --red:    #c0392b;
+  --amber:  #f59e0b;
+  --dark:   #0d1117;
+  --panel:  #161b22;
+  --card:   #1a2030;
+  --border: #252c3a;
+  --text:   #e2e8f0;
+  --muted:  #6b7a8d;
+  --font:   'Barlow Condensed','Arial Narrow',sans-serif;
+  --head:   'Bebas Neue',sans-serif;
+  --tap:    54px;
+  --r:      12px;
+  --gap:    12px;
+  --safe-t: env(safe-area-inset-top,0px);
+  --safe-b: env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{height:100%;-webkit-tap-highlight-color:transparent}
+body{background:var(--dark);color:var(--text);font-family:var(--font);font-size:16px;min-height:100%;padding-bottom:calc(148px + var(--safe-b))}
+
+/* HEADER */
+header{background:#0a0e14;border-bottom:2px solid var(--blue);padding:calc(10px + var(--safe-t)) 18px 10px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
+.logo .brand{font-family:var(--head);font-size:22px;letter-spacing:2px;color:var(--blue);line-height:1}
+.logo .sub{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-top:1px}
+header .contact{font-size:11px;color:var(--muted);text-align:right;line-height:1.5}
+
+/* HTTPS WARNING */
+#https-warn{display:none;background:#2d1a00;border-bottom:2px solid var(--amber);padding:14px 16px}
+#https-warn.show{display:block}
+.warn-title{color:var(--amber);font-size:15px;font-weight:700;margin-bottom:6px}
+.warn-body{font-size:13px;color:#c9a050;line-height:1.6}
+.warn-body code{background:#1a1000;padding:1px 5px;border-radius:3px}
+.warn-steps{margin-top:8px;padding-left:16px;font-size:13px;color:#c9a050;line-height:1.8}
+
+/* MAIN */
+main{padding:14px 14px 0;max-width:100%}
+
+/* JOB CARD */
+.job-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:var(--gap)}
+.job-card .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* FORM */
+.field{display:flex;flex-direction:column;gap:5px}
+.field>span{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+input[type="text"],input[type="number"],select,textarea{background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:17px;padding:0 12px;height:var(--tap);width:100%;outline:none;-webkit-appearance:none;appearance:none;transition:border-color .2s}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7a8d' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px}
+textarea{height:auto;padding:12px;resize:none}
+input:focus,select:focus,textarea:focus{border-color:var(--blue)}
+input[type="number"]{-moz-appearance:textfield}
+input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none}
+input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s ease}
+@keyframes btflash{0%{background:#0a3060}100%{background:#0d2035}}
+
+/* ROOM CARD */
+.room-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r);margin-bottom:var(--gap);overflow:hidden;transition:border-color .2s}
+.room-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer;user-select:none;gap:10px}
+.room-head-left{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.room-num{background:var(--blue);color:#fff;font-family:var(--head);font-size:13px;letter-spacing:1px;border-radius:5px;padding:3px 9px;flex-shrink:0}
+.room-name-input{font-size:17px!important;font-weight:700;height:42px!important;flex:1;min-width:0}
+.chevron{width:22px;height:22px;flex-shrink:0;color:var(--muted);transition:transform .2s}
+.room-card.open .chevron{transform:rotate(180deg)}
+.room-body{display:none;padding:0 16px 16px}
+.room-card.open .room-body{display:block}
+.dims-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px}
+.surface-row{display:flex;gap:8px;margin-bottom:12px}
+.surf-btn{flex:1;height:46px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;text-transform:capitalize;letter-spacing:.5px;transition:all .15s}
+.surf-btn.on{border-color:var(--blue);background:#162535;color:var(--blue)}
+.prod-row{display:grid;grid-template-columns:1fr 90px;gap:10px;margin-bottom:12px}
+.mini-sum{background:var(--dark);border-radius:8px;padding:10px 12px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
+.sum-label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.sum-val{font-size:16px;font-weight:700;color:var(--blue);margin-top:2px}
+.room-remove{width:100%;height:44px;margin-top:12px;background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer}
+
+/* ADD ROOM */
+#add-room-btn{width:100%;height:54px;background:transparent;border:1.5px dashed var(--blue);border-radius:var(--r);color:var(--blue);font-family:var(--font);font-size:17px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-bottom:var(--gap)}
+
+/* TOTALS */
+#totals-strip{display:none;background:var(--dark);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:var(--gap)}
+#totals-strip.visible{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center}
+.tot-label{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted)}
+.tot-val{font-family:var(--head);font-size:24px;letter-spacing:1px;margin-top:3px}
+
+/* GEN BUTTON */
+#gen-btn{display:none;width:100%;height:58px;background:var(--green);border:none;border-radius:var(--r);color:#fff;font-family:var(--head);font-size:22px;letter-spacing:2px;cursor:pointer;margin-bottom:var(--gap)}
+#gen-btn.visible{display:block}
+
+/* BID OUTPUT */
+#bid-out{display:none;background:#fff;color:#111;border-radius:var(--r);padding:24px 20px;font-family:Georgia,serif;font-size:13px;line-height:1.7;margin-bottom:var(--gap)}
+#bid-out.visible{display:block}
+#bid-out h1{font-size:18px;font-weight:700;margin-bottom:2px}
+#bid-out .bid-sub{font-size:11px;color:#555}
+#bid-out hr{border:none;border-top:1px solid #ddd;margin:12px 0}
+#bid-out table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px;overflow-x:auto;display:block}
+#bid-out th{text-align:left;padding:3px 5px;font-size:9px;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #111;white-space:nowrap}
+#bid-out td{padding:4px 5px;border-bottom:1px solid #eee;white-space:nowrap}
+#bid-out .totals-r{text-align:right;margin-bottom:12px}
+#bid-out .grand{font-size:18px;font-weight:700}
+#bid-out .disc{font-size:10px;color:#777;line-height:1.6}
+#bid-out .footer{margin-top:14px;font-size:11px;color:#555}
+#bid-out .print-btn{display:block;width:100%;height:48px;margin-top:14px;background:#111;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer}
+
+/* STICKY BT BAR */
+#bt-bar{position:fixed;bottom:0;left:0;right:0;background:#0a0e14;border-top:1.5px solid var(--blue);padding:10px 14px calc(10px + var(--safe-b));z-index:300}
+.bt-row1{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px}
+.bt-status-pill{display:flex;align-items:center;gap:8px;background:var(--panel);border-radius:20px;padding:6px 14px;font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden}
+.bt-status-pill span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bt-dot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s}
+.bt-dot.connected{background:var(--green);box-shadow:0 0 8px var(--green)}
+.bt-dot.connecting{background:var(--blue);animation:pulse 1s infinite}
+.bt-dot.error{background:var(--red)}
+.bt-dot.warn{background:var(--amber)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+#last-reading{background:var(--panel);border:1px solid var(--blue);border-radius:8px;padding:6px 16px;font-size:18px;font-weight:700;font-family:var(--head);letter-spacing:1px;color:var(--blue);min-width:80px;text-align:center;flex-shrink:0}
+.bt-row2{display:flex;align-items:center;gap:8px}
+#bt-connect-btn{height:var(--tap);padding:0 16px;background:var(--blue);border:none;border-radius:10px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;letter-spacing:.5px;cursor:pointer;display:flex;align-items:center;gap:7px;flex-shrink:0;white-space:nowrap;transition:background .2s}
+#bt-connect-btn.connected{background:var(--green)}
+#bt-connect-btn:disabled{opacity:.45;cursor:not-allowed}
+.bt-selects{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.bt-selects select{height:var(--tap);font-size:14px;padding:0 28px 0 10px;background-color:var(--panel);border-color:var(--border)}
+.dbg-gear{background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);width:44px;height:var(--tap);font-size:19px;cursor:pointer;flex-shrink:0}
+
+/* DEBUG PANEL */
+#debug-panel{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:500;overflow-y:auto;padding:20px 16px calc(20px + var(--safe-b))}
+#debug-panel.show{display:block}
+.dbg-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.dbg-title{font-family:var(--head);font-size:22px;color:var(--blue);letter-spacing:2px}
+.dbg-close{background:var(--red);border:none;color:#fff;border-radius:8px;padding:10px 18px;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer}
+.dbg-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px}
+.dbg-card-title{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:10px}
+#dbg-log{font-family:'Courier New',monospace;font-size:12px;color:#7ec8e3;line-height:1.6;white-space:pre-wrap;word-break:break-all;max-height:280px;overflow-y:auto;background:var(--dark);border-radius:6px;padding:10px}
+.dbg-svc{background:var(--dark);border-radius:6px;padding:8px 10px;margin-bottom:6px;font-size:12px;font-family:'Courier New',monospace}
+.svc-uuid{color:var(--blue);font-weight:700;display:block}
+.char-row{padding-left:12px;margin-top:3px}
+.char-uuid{color:#7ec8e3;display:block}
+.char-props{color:var(--muted);font-size:10px}
+.dbg-action-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.dbg-action-btn{height:44px;padding:0 16px;border-radius:8px;border:none;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer}
+.manual-row{display:flex;gap:8px}
+.manual-row input{flex:1;height:50px;font-size:18px;border-radius:8px;background:var(--dark);border:1.5px solid var(--border);color:var(--text);font-family:var(--font);padding:0 14px;outline:none}
+.manual-row input:focus{border-color:var(--blue)}
+.manual-row button{height:50px;padding:0 20px;background:var(--green);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer}
+
+/* NOTES */
+#notes-wrap{margin-bottom:var(--gap)}
+
+/* TOAST */
+#toast{position:fixed;bottom:calc(152px + var(--safe-b));left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:10px 22px;border-radius:24px;font-size:14px;font-weight:700;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .25s;z-index:999}
+#toast.show{opacity:1}
+#toast.err{background:var(--red)}
+#toast.warn{background:var(--amber);color:#000}
+
+/* RESPONSIVE — Z Fold 5 unfolded */
+@media(min-width:600px){
+  body{font-size:15px}
+  main{display:grid;grid-template-columns:1fr 1fr;column-gap:16px;padding:16px 16px 0;align-items:start}
+  .col-left{grid-column:1}
+  .col-right{grid-column:2;position:sticky;top:70px}
+  .dims-grid{grid-template-columns:repeat(5,1fr)}
+  .prod-row{grid-template-columns:1fr 100px}
+  .tot-val{font-size:26px}
+}
+/* Z Fold 5 cover screen */
+@media(max-width:390px){
+  :root{--tap:52px}
+  .job-card .row,.prod-row{grid-template-columns:1fr}
+  .dims-grid{grid-template-columns:1fr 1fr}
+  .mini-sum{grid-template-columns:1fr 1fr}
+  .bt-selects{grid-template-columns:1fr}
+}
+@media print{
+  header,#bt-bar,#add-room-btn,#rooms-container,.job-card,#notes-wrap,#totals-strip,#gen-btn,#toast,#https-warn{display:none!important}
+  body{padding-bottom:0}
+  #bid-out{display:block!important;border-radius:0;padding:0}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="brand">INGERSOLL PAINTING</div>
+    <div class="sub">PaintPro — DISTO D2</div>
+  </div>
+  <div class="contact">(315) 952-8259<br>Hannibal, NY</div>
+</header>
+
+<!-- HTTPS WARNING BANNER -->
+<div id="https-warn">
+  <div class="warn-title">⚠️ Bluetooth needs HTTPS — here's the fix</div>
+  <div class="warn-body">
+    Chrome blocks Bluetooth on <code>file://</code> addresses. You have two options:
+    <ol class="warn-steps">
+      <li><strong>Easiest:</strong> Upload this file to GoDaddy → <code>ingersollpaintingllc.com/paintpro.html</code> — open that URL in Chrome, done.</li>
+      <li><strong>Also works:</strong> Open Chrome, go to <code>chrome://flags</code>, search "Insecure origins", add <code>file://</code> — not recommended long term.</li>
+    </ol>
+    The estimator still works fully without Bluetooth — use the <strong>⚙ Manual Entry</strong> button below.
+  </div>
+</div>
+
+<main>
+  <div class="col-left">
+    <div class="job-card">
+      <div class="row">
+        <label class="field"><span>Client Name</span>
+          <input type="text" id="client-name" placeholder="e.g. Dave Reau" autocomplete="name"/></label>
+        <label class="field"><span>Job Address</span>
+          <input type="text" id="job-address" placeholder="45 Oak St, Camillus NY" autocomplete="street-address"/></label>
+      </div>
+    </div>
+
+    <div id="rooms-container"></div>
+    <button id="add-room-btn" onclick="addRoom()">+ ADD ROOM / AREA</button>
+
+    <div id="notes-wrap">
+      <label class="field"><span>Notes (optional)</span>
+        <textarea id="notes" rows="3" placeholder="Prep work, surface conditions, client notes..."></textarea>
+      </label>
+    </div>
+
+    <div id="totals-strip">
+      <div><div class="tot-label">Materials</div><div class="tot-val" id="tot-mat" style="color:var(--muted)">$0</div></div>
+      <div><div class="tot-label">Labor</div><div class="tot-val" id="tot-lab" style="color:var(--muted)">$0</div></div>
+      <div><div class="tot-label">Total</div><div class="tot-val" id="tot-grand" style="color:var(--green)">$0</div></div>
+    </div>
+
+    <button id="gen-btn" onclick="toggleBid()">GENERATE BID SUMMARY</button>
+  </div>
+
+  <div class="col-right">
+    <div id="bid-out"></div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<!-- STICKY BT BAR -->
+<div id="bt-bar">
+  <div class="bt-row1">
+    <div class="bt-status-pill">
+      <div class="bt-dot" id="bt-dot"></div>
+      <span id="bt-status-text">Not connected</span>
+    </div>
+    <div id="last-reading">— ft</div>
+  </div>
+  <div class="bt-row2">
+    <button id="bt-connect-btn" onclick="handleBtButton()">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/>
+      </svg>
+      <span id="bt-btn-label">Connect DISTO</span>
+    </button>
+    <div class="bt-selects">
+      <select id="target-field">
+        <option value="length">Fill: Length</option>
+        <option value="width">Fill: Width</option>
+        <option value="height">Fill: Height</option>
+      </select>
+      <select id="target-room"></select>
+    </div>
+    <button class="dbg-gear" onclick="openDebug()" title="Manual entry / Debug">⚙</button>
+  </div>
+</div>
+
+<!-- DEBUG / MANUAL ENTRY PANEL -->
+<div id="debug-panel">
+  <div class="dbg-header">
+    <div class="dbg-title">Manual Entry &amp; Debug</div>
+    <button class="dbg-close" onclick="closeDebug()">✕ Close</button>
+  </div>
+
+  <!-- Manual measurement entry — the always-working fallback -->
+  <div class="dbg-card">
+    <div class="dbg-card-title">Manual Measurement (always works)</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:10px">
+      Type a measurement in decimal feet and tap Send. It fills the selected field just like the DISTO would.
+    </p>
+    <div class="manual-row">
+      <input type="number" id="manual-ft" placeholder="e.g. 12.5 ft" step="0.01" inputmode="decimal"/>
+      <button onclick="sendManual()">Send</button>
+    </div>
+  </div>
+
+  <!-- Connection status -->
+  <div class="dbg-card">
+    <div class="dbg-card-title">Bluetooth Status</div>
+    <div id="dbg-status-detail" style="font-size:13px;color:var(--text);line-height:1.7">No connection yet.</div>
+    <div class="dbg-action-row" style="margin-top:10px">
+      <button class="dbg-action-btn" style="background:var(--blue);color:#fff" onclick="closeDebug();handleBtButton()">Connect DISTO</button>
+      <button class="dbg-action-btn" style="background:var(--panel);color:var(--muted);border:1px solid var(--border)" onclick="clearLog()">Clear Log</button>
+    </div>
+  </div>
+
+  <!-- Discovered services -->
+  <div class="dbg-card">
+    <div class="dbg-card-title">Discovered BLE Services &amp; Characteristics</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:8px">
+      After connecting, these UUIDs tell us exactly which characteristic carries the measurements. Share a screenshot of this with James if Bluetooth isn't auto-populating.
+    </p>
+    <div id="dbg-services" style="font-size:13px;color:var(--muted)">Connect to a device first.</div>
+  </div>
+
+  <!-- Raw log -->
+  <div class="dbg-card">
+    <div class="dbg-card-title">Raw BLE Data Log</div>
+    <div id="dbg-log">Waiting…</div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// CONSTANTS
+// ══════════════════════════════════════════════
+const PRODUCTS = [
+  {name:"BM Regal Select (Int)",      price:72, cov:400},
+  {name:"BM Ultra Spec 500 (Int)",    price:52, cov:400},
+  {name:"BM Advance (Cabinets/Trim)", price:88, cov:400},
+  {name:"BM Aura (Premium Int)",      price:96, cov:400},
+  {name:"BM Woodluxe Solid (Ext)",    price:68, cov:200},
+  {name:"BM High Build (Ext Trim)",   price:74, cov:300},
+  {name:"BM Porch & Floor",           price:62, cov:400},
+  {name:"Custom Product",             price:65, cov:400},
+];
+const LABOR  = {walls:1.85, ceiling:1.65, trim:3.50};
+const MARKUP = 1.20;
+
+// Known BLE candidates — tried in order.
+// If the D2 uses a different UUID we'll discover it via enumeration.
+const BLE_CANDIDATES = [
+  {svc:'3ab10100-f831-4395-b29d-570977d5bf94', char:'3ab10101-f831-4395-b29d-570977d5bf94', label:'DISTO Primary'},
+  {svc:'6e400001-b5a3-f393-e0a9-e50e24dcca9e', char:'6e400003-b5a3-f393-e0a9-e50e24dcca9e', label:'Nordic UART'},
+];
+
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let rooms = [], roomCount = 0;
+let btDevice = null, btConnected = false, activeChar = null;
+let bidOpen = false;
+
+// ══════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  addRoom();
+
+  if (location.protocol === 'file:') {
+    document.getElementById('https-warn').classList.add('show');
+    setStatus('warn', 'Upload to HTTPS to enable Bluetooth');
+    document.getElementById('bt-connect-btn').disabled = true;
+    dbgLog('Running on file:// — Web Bluetooth blocked.\nUpload to ingersollpaintingllc.com to enable.\nUse ⚙ Manual Entry in the meantime.');
+    return;
+  }
+  if (!navigator.bluetooth) {
+    setStatus('error', 'Open in Chrome browser');
+    document.getElementById('bt-connect-btn').disabled = true;
+    dbgLog('navigator.bluetooth not found.\nMust use Google Chrome — not Samsung Internet, Firefox, or Safari.');
+    return;
+  }
+  dbgLog('Web Bluetooth ready. Tap "Connect DISTO" to scan.');
+});
+
+// ══════════════════════════════════════════════
+// BLUETOOTH
+// ══════════════════════════════════════════════
+
+function handleBtButton() {
+  btConnected ? disconnectBT() : connectBT();
+}
+
+async function connectBT() {
+  dbgLog('\n► Requesting device scan…');
+  setStatus('connecting', 'Scanning…');
+  setBtnState('connecting');
+
+  try {
+    btDevice = await navigator.bluetooth.requestDevice({
+      filters: [
+        {namePrefix: 'DISTO'},
+        {namePrefix: 'Leica'},
+      ],
+      optionalServices: [
+        '3ab10100-f831-4395-b29d-570977d5bf94',
+        '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+        'generic_access',
+        'device_information',
+        'battery_service',
+      ]
+    });
+
+    dbgLog(`Device selected: "${btDevice.name}"`);
+    btDevice.addEventListener('gattserverdisconnected', onBTDrop);
+    setStatus('connecting', 'Connecting…');
+
+    const server = await btDevice.gatt.connect();
+    dbgLog('GATT connected. Enumerating services…');
+
+    // Enumerate everything we can see
+    let allServices = [];
+    try {
+      allServices = await server.getPrimaryServices();
+      dbgLog(`Found ${allServices.length} service(s).`);
+    } catch(e) {
+      dbgLog(`Could not enumerate services: ${e.message}`);
+    }
+
+    // Show in debug panel
+    await showServices(allServices);
+
+    // Try known candidates first
+    let found = false;
+    for (const c of BLE_CANDIDATES) {
+      try {
+        dbgLog(`\nTrying ${c.label}…`);
+        const svc  = await server.getPrimaryService(c.svc);
+        const char = await svc.getCharacteristic(c.char);
+        const props = charProps(char);
+        dbgLog(`  Char found — props: [${props.join(', ')}]`);
+        if (props.includes('notify') || props.includes('indicate')) {
+          await char.startNotifications();
+          char.addEventListener('characteristicvaluechanged', onMeasurement);
+          activeChar = char;
+          found = true;
+          dbgLog(`  Subscribed to notifications on ${c.label} ✓`);
+          break;
+        }
+      } catch(e) {
+        dbgLog(`  Not available: ${e.message}`);
+      }
+    }
+
+    // Fallback: subscribe to EVERY notify characteristic we can find
+    if (!found) {
+      dbgLog('\nKnown UUIDs not matched — trying all notify characteristics…');
+      outer:
+      for (const svc of allServices) {
+        try {
+          const chars = await svc.getCharacteristics();
+          for (const char of chars) {
+            if (char.properties.notify || char.properties.indicate) {
+              try {
+                await char.startNotifications();
+                char.addEventListener('characteristicvaluechanged', onMeasurement);
+                activeChar = char;
+                found = true;
+                dbgLog(`  Subscribed to ${char.uuid} in ${svc.uuid} ✓`);
+                break outer;
+              } catch(e) {
+                dbgLog(`  Could not subscribe to ${char.uuid}: ${e.message}`);
+              }
+            }
+          }
+        } catch(e) {}
+      }
+    }
+
+    btConnected = true;
+
+    if (found) {
+      setStatus('connected', `${btDevice.name} — ready`);
+      setBtnState('connected');
+      showToast('DISTO connected — shoot a measurement');
+      dbgLog('\nReady. Press the measure button on your DISTO D2.');
+    } else {
+      setStatus('warn', `${btDevice.name} — no data char`);
+      setBtnState('connected');
+      showToast('Connected — check ⚙ debug for UUIDs', 'warn');
+      dbgLog('\nConnected but no notify characteristic found.\nTap ⚙ and share a screenshot of the Services list\nso we can add your DISTO\'s exact UUID.');
+    }
+
+    updateDebugStatus();
+
+  } catch(err) {
+    const friendly =
+      err.name === 'NotFoundError'   ? 'No device selected — try again' :
+      err.name === 'SecurityError'   ? 'Blocked — page needs HTTPS' :
+      err.name === 'NetworkError'    ? 'Connection lost — retry' :
+      err.message || 'Connection failed';
+    setStatus('error', friendly);
+    setBtnState('idle');
+    dbgLog(`\nError: ${err.name}: ${err.message}`);
+    showToast(friendly, 'err');
+  }
+}
+
+function disconnectBT() {
+  if (btDevice?.gatt?.connected) btDevice.gatt.disconnect();
+  onBTDrop();
+}
+
+function onBTDrop() {
+  btConnected = false; activeChar = null;
+  setStatus('', 'Disconnected');
+  setBtnState('idle');
+  document.getElementById('last-reading').textContent = '— ft';
+  dbgLog('\nDevice disconnected.');
+  updateDebugStatus();
+}
+
+// ── Parse measurement ─────────────────────────────
+function onMeasurement(evt) {
+  const dv  = evt.target.value;
+  const raw = new Uint8Array(dv.buffer);
+  dbgLog(`\n► Data [${raw.length}B]: [${Array.from(raw).map(b=>b.toString(16).padStart(2,'0')).join(' ')}]`);
+
+  let meters = null;
+
+  // Try ASCII text
+  try {
+    const txt = new TextDecoder('utf-8',{fatal:true}).decode(dv.buffer).trim();
+    dbgLog(`  ASCII: "${txt}"`);
+    const mM  = txt.match(/([\d.]+)\s*m(?!m)/i);
+    const mmM = txt.match(/([\d.]+)\s*mm/i);
+    const ftM = txt.match(/(\d+)\s*ft\s*([\d.]+)?\s*in?/i);
+    if      (mM)  { meters = parseFloat(mM[1]);                                       dbgLog(`  → meters: ${meters}`) }
+    else if (mmM) { meters = parseFloat(mmM[1])/1000;                                 dbgLog(`  → mm: ${meters} m`) }
+    else if (ftM) { meters = ((parseFloat(ftM[1])||0)*12+(parseFloat(ftM[2])||0))*.0254; dbgLog(`  → ft/in: ${meters} m`) }
+  } catch {}
+
+  // Try binary — every 4-byte window
+  if (meters === null) {
+    for (let o = 0; o <= dv.byteLength - 4; o++) {
+      const le = dv.getUint32(o, true);
+      const be = dv.getUint32(o, false);
+      if (le > 10 && le < 200000) { meters = le/1000;   dbgLog(`  → LE mm @${o}: ${le} → ${meters}m`); break }
+      if (be > 10 && be < 200000) { meters = be/1000;   dbgLog(`  → BE mm @${o}: ${be} → ${meters}m`); break }
+      if (le > 100 && le < 2000000) { meters = le/10000; dbgLog(`  → LE mm×10 @${o}: ${le} → ${meters}m`); break }
+    }
+  }
+
+  if (!meters || meters <= 0 || meters > 200) {
+    dbgLog('  Could not parse — check raw bytes above.');
+    showToast('Got data but could not parse — check ⚙ debug', 'warn');
+    return;
+  }
+
+  const feet = meters * 3.28084;
+  const fw   = Math.floor(feet);
+  const ins  = Math.round((feet - fw) * 12);
+  const disp = `${fw}'${ins}"`;
+  dbgLog(`  ✓ ${meters.toFixed(4)}m = ${feet.toFixed(3)}ft = ${disp}`);
+
+  applyMeasurement(feet, disp);
+}
+
+// ── Apply to selected field ───────────────────────
+function applyMeasurement(feet, disp) {
+  document.getElementById('last-reading').textContent = disp;
+  const field   = document.getElementById('target-field').value;
+  const roomIdx = parseInt(document.getElementById('target-room').value);
+  const room    = rooms[roomIdx];
+  if (!room) return;
+  const el = document.getElementById(`${room.id}_${field}`);
+  if (!el) return;
+  el.value = feet.toFixed(2);
+  el.classList.remove('bt-flash');
+  void el.offsetWidth;
+  el.classList.add('bt-flash');
+  setTimeout(() => el.classList.remove('bt-flash'), 900);
+  updateField(room.id, field, feet.toFixed(2));
+  showToast(`${disp} → ${field} · ${room.name}`);
+}
+
+// ── Helpers ───────────────────────────────────────
+function charProps(char) {
+  return ['read','write','writeWithoutResponse','notify','indicate'].filter(p => char.properties[p]);
+}
+
+async function showServices(services) {
+  const el = document.getElementById('dbg-services');
+  if (!services.length) { el.textContent = 'No services found.'; return; }
+  el.innerHTML = '';
+  for (const svc of services) {
+    const div = document.createElement('div');
+    div.className = 'dbg-svc';
+    let html = `<span class="svc-uuid">SVC: ${svc.uuid}</span>`;
+    try {
+      const chars = await svc.getCharacteristics();
+      for (const char of chars) {
+        const p = charProps(char);
+        html += `<div class="char-row"><span class="char-uuid">CHAR: ${char.uuid}</span><span class="char-props">[${p.join(', ')}]</span></div>`;
+      }
+    } catch { html += `<div class="char-row" style="color:var(--red)">Cannot read chars</div>`; }
+    div.innerHTML = html;
+    el.appendChild(div);
+  }
+}
+
+function setBtnState(state) {
+  const btn = document.getElementById('bt-connect-btn');
+  const lbl = document.getElementById('bt-btn-label');
+  btn.className = state === 'connected' ? 'connected' : '';
+  if      (state === 'connecting') lbl.textContent = 'Connecting…';
+  else if (state === 'connected')  lbl.textContent = 'Disconnect';
+  else                             lbl.textContent = 'Connect DISTO';
+}
+
+function setStatus(cls, txt) {
+  document.getElementById('bt-dot').className = 'bt-dot' + (cls ? ' '+cls : '');
+  document.getElementById('bt-status-text').textContent = txt;
+}
+
+function updateDebugStatus() {
+  document.getElementById('dbg-status-detail').innerHTML = btDevice
+    ? `Device: <strong>${btDevice.name}</strong><br>GATT: ${btDevice.gatt?.connected ? 'connected' : 'disconnected'}<br>Active char: ${activeChar ? activeChar.uuid : 'none'}`
+    : 'No device connected yet.';
+}
+
+// ══════════════════════════════════════════════
+// DEBUG PANEL
+// ══════════════════════════════════════════════
+function openDebug()  { document.getElementById('debug-panel').classList.add('show'); updateDebugStatus(); }
+function closeDebug() { document.getElementById('debug-panel').classList.remove('show'); }
+function clearLog()   { document.getElementById('dbg-log').textContent = ''; }
+function dbgLog(msg)  {
+  const el = document.getElementById('dbg-log');
+  el.textContent += msg + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+function sendManual() {
+  const val = parseFloat(document.getElementById('manual-ft').value);
+  if (!val || val <= 0) return showToast('Enter a valid number in feet', 'warn');
+  const fw = Math.floor(val), ins = Math.round((val-fw)*12);
+  applyMeasurement(val, `${fw}'${ins}"`);
+  document.getElementById('manual-ft').value = '';
+  closeDebug();
+}
+
+// ══════════════════════════════════════════════
+// ROOMS
+// ══════════════════════════════════════════════
+function addRoom() {
+  const id   = 'r'+(++roomCount);
+  const name = 'Room '+roomCount;
+  const room = {id, name, length:'', width:'', height:'8', doors:'1', windows:'2',
+    surfaces:{walls:true,ceiling:false,trim:false}, product:PRODUCTS[0].name, coats:'2', open:true};
+  rooms.push(room);
+  renderRoom(room, rooms.length-1);
+  refreshRoomSelect();
+  rooms.forEach(r => { if(r.id!==id) setOpen(r.id,false); });
+}
+
+function renderRoom(room, idx) {
+  const card = document.createElement('div');
+  card.className = 'room-card'+(room.open?' open':'');
+  card.id = room.id+'_card';
+  const opts = PRODUCTS.map(p=>`<option value="${p.name}"${p.name===room.product?' selected':''}>${p.name} — $${p.price}/gal</option>`).join('');
+  card.innerHTML = `
+    <div class="room-head" onclick="toggleOpen('${room.id}')">
+      <div class="room-head-left">
+        <span class="room-num" id="${room.id}_num">#${idx+1}</span>
+        <input class="room-name-input" type="text" id="${room.id}_name" value="${room.name}"
+          onclick="event.stopPropagation()" oninput="updateField('${room.id}','name',this.value)"/>
+      </div>
+      <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="room-body">
+      <div class="dims-grid">
+        <label class="field"><span>Length (ft)</span><input type="number" id="${room.id}_length" value="${room.length}" min="0" step="0.01" inputmode="decimal" oninput="updateField('${room.id}','length',this.value)"/></label>
+        <label class="field"><span>Width (ft)</span><input type="number" id="${room.id}_width" value="${room.width}" min="0" step="0.01" inputmode="decimal" oninput="updateField('${room.id}','width',this.value)"/></label>
+        <label class="field"><span>Height (ft)</span><input type="number" id="${room.id}_height" value="${room.height}" min="0" step="0.01" inputmode="decimal" oninput="updateField('${room.id}','height',this.value)"/></label>
+        <label class="field"><span>Doors</span><input type="number" id="${room.id}_doors" value="${room.doors}" min="0" inputmode="numeric" oninput="updateField('${room.id}','doors',this.value)"/></label>
+        <label class="field"><span>Windows</span><input type="number" id="${room.id}_windows" value="${room.windows}" min="0" inputmode="numeric" oninput="updateField('${room.id}','windows',this.value)"/></label>
+      </div>
+      <div class="surface-row">
+        <button class="surf-btn${room.surfaces.walls?' on':''}" id="${room.id}_sw" onclick="toggleSurf('${room.id}','walls')">Walls</button>
+        <button class="surf-btn${room.surfaces.ceiling?' on':''}" id="${room.id}_sc" onclick="toggleSurf('${room.id}','ceiling')">Ceiling</button>
+        <button class="surf-btn${room.surfaces.trim?' on':''}" id="${room.id}_st" onclick="toggleSurf('${room.id}','trim')">Trim</button>
+      </div>
+      <div class="prod-row">
+        <label class="field"><span>Paint Product</span><select id="${room.id}_product" onchange="updateField('${room.id}','product',this.value)">${opts}</select></label>
+        <label class="field"><span>Coats</span><select id="${room.id}_coats" onchange="updateField('${room.id}','coats',this.value)">
+          <option${room.coats==='1'?' selected':''}>1</option><option${room.coats==='2'?' selected':''}>2</option><option${room.coats==='3'?' selected':''}>3</option>
+        </select></label>
+      </div>
+      <div class="mini-sum" id="${room.id}_sum" style="display:none">
+        <div><div class="sum-label">Wall SF</div><div class="sum-val" id="${room.id}_ssf">—</div></div>
+        <div><div class="sum-label">Gallons</div><div class="sum-val" id="${room.id}_sgal">—</div></div>
+        <div><div class="sum-label">Materials</div><div class="sum-val" id="${room.id}_smat">—</div></div>
+        <div><div class="sum-label">Labor</div><div class="sum-val" id="${room.id}_slab">—</div></div>
+      </div>
+      <button class="room-remove" onclick="removeRoom('${room.id}')">✕ Remove This Room</button>
+    </div>`;
+  document.getElementById('rooms-container').appendChild(card);
+}
+
+function toggleOpen(id) { const r=rooms.find(r=>r.id===id); if(r) setOpen(id,!r.open); }
+function setOpen(id,val) {
+  const r=rooms.find(r=>r.id===id); if(!r) return;
+  r.open=val;
+  document.getElementById(id+'_card')?.classList.toggle('open',val);
+}
+function removeRoom(id) {
+  if(rooms.length===1) return showToast('Need at least one room','warn');
+  rooms=rooms.filter(r=>r.id!==id);
+  document.getElementById(id+'_card').remove();
+  rooms.forEach((r,i)=>{ const e=document.getElementById(r.id+'_num'); if(e) e.textContent='#'+(i+1); });
+  refreshRoomSelect(); recalcAll();
+}
+function updateField(id,field,val) {
+  const r=rooms.find(r=>r.id===id); if(!r) return;
+  r[field]=val;
+  if(field==='name') refreshRoomSelect();
+  recalcRoom(id);
+}
+function toggleSurf(id,surf) {
+  const r=rooms.find(r=>r.id===id); if(!r) return;
+  r.surfaces[surf]=!r.surfaces[surf];
+  document.getElementById(`${id}_s${surf[0]}`).classList.toggle('on',r.surfaces[surf]);
+  recalcRoom(id);
+}
+function refreshRoomSelect() {
+  document.getElementById('target-room').innerHTML=rooms.map((r,i)=>`<option value="${i}">${r.name}</option>`).join('');
+}
+
+// ══════════════════════════════════════════════
+// CALCULATIONS
+// ══════════════════════════════════════════════
+function calc(room) {
+  const l=parseFloat(room.length)||0, w=parseFloat(room.width)||0, h=parseFloat(room.height)||0;
+  const d=parseInt(room.doors)||0, win=parseInt(room.windows)||0, c=parseInt(room.coats)||1;
+  const wSF=Math.max(0,2*(l+w)*h-d*21-win*15), cSF=l*w, tLF=2*(l+w)+d*7+win*4;
+  const p=PRODUCTS.find(x=>x.name===room.product)||PRODUCTS[0];
+  const gal=(room.surfaces.walls?Math.ceil(wSF*c/p.cov):0)+(room.surfaces.ceiling?Math.ceil(cSF*c/p.cov):0)+(room.surfaces.trim?Math.ceil(tLF*c/p.cov):0);
+  const mat=gal*p.price*MARKUP;
+  const lab=(room.surfaces.walls?wSF*LABOR.walls*c:0)+(room.surfaces.ceiling?cSF*LABOR.ceiling*c:0)+(room.surfaces.trim?tLF*LABOR.trim*c:0);
+  return {wSF,cSF,tLF,gal,mat,lab,total:mat+lab,valid:l>0&&w>0};
+}
+function recalcRoom(id) {
+  const room=rooms.find(r=>r.id===id); if(!room) return;
+  const c=calc(room), el=document.getElementById(`${id}_sum`);
+  if(el){
+    if(c.valid){
+      el.style.display='grid';
+      document.getElementById(`${id}_ssf`).textContent=room.surfaces.walls?c.wSF.toFixed(0)+' sf':'—';
+      document.getElementById(`${id}_sgal`).textContent=c.gal+' gal';
+      document.getElementById(`${id}_smat`).textContent=fmt(c.mat);
+      document.getElementById(`${id}_slab`).textContent=fmt(c.lab);
+    } else el.style.display='none';
+  }
+  recalcAll();
+}
+function recalcAll() {
+  const cs=rooms.map(calc), any=cs.some(c=>c.valid);
+  const mat=cs.reduce((a,c)=>a+c.mat,0), lab=cs.reduce((a,c)=>a+c.lab,0), grand=mat+lab;
+  document.getElementById('totals-strip').classList.toggle('visible',any);
+  document.getElementById('gen-btn').classList.toggle('visible',any);
+  document.getElementById('tot-mat').textContent=fmt(mat);
+  document.getElementById('tot-lab').textContent=fmt(lab);
+  document.getElementById('tot-grand').textContent=fmt(grand);
+  if(bidOpen) renderBid();
+}
+
+// ══════════════════════════════════════════════
+// BID
+// ══════════════════════════════════════════════
+function toggleBid() {
+  bidOpen=!bidOpen;
+  document.getElementById('gen-btn').textContent=bidOpen?'HIDE BID SUMMARY':'GENERATE BID SUMMARY';
+  document.getElementById('bid-out').classList.toggle('visible',bidOpen);
+  if(bidOpen) renderBid();
+}
+function renderBid() {
+  const client=document.getElementById('client-name').value||'[Client Name]';
+  const addr=document.getElementById('job-address').value||'[Job Address]';
+  const notes=document.getElementById('notes').value;
+  const date=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const cs=rooms.map(calc), mat=cs.reduce((a,c)=>a+c.mat,0), lab=cs.reduce((a,c)=>a+c.lab,0), grand=mat+lab;
+  const rows=rooms.map((r,i)=>{
+    const c=cs[i], surfs=Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>k).join(', ');
+    const short=r.product.replace(/ \(Int\)| \(Ext\)| \(Cabinets\/Trim\)/g,'');
+    const sf=(r.surfaces.walls?c.wSF:0)+(r.surfaces.ceiling?c.cSF:0);
+    return `<tr><td style="font-weight:600">${r.name}</td><td style="text-transform:capitalize">${surfs||'—'}</td><td>${short}</td><td style="text-align:center">${r.coats}</td><td>${sf.toFixed(0)} sf</td><td>${c.gal} gal</td><td>${fmt(c.mat)}</td><td>${fmt(c.lab)}</td><td style="font-weight:700">${fmt(c.total)}</td></tr>`;
+  }).join('');
+  document.getElementById('bid-out').innerHTML=`
+    <h1>INGERSOLL PAINTING LLC</h1>
+    <div class="bid-sub">496 Phinney Road, Hannibal, NY 13074 | (315) 952-8259</div>
+    <hr/><div><strong>Client:</strong> ${client}<br/><strong>Address:</strong> ${addr}<br/><strong>Date:</strong> ${date}</div>
+    <hr/><div style="font-size:14px;font-weight:700;margin-bottom:8px">Project Breakdown</div>
+    <table><thead><tr><th>Area</th><th>Surfaces</th><th>Product</th><th>Coats</th><th>Sq Ft</th><th>Gal</th><th>Materials</th><th>Labor</th><th>Subtotal</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="totals-r"><div>Materials: ${fmt(mat)}</div><div>Labor: ${fmt(lab)}</div><div class="grand">Total: ${fmt(grand)}</div></div>
+    ${notes?`<div style="font-size:12px;color:#444;margin-bottom:12px"><strong>Notes:</strong> ${notes}</div>`:''}
+    <hr/><div class="disc"><strong>1-Year Workmanship Warranty.</strong> Based on the size and specifics of your project, the paint cost and materials are an estimate. Pricing may be adjusted if more paint and materials are needed. Labor costs are estimated based on the expected scope of work. If unforeseen issues arise during the project, adjustments may be necessary.</div>
+    <div class="footer">Ingersoll Painting LLC — Family Owned Since 1978 — Licensed and Insured</div>
+    <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>`;
+}
+
+// ══════════════════════════════════════════════
+// UTILITIES
+// ══════════════════════════════════════════════
+function fmt(n){return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+let toastT;
+function showToast(msg, type='') {
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.className='show'+(type?' '+type:'');
+  clearTimeout(toastT);
+  toastT=setTimeout(()=>el.className='',2600);
+}
+</script>
+</body>
+</html>

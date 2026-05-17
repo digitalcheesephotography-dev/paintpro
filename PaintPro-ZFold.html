@@ -72,6 +72,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .room-name-input{font-size:17px!important;font-weight:700;height:42px!important;flex:1;min-width:0}
 .chevron{width:22px;height:22px;flex-shrink:0;color:var(--muted);transition:transform .2s}
 .room-card.open .chevron{transform:rotate(180deg)}
+.room-sf-badge{background:#162535;border:1px solid var(--blue);color:var(--blue);font-family:var(--head);font-size:15px;letter-spacing:1px;border-radius:6px;padding:3px 10px;flex-shrink:0;white-space:nowrap}
 .room-body{display:none;padding:0 16px 16px}
 .room-card.open .room-body{display:block}
 .dims-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px}
@@ -197,10 +198,63 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   .bt-selects{grid-template-columns:1fr}
 }
 @media print{
-  header,#bt-bar,#add-room-btn,#rooms-container,.job-card,#notes-wrap,#totals-strip,#gen-btn,#toast,#https-warn{display:none!important}
+  header,#bt-bar,#add-room-btn,#rooms-container,.job-card,#notes-wrap,#totals-strip,#gen-btn,#toast,#https-warn,#tab-bar,#contacts-section{display:none!important}
   body{padding-bottom:0}
   #bid-out{display:block!important;border-radius:0;padding:0}
 }
+
+/* ── TAB BAR ── */
+#tab-bar{display:flex;background:#0a0e14;border-bottom:1px solid var(--border);position:sticky;top:52px;z-index:190}
+.tab-btn{flex:1;height:44px;background:transparent;border:none;color:var(--muted);font-family:var(--font);font-size:15px;font-weight:700;letter-spacing:1px;cursor:pointer;border-bottom:3px solid transparent;transition:all .2s}
+.tab-btn.active{color:var(--blue);border-bottom-color:var(--blue)}
+
+/* ── CONTACTS ── */
+#contacts-section{display:none;padding:14px 14px 0}
+#contacts-section.active{display:block}
+.contacts-toolbar{display:flex;gap:10px;margin-bottom:14px}
+#contact-search{flex:1;height:var(--tap);font-size:15px}
+.btn-add-contact{height:var(--tap);padding:0 18px;background:var(--blue);border:none;border-radius:10px;color:#fff;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;white-space:nowrap}
+.status-filter{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:14px}
+.status-filter::-webkit-scrollbar{display:none}
+.sf-btn{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.sf-btn.active{border-color:var(--blue);background:#162535;color:var(--blue)}
+
+/* Contact card */
+.contact-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px;transition:border-color .2s}
+.contact-card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.contact-name{font-size:17px;font-weight:700;line-height:1.2}
+.contact-addr{font-size:13px;color:var(--muted);margin-top:2px}
+.status-badge{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;letter-spacing:0.5px;flex-shrink:0;margin-left:8px}
+.status-pending{background:#2d1f00;color:#f59e0b;border:1px solid #f59e0b}
+.status-followup{background:#1a1535;color:#a78bfa;border:1px solid #a78bfa}
+.status-scheduled{background:#162535;color:var(--blue);border:1px solid var(--blue)}
+.status-inprogress{background:#1a2a1a;color:#4ade80;border:1px solid #4ade80}
+.status-completed{background:#1a1a1a;color:var(--muted);border:1px solid var(--border)}
+.contact-meta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.contact-meta span{font-size:12px;color:var(--muted)}
+.contact-meta strong{color:var(--text)}
+.contact-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ca-btn{height:44px;border-radius:8px;border:none;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer}
+.ca-text{background:var(--green);color:#fff}
+.ca-edit{background:var(--panel);color:var(--text);border:1px solid var(--border)!important;border:none}
+.quick-texts{margin-top:10px;display:none}
+.quick-texts.open{display:block}
+.qt-btn{display:block;width:100%;text-align:left;padding:10px 14px;background:var(--dark);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:13px;cursor:pointer;margin-bottom:6px;line-height:1.4}
+.qt-btn:hover{border-color:var(--green);color:var(--green)}
+.qt-phone{font-size:13px;color:var(--blue);text-decoration:none;display:block;margin-bottom:6px}
+
+/* Contact modal */
+#contact-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:600;overflow-y:auto;padding:20px 16px calc(20px + var(--safe-b))}
+#contact-modal.show{display:block}
+.modal-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:20px}
+.modal-title{font-family:var(--head);font-size:22px;color:var(--blue);letter-spacing:2px;margin-bottom:16px}
+.modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.modal-full{grid-column:1/-1}
+.modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.modal-save{height:50px;background:var(--green);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer}
+.modal-cancel{height:50px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer}
+.modal-delete{height:44px;width:100%;margin-top:8px;background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer}
+.status-select{height:var(--tap);font-size:15px}
 </style>
 </head>
 <body>
@@ -226,7 +280,13 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   </div>
 </div>
 
-<main>
+<!-- TAB BAR -->
+<div id="tab-bar">
+  <button class="tab-btn active" id="tab-estimate" onclick="switchTab('estimate')">📐 ESTIMATOR</button>
+  <button class="tab-btn" id="tab-contacts" onclick="switchTab('contacts')">👥 CONTACTS</button>
+</div>
+
+<main id="estimator-section">
   <div class="col-left">
     <div class="job-card">
       <div class="row">
@@ -259,6 +319,66 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div id="bid-out"></div>
   </div>
 </main>
+
+<!-- CONTACTS SECTION -->
+<div id="contacts-section">
+  <div class="contacts-toolbar">
+    <input type="text" id="contact-search" placeholder="Search clients…" oninput="renderContacts()"/>
+    <button class="btn-add-contact" onclick="openContactModal(null)">+ Add</button>
+  </div>
+
+  <div class="status-filter">
+    <button class="sf-btn active" data-status="all" onclick="setStatusFilter('all',this)">All</button>
+    <button class="sf-btn" data-status="pending" onclick="setStatusFilter('pending',this)">Pending</button>
+    <button class="sf-btn" data-status="followup" onclick="setStatusFilter('followup',this)">Follow Up</button>
+    <button class="sf-btn" data-status="scheduled" onclick="setStatusFilter('scheduled',this)">Scheduled</button>
+    <button class="sf-btn" data-status="inprogress" onclick="setStatusFilter('inprogress',this)">In Progress</button>
+    <button class="sf-btn" data-status="completed" onclick="setStatusFilter('completed',this)">Completed</button>
+  </div>
+
+  <div id="contacts-list"></div>
+
+  <div id="no-contacts" style="text-align:center;padding:40px 20px;color:var(--muted);display:none">
+    <div style="font-size:36px;margin-bottom:12px">👥</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px">No contacts yet</div>
+    <div style="font-size:13px">Save a client from the Estimator or tap + Add</div>
+  </div>
+</div>
+
+<!-- CONTACT MODAL -->
+<div id="contact-modal">
+  <div class="modal-card">
+    <div class="modal-title" id="modal-title">ADD CLIENT</div>
+    <input type="hidden" id="modal-contact-id"/>
+    <div class="modal-grid">
+      <label class="field modal-full"><span>Client Name</span>
+        <input type="text" id="modal-name" placeholder="Dave Reau" autocomplete="name"/></label>
+      <label class="field modal-full"><span>Phone</span>
+        <input type="tel" id="modal-phone" placeholder="(315) 555-0100" autocomplete="tel" inputmode="tel"/></label>
+      <label class="field modal-full"><span>Address</span>
+        <input type="text" id="modal-address" placeholder="45 Oak St, Camillus NY" autocomplete="street-address"/></label>
+      <label class="field modal-full"><span>Email (optional)</span>
+        <input type="email" id="modal-email" placeholder="dave@email.com" autocomplete="email"/></label>
+      <label class="field modal-full"><span>Status</span>
+        <select id="modal-status" class="status-select">
+          <option value="pending">Pending</option>
+          <option value="followup">Follow Up</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="inprogress">In Progress</option>
+          <option value="completed">Completed</option>
+        </select></label>
+      <label class="field modal-full"><span>Estimate Amount</span>
+        <input type="text" id="modal-estimate" placeholder="e.g. $4,200.00"/></label>
+      <label class="field modal-full"><span>Notes</span>
+        <textarea id="modal-notes" rows="3" placeholder="Job details, follow-up date, etc."></textarea></label>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeContactModal()">Cancel</button>
+      <button class="modal-save" onclick="saveContact()">Save Client</button>
+    </div>
+    <button class="modal-delete" id="modal-delete-btn" style="display:none" onclick="deleteContact()">Delete Contact</button>
+  </div>
+</div>
 
 <div id="toast"></div>
 
@@ -720,6 +840,7 @@ function renderRoom(room, idx) {
         <input class="room-name-input" type="text" id="${room.id}_name" value="${room.name}"
           onclick="event.stopPropagation()" oninput="updateField('${room.id}','name',this.value)"/>
       </div>
+      <span class="room-sf-badge" id="${room.id}_sfbadge" style="display:none"></span>
       <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="room-body">
@@ -935,14 +1056,25 @@ function calc(room) {
 function recalcRoom(id) {
   const room=rooms.find(r=>r.id===id); if(!room) return;
   const c=calc(room), el=document.getElementById(`${id}_sum`);
-  if(el){
-    if(c.valid){
+  const badge=document.getElementById(`${id}_sfbadge`);
+
+  if(c.valid){
+    // Mini summary inside card
+    if(el){
       el.style.display='grid';
       document.getElementById(`${id}_ssf`).textContent=c.totalSF>0?c.totalSF.toFixed(0)+' sf':'—';
       document.getElementById(`${id}_sgal`).textContent=c.gal+' gal';
       document.getElementById(`${id}_smat`).textContent=fmt(c.mat);
       document.getElementById(`${id}_slab`).textContent=fmt(c.lab);
-    } else el.style.display='none';
+    }
+    // Header badge — always visible even when collapsed
+    if(badge){
+      badge.style.display='inline-block';
+      badge.textContent=c.totalSF.toFixed(0)+' sf';
+    }
+  } else {
+    if(el) el.style.display='none';
+    if(badge) badge.style.display='none';
   }
   recalcAll();
 }
@@ -962,38 +1094,419 @@ function recalcAll() {
 // ══════════════════════════════════════════════
 function toggleBid() {
   bidOpen=!bidOpen;
-  document.getElementById('gen-btn').textContent=bidOpen?'HIDE BID SUMMARY':'GENERATE BID SUMMARY';
+  document.getElementById('gen-btn').textContent=bidOpen?'HIDE PROPOSAL':'GENERATE PROPOSAL';
   document.getElementById('bid-out').classList.toggle('visible',bidOpen);
   if(bidOpen) renderBid();
 }
+
 function renderBid() {
-  const client=document.getElementById('client-name').value||'[Client Name]';
-  const addr=document.getElementById('job-address').value||'[Job Address]';
-  const notes=document.getElementById('notes').value;
-  const date=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  const cs=rooms.map(calc), mat=cs.reduce((a,c)=>a+c.mat,0), lab=cs.reduce((a,c)=>a+c.lab,0), grand=mat+lab;
-  const rows=rooms.map((r,i)=>{
-    const c=cs[i], surfs=Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>k).join(', ');
-    const short=r.product.replace(/ \(Int\)| \(Ext\)| \(Cabinets\/Trim\)/g,'');
-    const walls = r.walls.map((w,j)=>`W${j+1}: ${parseFloat(w.ft).toFixed(1)}ft`).join(', ');
-    return `<tr><td style="font-weight:600">${r.name}</td><td style="text-transform:capitalize">${surfs||'—'}</td><td>${short}</td><td style="text-align:center">${r.coats}</td><td>${c.wallSF.toFixed(0)} sf</td><td>${c.gal} gal</td><td>${fmt(c.mat)}</td><td>${fmt(c.lab)}</td><td style="font-weight:700">${fmt(c.total)}</td></tr>`;
+  const client = document.getElementById('client-name').value || '[Client Name]';
+  const addr   = document.getElementById('job-address').value || '[Job Address]';
+  const notes  = document.getElementById('notes').value;
+  const date   = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const cs     = rooms.map(calc);
+  const mat    = cs.reduce((a,c)=>a+c.mat,0);
+  const lab    = cs.reduce((a,c)=>a+c.lab,0);
+  const grand  = mat+lab;
+
+  // Room rows — one per room with surface breakdown
+  const roomRows = rooms.map((r,i) => {
+    const c     = cs[i];
+    const surfs = Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>k[0].toUpperCase()+k.slice(1)).join(', ');
+    const short = r.product.replace(/ \(Int\)| \(Ext\)| \(Cabinets\/Trim\)/g,'');
+    const sf    = c.totalSF > 0 ? c.totalSF.toFixed(0)+' sf' : '—';
+    return `
+      <tr style="border-bottom:1px solid #e5e7eb">
+        <td style="padding:8px 6px;font-weight:700;font-size:13px">${r.name}</td>
+        <td style="padding:8px 6px;font-size:12px;color:#555">${surfs||'—'}</td>
+        <td style="padding:8px 6px;font-size:12px">${short}</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center">${r.coats}</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right">${sf}</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(c.total)}</td>
+      </tr>`;
   }).join('');
-  document.getElementById('bid-out').innerHTML=`
-    <h1>INGERSOLL PAINTING LLC</h1>
-    <div class="bid-sub">496 Phinney Road, Hannibal, NY 13074 | (315) 952-8259</div>
-    <hr/><div><strong>Client:</strong> ${client}<br/><strong>Address:</strong> ${addr}<br/><strong>Date:</strong> ${date}</div>
-    <hr/><div style="font-size:14px;font-weight:700;margin-bottom:8px">Project Breakdown</div>
-    <table><thead><tr><th>Area</th><th>Surfaces</th><th>Product</th><th>Coats</th><th>Sq Ft</th><th>Gal</th><th>Materials</th><th>Labor</th><th>Subtotal</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="totals-r"><div>Materials: ${fmt(mat)}</div><div>Labor: ${fmt(lab)}</div><div class="grand">Total: ${fmt(grand)}</div></div>
-    ${notes?`<div style="font-size:12px;color:#444;margin-bottom:12px"><strong>Notes:</strong> ${notes}</div>`:''}
-    <hr/><div class="disc"><strong>1-Year Workmanship Warranty.</strong> Based on the size and specifics of your project, the paint cost and materials are an estimate. Pricing may be adjusted if more paint and materials are needed. Labor costs are estimated based on the expected scope of work. If unforeseen issues arise during the project, adjustments may be necessary.</div>
-    <div class="footer">Ingersoll Painting LLC — Family Owned Since 1978 — Licensed and Insured</div>
-    <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>`;
+
+  document.getElementById('bid-out').innerHTML = `
+    <div style="font-family:Georgia,serif;color:#111;line-height:1.6">
+
+      <!-- HEADER -->
+      <div style="text-align:center;border-bottom:3px solid #111;padding-bottom:14px;margin-bottom:16px">
+        <div style="font-size:22px;font-weight:700;letter-spacing:1px">INGERSOLL PAINTING LLC</div>
+        <div style="font-size:12px;color:#555;margin-top:4px">
+          496 Phinney Road, Hannibal, NY 13074 &nbsp;|&nbsp; (315) 952-8259<br>
+          info@ingersollpaintingllc.com &nbsp;|&nbsp; ingersollpaintingllc.com
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:#888;letter-spacing:2px;text-transform:uppercase">
+          Family Owned Since 1978 — Licensed &amp; Insured
+        </div>
+      </div>
+
+      <!-- CLIENT + DATE -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;font-size:13px">
+        <div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:4px">Prepared For</div>
+          <div style="font-weight:700;font-size:15px">${client}</div>
+          <div style="color:#555">${addr}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:4px">Date</div>
+          <div style="font-weight:700">${date}</div>
+        </div>
+      </div>
+
+      <div style="font-size:16px;font-weight:700;margin-bottom:10px;border-bottom:1px solid #ddd;padding-bottom:6px">
+        Project Services
+      </div>
+
+      <!-- ROOM TABLE -->
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-family:Georgia,serif">
+        <thead>
+          <tr style="border-bottom:2px solid #111;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#555">
+            <th style="padding:6px;text-align:left">Area</th>
+            <th style="padding:6px;text-align:left">Surfaces</th>
+            <th style="padding:6px;text-align:left">Product</th>
+            <th style="padding:6px;text-align:center">Coats</th>
+            <th style="padding:6px;text-align:right">Sq Ft</th>
+            <th style="padding:6px;text-align:right">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>${roomRows}</tbody>
+      </table>
+
+      <!-- TOTALS -->
+      <div style="border-top:2px solid #111;padding-top:10px;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:#555;margin-bottom:4px">
+          <span>Materials &amp; Supplies</span><span>${fmt(mat)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:#555;margin-bottom:8px">
+          <span>Labor</span><span>${fmt(lab)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:20px;font-weight:700;border-top:1px solid #ddd;padding-top:8px">
+          <span>Total Estimate</span><span>${fmt(grand)}</span>
+        </div>
+      </div>
+
+      <!-- ABOUT THE PRODUCT -->
+      <div style="margin-bottom:14px;font-size:12px">
+        <div style="font-weight:700;margin-bottom:4px">About the Product</div>
+        <div style="color:#444">Benjamin Moore paints are used throughout this project. Known for exceptional coverage, durability, and color retention — backed by one of the most trusted names in the industry.</div>
+      </div>
+
+      ${notes ? `
+      <div style="margin-bottom:14px;font-size:12px">
+        <div style="font-weight:700;margin-bottom:4px">Project Notes</div>
+        <div style="color:#444">${notes}</div>
+      </div>` : ''}
+
+      <!-- WARRANTY + DISCLAIMER -->
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:12px;font-size:11px;color:#555;margin-bottom:14px;line-height:1.7">
+        <strong>1-Year Workmanship Warranty.</strong> Ingersoll Painting LLC stands behind the quality of our work. Any workmanship defects will be addressed at no charge within one year of project completion.<br><br>
+        <strong>Paint &amp; Materials Disclaimer.</strong> Based on the size and specifics of your project, the paint cost and materials are an estimate. Pricing may be adjusted if more paint and materials are needed. Labor costs are estimated based on the expected scope of work. If unforeseen issues arise during the project, adjustments may be necessary.
+      </div>
+
+      <!-- SIGNATURE LINE -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;font-size:12px;margin-bottom:16px">
+        <div>
+          <div style="border-bottom:1px solid #111;margin-bottom:4px;height:32px"></div>
+          <div style="color:#555">Client Signature</div>
+        </div>
+        <div>
+          <div style="border-bottom:1px solid #111;margin-bottom:4px;height:32px"></div>
+          <div style="color:#555">Date</div>
+        </div>
+      </div>
+
+      <div style="text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:12px">
+        Thank you for choosing Ingersoll Painting LLC
+      </div>
+
+      <!-- ACTION BUTTONS -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px">
+        <button onclick="window.print()"
+          style="height:50px;background:#111;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer">
+          Save as PDF
+        </button>
+        <button onclick="shareBid()"
+          style="height:50px;background:#2baae1;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer">
+          Share / Text
+        </button>
+      </div>
+      <button onclick="saveClientFromBid()"
+        style="width:100%;height:50px;margin-top:10px;background:#2e8b1e;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer">
+        💾 Save Client to Contacts
+      </button>
+    </div>`;
+}
+
+function shareBid() {
+  const client = document.getElementById('client-name').value || 'Client';
+  const addr   = document.getElementById('job-address').value || '';
+  const date   = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const cs     = rooms.map(calc);
+  const grand  = cs.reduce((a,c)=>a+c.total,0);
+
+  // Build plain-text version for sharing
+  const roomLines = rooms.map((r,i) => {
+    const c     = cs[i];
+    const surfs = Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>k).join(', ');
+    return `${r.name} (${surfs||'walls'}): ${c.totalSF.toFixed(0)} sf — ${fmt(c.total)}`;
+  }).join('\n');
+
+  const text = `INGERSOLL PAINTING LLC
+Estimate for ${client}
+${addr}
+Date: ${date}
+
+PROJECT BREAKDOWN
+${roomLines}
+
+TOTAL ESTIMATE: ${fmt(grand)}
+
+1-Year Workmanship Warranty
+(315) 952-8259 | ingersollpaintingllc.com
+Family Owned Since 1978`;
+
+  if (navigator.share) {
+    navigator.share({
+      title: `Ingersoll Painting — Estimate for ${client}`,
+      text: text,
+    }).catch(()=>{});
+  } else {
+    // Fallback — copy to clipboard
+    navigator.clipboard.writeText(text).then(()=>{
+      showToast('Copied to clipboard — paste into a text or email');
+    }).catch(()=>{
+      showToast('Use Save as PDF to share', 'warn');
+    });
+  }
 }
 
 // ══════════════════════════════════════════════
-// UTILITIES
+// TABS
 // ══════════════════════════════════════════════
+function switchTab(tab) {
+  document.getElementById('estimator-section').style.display = tab==='estimate' ? '' : 'none';
+  document.getElementById('contacts-section').classList.toggle('active', tab==='contacts');
+  document.getElementById('bt-bar').style.display = tab==='estimate' ? '' : 'none';
+  document.getElementById('tab-estimate').classList.toggle('active', tab==='estimate');
+  document.getElementById('tab-contacts').classList.toggle('active', tab==='contacts');
+  if(tab==='contacts') renderContacts();
+}
+
+// ══════════════════════════════════════════════
+// CONTACTS — localStorage CRUD
+// ══════════════════════════════════════════════
+const CONTACTS_KEY = 'ingersoll_contacts_v1';
+let activeStatusFilter = 'all';
+
+function loadContacts() {
+  try { return JSON.parse(localStorage.getItem(CONTACTS_KEY)) || []; }
+  catch { return []; }
+}
+function saveContacts(contacts) {
+  localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
+}
+
+function setStatusFilter(status, btn) {
+  activeStatusFilter = status;
+  document.querySelectorAll('.sf-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderContacts();
+}
+
+function renderContacts() {
+  const contacts = loadContacts();
+  const query    = (document.getElementById('contact-search')?.value||'').toLowerCase();
+  const list     = document.getElementById('contacts-list');
+  const none     = document.getElementById('no-contacts');
+  if(!list) return;
+
+  let filtered = contacts.filter(c => {
+    const matchStatus = activeStatusFilter==='all' || c.status===activeStatusFilter;
+    const matchQuery  = !query ||
+      (c.name||'').toLowerCase().includes(query) ||
+      (c.address||'').toLowerCase().includes(query) ||
+      (c.phone||'').includes(query);
+    return matchStatus && matchQuery;
+  });
+
+  // Sort: follow-up and pending first, then by name
+  const order = {followup:0,pending:1,scheduled:2,inprogress:3,completed:4};
+  filtered.sort((a,b)=>(order[a.status]??5)-(order[b.status]??5)||a.name.localeCompare(b.name));
+
+  list.innerHTML = '';
+  none.style.display = filtered.length===0 ? 'block' : 'none';
+  filtered.forEach(c => list.appendChild(buildContactCard(c)));
+}
+
+const STATUS_LABELS = {pending:'Pending',followup:'Follow Up',scheduled:'Scheduled',inprogress:'In Progress',completed:'Completed'};
+
+function buildContactCard(c) {
+  const div = document.createElement('div');
+  div.className = 'contact-card';
+  div.id = 'cc_'+c.id;
+  div.innerHTML = `
+    <div class="contact-card-header">
+      <div>
+        <div class="contact-name">${c.name||'—'}</div>
+        <div class="contact-addr">${c.address||''}</div>
+      </div>
+      <span class="status-badge status-${c.status||'pending'}">${STATUS_LABELS[c.status]||'Pending'}</span>
+    </div>
+    <div class="contact-meta">
+      ${c.phone?`<span><strong><a class="qt-phone" href="tel:${c.phone}" onclick="event.stopPropagation()">${c.phone}</a></strong></span>`:''}
+      ${c.estimate?`<span>Est: <strong>${c.estimate}</strong></span>`:''}
+      ${c.estimateDate?`<span>Date: <strong>${c.estimateDate}</strong></span>`:''}
+      ${c.notes?`<span style="color:var(--muted);font-size:12px">${c.notes.substring(0,60)}${c.notes.length>60?'…':''}</span>`:''}
+    </div>
+    <div class="contact-actions">
+      <button class="ca-btn ca-text" onclick="toggleQuickTexts('${c.id}')">💬 Quick Text</button>
+      <button class="ca-btn ca-edit" onclick="openContactModal('${c.id}')">✏️ Edit</button>
+    </div>
+    <div class="quick-texts" id="qt_${c.id}">
+      ${buildQuickTexts(c)}
+    </div>`;
+  return div;
+}
+
+function buildQuickTexts(c) {
+  const name  = (c.name||'').split(' ')[0] || 'there';
+  const phone = c.phone || '';
+  const sig   = `\n\n— Ingersoll Painting LLC\n(315) 952-8259`;
+
+  const templates = [
+    {
+      label: '📋 Following up on your estimate',
+      body:  `Hi ${name}, this is James Bailey with Ingersoll Painting LLC. I wanted to follow up on the estimate I provided for your project. We take great pride in delivering quality work and would love the opportunity to work with you. Please don't hesitate to reach out with any questions — I'm happy to go over the details at your convenience. Looking forward to hearing from you!${sig}`
+    },
+    {
+      label: '📅 Confirming your scheduled date',
+      body:  `Hi ${name}, this is James Bailey with Ingersoll Painting LLC. I'm reaching out to confirm that we have your project scheduled and on our calendar. We will be in touch shortly with the specific date and arrival time. Thank you for choosing Ingersoll Painting — we look forward to taking care of your home!${sig}`
+    },
+    {
+      label: '🚗 On our way',
+      body:  `Hi ${name}, this is James Bailey with Ingersoll Painting LLC. I wanted to let you know that our crew is on our way and will be arriving shortly. If you have any last-minute questions or need to reach us before we arrive, please don't hesitate to call. See you soon!${sig}`
+    },
+    {
+      label: '⏰ Running a few minutes behind',
+      body:  `Hi ${name}, this is James Bailey with Ingersoll Painting LLC. I wanted to give you a courtesy heads-up that we are running just a few minutes behind schedule today. We sincerely appreciate your patience and will be there shortly. Thank you for understanding!${sig}`
+    },
+  ];
+
+  return templates.map(t => {
+    const encoded = encodeURIComponent(t.body);
+    const smsUrl  = phone ? `sms:${phone.replace(/\D/g,'')}?body=${encoded}` : `sms:?body=${encoded}`;
+    return `<a href="${smsUrl}" class="qt-btn" onclick="event.stopPropagation()">${t.label}</a>`;
+  }).join('');
+}
+
+function toggleQuickTexts(id) {
+  const el = document.getElementById('qt_'+id);
+  if(el) el.classList.toggle('open');
+}
+
+// ── Contact Modal ─────────────────────────────
+let editingContactId = null;
+
+function openContactModal(id) {
+  editingContactId = id;
+  const contacts = loadContacts();
+  const c = id ? contacts.find(x=>x.id===id) : null;
+
+  document.getElementById('modal-title').textContent   = c ? 'EDIT CLIENT' : 'ADD CLIENT';
+  document.getElementById('modal-contact-id').value    = c?.id || '';
+  document.getElementById('modal-name').value          = c?.name || '';
+  document.getElementById('modal-phone').value         = c?.phone || '';
+  document.getElementById('modal-address').value       = c?.address || '';
+  document.getElementById('modal-email').value         = c?.email || '';
+  document.getElementById('modal-status').value        = c?.status || 'pending';
+  document.getElementById('modal-estimate').value      = c?.estimate || '';
+  document.getElementById('modal-notes').value         = c?.notes || '';
+  document.getElementById('modal-delete-btn').style.display = c ? 'block' : 'none';
+  document.getElementById('contact-modal').classList.add('show');
+}
+
+function closeContactModal() {
+  document.getElementById('contact-modal').classList.remove('show');
+  editingContactId = null;
+}
+
+function saveContact() {
+  const name = document.getElementById('modal-name').value.trim();
+  if(!name) return showToast('Enter a client name', 'warn');
+
+  const contacts = loadContacts();
+  const id       = editingContactId || 'c'+Date.now();
+  const existing = contacts.findIndex(c=>c.id===id);
+
+  const contact = {
+    id,
+    name,
+    phone:        document.getElementById('modal-phone').value.trim(),
+    address:      document.getElementById('modal-address').value.trim(),
+    email:        document.getElementById('modal-email').value.trim(),
+    status:       document.getElementById('modal-status').value,
+    estimate:     document.getElementById('modal-estimate').value.trim(),
+    estimateDate: existing>=0 ? contacts[existing].estimateDate : new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),
+    notes:        document.getElementById('modal-notes').value.trim(),
+    updatedAt:    Date.now(),
+  };
+
+  if(existing>=0) contacts[existing]=contact;
+  else contacts.unshift(contact);
+
+  saveContacts(contacts);
+  closeContactModal();
+  renderContacts();
+  showToast(`${name} saved to contacts`);
+}
+
+function deleteContact() {
+  if(!editingContactId) return;
+  const contacts = loadContacts().filter(c=>c.id!==editingContactId);
+  saveContacts(contacts);
+  closeContactModal();
+  renderContacts();
+  showToast('Contact deleted', 'warn');
+}
+
+// ── Save client from bid ──────────────────────
+function saveClientFromBid() {
+  const name     = document.getElementById('client-name').value.trim();
+  const address  = document.getElementById('job-address').value.trim();
+  const cs       = rooms.map(calc);
+  const grand    = cs.reduce((a,c)=>a+c.total,0);
+  const estimate = grand>0 ? fmt(grand) : '';
+
+  if(!name) return showToast('Enter a client name first', 'warn');
+
+  const contacts = loadContacts();
+  const existing = contacts.find(c=>c.name.toLowerCase()===name.toLowerCase());
+
+  if(existing) {
+    // Update estimate on existing contact
+    existing.estimate     = estimate;
+    existing.estimateDate = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    existing.address      = address || existing.address;
+    existing.updatedAt    = Date.now();
+    saveContacts(contacts);
+    showToast(`${name} updated in contacts`);
+  } else {
+    // Pre-fill modal with current bid info
+    editingContactId = null;
+    document.getElementById('modal-title').textContent   = 'SAVE CLIENT';
+    document.getElementById('modal-contact-id').value    = '';
+    document.getElementById('modal-name').value          = name;
+    document.getElementById('modal-phone').value         = '';
+    document.getElementById('modal-address').value       = address;
+    document.getElementById('modal-email').value         = '';
+    document.getElementById('modal-status').value        = 'pending';
+    document.getElementById('modal-estimate').value      = estimate;
+    document.getElementById('modal-notes').value         = document.getElementById('notes').value;
+    document.getElementById('modal-delete-btn').style.display = 'none';
+    document.getElementById('contact-modal').classList.add('show');
+  }
+}
 function fmt(n){return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
 let toastT;
 function showToast(msg, type='') {

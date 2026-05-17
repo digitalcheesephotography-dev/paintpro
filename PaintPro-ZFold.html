@@ -84,6 +84,19 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .sum-val{font-size:16px;font-weight:700;color:var(--blue);margin-top:2px}
 .room-remove{width:100%;height:44px;margin-top:12px;background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer}
 
+/* Wall shooting UI */
+.walls-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.walls-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.walls-perimeter{font-size:13px;font-weight:700;color:var(--blue)}
+.wall-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.wall-badge{background:var(--border);color:var(--muted);font-size:11px;font-weight:700;border-radius:4px;padding:2px 7px;flex-shrink:0;font-family:var(--head);letter-spacing:1px}
+.wall-row input{flex:1;height:46px;font-size:17px}
+.wall-unit{font-size:13px;color:var(--muted);flex-shrink:0}
+.wall-del{background:transparent;border:none;color:var(--red);font-size:20px;cursor:pointer;padding:0 4px;flex-shrink:0;line-height:1}
+.add-wall-btn{width:100%;height:46px;background:transparent;border:1.5px dashed var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;margin-bottom:12px;transition:all .15s}
+.add-wall-btn:hover{border-color:var(--blue);color:var(--blue)}
+.height-row{margin-bottom:12px}
+
 /* ADD ROOM */
 #add-room-btn{width:100%;height:54px;background:transparent;border:1.5px dashed var(--blue);border-radius:var(--r);color:var(--blue);font-family:var(--font);font-size:17px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-bottom:var(--gap)}
 
@@ -264,9 +277,8 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     </button>
     <div class="bt-selects">
       <select id="target-field">
-        <option value="length">Fill: Length</option>
-        <option value="width">Fill: Width</option>
-        <option value="height">Fill: Height</option>
+        <option value="wall">→ Next Wall</option>
+        <option value="height">→ Height</option>
       </select>
       <select id="target-room"></select>
     </div>
@@ -579,15 +591,22 @@ function applyMeasurement(feet, disp) {
   const roomIdx = parseInt(document.getElementById('target-room').value);
   const room    = rooms[roomIdx];
   if (!room) return;
-  const el = document.getElementById(`${room.id}_${field}`);
-  if (!el) return;
-  el.value = feet.toFixed(2);
-  el.classList.remove('bt-flash');
-  void el.offsetWidth;
-  el.classList.add('bt-flash');
-  setTimeout(() => el.classList.remove('bt-flash'), 900);
-  updateField(room.id, field, feet.toFixed(2));
-  showToast(`${disp} → ${field} · ${room.name}`);
+
+  if (field === 'wall') {
+    // Add a new wall with this measurement
+    addWall(room.id, feet.toFixed(2));
+    showToast(`${disp} → Wall ${room.walls.length} · ${room.name}`);
+  } else if (field === 'height') {
+    const el = document.getElementById(`${room.id}_height`);
+    if (!el) return;
+    el.value = feet.toFixed(2);
+    el.classList.remove('bt-flash');
+    void el.offsetWidth;
+    el.classList.add('bt-flash');
+    setTimeout(() => el.classList.remove('bt-flash'), 900);
+    updateField(room.id, 'height', feet.toFixed(2));
+    showToast(`${disp} → Height · ${room.name}`);
+  }
 }
 
 // ── Helpers ───────────────────────────────────────
@@ -661,7 +680,7 @@ function sendManual() {
 function addRoom() {
   const id   = 'r'+(++roomCount);
   const name = 'Room '+roomCount;
-  const room = {id, name, length:'', width:'', height:'8', doors:'1', windows:'2',
+  const room = {id, name, walls:[], height:'8',
     surfaces:{walls:true,ceiling:false,trim:false}, product:PRODUCTS[0].name, coats:'2', open:true};
   rooms.push(room);
   renderRoom(room, rooms.length-1);
@@ -684,33 +703,57 @@ function renderRoom(room, idx) {
       <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="room-body">
-      <div class="dims-grid">
-        <label class="field"><span>Length (ft)</span><input type="number" id="${room.id}_length" value="${room.length}" min="0" step="0.01" inputmode="decimal" oninput="updateField('${room.id}','length',this.value)"/></label>
-        <label class="field"><span>Width (ft)</span><input type="number" id="${room.id}_width" value="${room.width}" min="0" step="0.01" inputmode="decimal" oninput="updateField('${room.id}','width',this.value)"/></label>
-        <label class="field"><span>Height (ft)</span><input type="number" id="${room.id}_height" value="${room.height}" min="0" step="0.01" inputmode="decimal" oninput="updateField('${room.id}','height',this.value)"/></label>
-        <label class="field"><span>Doors</span><input type="number" id="${room.id}_doors" value="${room.doors}" min="0" inputmode="numeric" oninput="updateField('${room.id}','doors',this.value)"/></label>
-        <label class="field"><span>Windows</span><input type="number" id="${room.id}_windows" value="${room.windows}" min="0" inputmode="numeric" oninput="updateField('${room.id}','windows',this.value)"/></label>
+
+      <!-- Individual walls -->
+      <div class="walls-header">
+        <span class="walls-label">Walls (shoot each one)</span>
+        <span class="walls-perimeter" id="${room.id}_perim"></span>
       </div>
+      <div class="walls-list" id="${room.id}_walls"></div>
+      <button class="add-wall-btn" onclick="addWall('${room.id}')">+ Add Wall</button>
+
+      <!-- Ceiling height -->
+      <div class="height-row">
+        <label class="field">
+          <span>Ceiling Height (ft)</span>
+          <input type="number" id="${room.id}_height" value="${room.height}" min="0" step="0.01" inputmode="decimal"
+            oninput="updateField('${room.id}','height',this.value)"/>
+        </label>
+      </div>
+
+      <!-- Surfaces -->
       <div class="surface-row">
         <button class="surf-btn${room.surfaces.walls?' on':''}" id="${room.id}_sw" onclick="toggleSurf('${room.id}','walls')">Walls</button>
         <button class="surf-btn${room.surfaces.ceiling?' on':''}" id="${room.id}_sc" onclick="toggleSurf('${room.id}','ceiling')">Ceiling</button>
         <button class="surf-btn${room.surfaces.trim?' on':''}" id="${room.id}_st" onclick="toggleSurf('${room.id}','trim')">Trim</button>
       </div>
+
+      <!-- Product + coats -->
       <div class="prod-row">
-        <label class="field"><span>Paint Product</span><select id="${room.id}_product" onchange="updateField('${room.id}','product',this.value)">${opts}</select></label>
-        <label class="field"><span>Coats</span><select id="${room.id}_coats" onchange="updateField('${room.id}','coats',this.value)">
-          <option${room.coats==='1'?' selected':''}>1</option><option${room.coats==='2'?' selected':''}>2</option><option${room.coats==='3'?' selected':''}>3</option>
-        </select></label>
+        <label class="field"><span>Paint Product</span>
+          <select id="${room.id}_product" onchange="updateField('${room.id}','product',this.value)">${opts}</select>
+        </label>
+        <label class="field"><span>Coats</span>
+          <select id="${room.id}_coats" onchange="updateField('${room.id}','coats',this.value)">
+            <option${room.coats==='1'?' selected':''}>1</option>
+            <option${room.coats==='2'?' selected':''}>2</option>
+            <option${room.coats==='3'?' selected':''}>3</option>
+          </select>
+        </label>
       </div>
+
+      <!-- Mini summary -->
       <div class="mini-sum" id="${room.id}_sum" style="display:none">
         <div><div class="sum-label">Wall SF</div><div class="sum-val" id="${room.id}_ssf">—</div></div>
         <div><div class="sum-label">Gallons</div><div class="sum-val" id="${room.id}_sgal">—</div></div>
         <div><div class="sum-label">Materials</div><div class="sum-val" id="${room.id}_smat">—</div></div>
         <div><div class="sum-label">Labor</div><div class="sum-val" id="${room.id}_slab">—</div></div>
       </div>
+
       <button class="room-remove" onclick="removeRoom('${room.id}')">✕ Remove This Room</button>
     </div>`;
   document.getElementById('rooms-container').appendChild(card);
+  renderWalls(room);
 }
 
 function toggleOpen(id) { const r=rooms.find(r=>r.id===id); if(r) setOpen(id,!r.open); }
@@ -725,6 +768,59 @@ function removeRoom(id) {
   document.getElementById(id+'_card').remove();
   rooms.forEach((r,i)=>{ const e=document.getElementById(r.id+'_num'); if(e) e.textContent='#'+(i+1); });
   refreshRoomSelect(); recalcAll();
+}
+
+// ── Wall management ───────────────────────────────
+let wallCount = 0;
+
+function addWall(roomId, ft='') {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  const wid = 'w'+(++wallCount);
+  room.walls.push({id:wid, ft:ft.toString()});
+  renderWalls(room);
+  recalcRoom(roomId);
+  // Focus new wall input
+  setTimeout(()=>{ const el=document.getElementById(wid+'_ft'); if(el) el.focus(); }, 50);
+}
+
+function removeWall(roomId, wallId) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  room.walls = room.walls.filter(w=>w.id!==wallId);
+  renderWalls(room);
+  recalcRoom(roomId);
+}
+
+function updateWall(roomId, wallId, val) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  const wall = room.walls.find(w=>w.id===wallId); if(!wall) return;
+  wall.ft = val;
+  updatePerimeterDisplay(room);
+  recalcRoom(roomId);
+}
+
+function renderWalls(room) {
+  const container = document.getElementById(room.id+'_walls'); if(!container) return;
+  container.innerHTML = '';
+  room.walls.forEach((wall, i) => {
+    const row = document.createElement('div');
+    row.className = 'wall-row';
+    row.id = wall.id+'_row';
+    row.innerHTML = `
+      <span class="wall-badge">W${i+1}</span>
+      <input type="number" id="${wall.id}_ft" value="${wall.ft}" min="0" step="0.01"
+        inputmode="decimal" placeholder="0.00"
+        oninput="updateWall('${room.id}','${wall.id}',this.value)"/>
+      <span class="wall-unit">ft</span>
+      <button class="wall-del" onclick="removeWall('${room.id}','${wall.id}')">✕</button>`;
+    container.appendChild(row);
+  });
+  updatePerimeterDisplay(room);
+}
+
+function updatePerimeterDisplay(room) {
+  const perim = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0), 0);
+  const el = document.getElementById(room.id+'_perim');
+  if(el) el.textContent = perim > 0 ? `${perim.toFixed(1)} ft perimeter` : '';
 }
 function updateField(id,field,val) {
   const r=rooms.find(r=>r.id===id); if(!r) return;
@@ -746,22 +842,33 @@ function refreshRoomSelect() {
 // CALCULATIONS
 // ══════════════════════════════════════════════
 function calc(room) {
-  const l=parseFloat(room.length)||0, w=parseFloat(room.width)||0, h=parseFloat(room.height)||0;
-  const d=parseInt(room.doors)||0, win=parseInt(room.windows)||0, c=parseInt(room.coats)||1;
-  const wSF=Math.max(0,2*(l+w)*h-d*21-win*15), cSF=l*w, tLF=2*(l+w)+d*7+win*4;
-  const p=PRODUCTS.find(x=>x.name===room.product)||PRODUCTS[0];
-  const gal=(room.surfaces.walls?Math.ceil(wSF*c/p.cov):0)+(room.surfaces.ceiling?Math.ceil(cSF*c/p.cov):0)+(room.surfaces.trim?Math.ceil(tLF*c/p.cov):0);
-  const mat=gal*p.price*MARKUP;
-  const lab=(room.surfaces.walls?wSF*LABOR.walls*c:0)+(room.surfaces.ceiling?cSF*LABOR.ceiling*c:0)+(room.surfaces.trim?tLF*LABOR.trim*c:0);
-  return {wSF,cSF,tLF,gal,mat,lab,total:mat+lab,valid:l>0&&w>0};
+  const perimeter = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0), 0);
+  const h = parseFloat(room.height) || 0;
+  const c = parseInt(room.coats)    || 1;
+
+  // Wall SF = sum of all wall lengths × ceiling height
+  const wallSF = perimeter * h;
+  const trimLF = perimeter; // perimeter doubles as trim linear feet
+
+  const p   = PRODUCTS.find(x=>x.name===room.product) || PRODUCTS[0];
+  const gWall = room.surfaces.walls ? Math.ceil(wallSF*c/p.cov) : 0;
+  const gTrim = room.surfaces.trim  ? Math.ceil(trimLF*c/p.cov) : 0;
+  const gal   = gWall + gTrim;
+
+  const mat = gal * p.price * MARKUP;
+  const lab = (room.surfaces.walls ? wallSF*LABOR.walls*c : 0)
+            + (room.surfaces.trim  ? trimLF*LABOR.trim*c  : 0);
+
+  return {wallSF, trimLF, gal, mat, lab, total:mat+lab, valid: perimeter>0 && h>0};
 }
+
 function recalcRoom(id) {
   const room=rooms.find(r=>r.id===id); if(!room) return;
   const c=calc(room), el=document.getElementById(`${id}_sum`);
   if(el){
     if(c.valid){
       el.style.display='grid';
-      document.getElementById(`${id}_ssf`).textContent=room.surfaces.walls?c.wSF.toFixed(0)+' sf':'—';
+      document.getElementById(`${id}_ssf`).textContent=room.surfaces.walls?c.wallSF.toFixed(0)+' sf':'—';
       document.getElementById(`${id}_sgal`).textContent=c.gal+' gal';
       document.getElementById(`${id}_smat`).textContent=fmt(c.mat);
       document.getElementById(`${id}_slab`).textContent=fmt(c.lab);
@@ -798,8 +905,8 @@ function renderBid() {
   const rows=rooms.map((r,i)=>{
     const c=cs[i], surfs=Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>k).join(', ');
     const short=r.product.replace(/ \(Int\)| \(Ext\)| \(Cabinets\/Trim\)/g,'');
-    const sf=(r.surfaces.walls?c.wSF:0)+(r.surfaces.ceiling?c.cSF:0);
-    return `<tr><td style="font-weight:600">${r.name}</td><td style="text-transform:capitalize">${surfs||'—'}</td><td>${short}</td><td style="text-align:center">${r.coats}</td><td>${sf.toFixed(0)} sf</td><td>${c.gal} gal</td><td>${fmt(c.mat)}</td><td>${fmt(c.lab)}</td><td style="font-weight:700">${fmt(c.total)}</td></tr>`;
+    const walls = r.walls.map((w,j)=>`W${j+1}: ${parseFloat(w.ft).toFixed(1)}ft`).join(', ');
+    return `<tr><td style="font-weight:600">${r.name}</td><td style="text-transform:capitalize">${surfs||'—'}</td><td>${short}</td><td style="text-align:center">${r.coats}</td><td>${c.wallSF.toFixed(0)} sf</td><td>${c.gal} gal</td><td>${fmt(c.mat)}</td><td>${fmt(c.lab)}</td><td style="font-weight:700">${fmt(c.total)}</td></tr>`;
   }).join('');
   document.getElementById('bid-out').innerHTML=`
     <h1>INGERSOLL PAINTING LLC</h1>

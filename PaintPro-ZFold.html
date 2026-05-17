@@ -510,6 +510,8 @@ function onBTDrop() {
 }
 
 // ── Parse measurement ─────────────────────────────
+// DISTO D2 confirmed format: IEEE 754 float32 little-endian, value in meters
+// e.g. [16 6a 95 40] = 4.6693m = 15'4"  |  [ab cf 95 40] = 4.6816m = 15'4"
 function onMeasurement(evt) {
   const dv  = evt.target.value;
   const raw = new Uint8Array(dv.buffer);
@@ -517,32 +519,47 @@ function onMeasurement(evt) {
 
   let meters = null;
 
-  // Try ASCII text
-  try {
-    const txt = new TextDecoder('utf-8',{fatal:true}).decode(dv.buffer).trim();
-    dbgLog(`  ASCII: "${txt}"`);
-    const mM  = txt.match(/([\d.]+)\s*m(?!m)/i);
-    const mmM = txt.match(/([\d.]+)\s*mm/i);
-    const ftM = txt.match(/(\d+)\s*ft\s*([\d.]+)?\s*in?/i);
-    if      (mM)  { meters = parseFloat(mM[1]);                                       dbgLog(`  → meters: ${meters}`) }
-    else if (mmM) { meters = parseFloat(mmM[1])/1000;                                 dbgLog(`  → mm: ${meters} m`) }
-    else if (ftM) { meters = ((parseFloat(ftM[1])||0)*12+(parseFloat(ftM[2])||0))*.0254; dbgLog(`  → ft/in: ${meters} m`) }
-  } catch {}
-
-  // Try binary — every 4-byte window
-  if (meters === null) {
-    for (let o = 0; o <= dv.byteLength - 4; o++) {
-      const le = dv.getUint32(o, true);
-      const be = dv.getUint32(o, false);
-      if (le > 10 && le < 200000) { meters = le/1000;   dbgLog(`  → LE mm @${o}: ${le} → ${meters}m`); break }
-      if (be > 10 && be < 200000) { meters = be/1000;   dbgLog(`  → BE mm @${o}: ${be} → ${meters}m`); break }
-      if (le > 100 && le < 2000000) { meters = le/10000; dbgLog(`  → LE mm×10 @${o}: ${le} → ${meters}m`); break }
+  // ── PRIMARY: float32 little-endian (confirmed DISTO D2 format) ──
+  if (dv.byteLength >= 4) {
+    const f32 = dv.getFloat32(0, true); // little-endian
+    if (f32 > 0.01 && f32 < 200) {     // 1cm to 200m — sane range
+      meters = f32;
+      dbgLog(`  ✓ float32 LE: ${f32.toFixed(4)}m`);
     }
   }
 
+  // ── FALLBACK: scan all 4-byte windows for float32 ──
+  if (meters === null && dv.byteLength >= 4) {
+    for (let o = 0; o <= dv.byteLength - 4; o++) {
+      const f = dv.getFloat32(o, true);
+      if (f > 0.01 && f < 200) { meters = f; dbgLog(`  float32 LE @${o}: ${f.toFixed(4)}m`); break; }
+    }
+  }
+
+  // ── FALLBACK 2: integer mm or mm×10 ──
+  if (meters === null && dv.byteLength >= 4) {
+    for (let o = 0; o <= dv.byteLength - 4; o++) {
+      const le = dv.getUint32(o, true);
+      if (le > 10 && le < 200000)   { meters = le/1000;  dbgLog(`  uint32 LE mm @${o}: ${le}`); break; }
+      if (le > 100 && le < 2000000) { meters = le/10000; dbgLog(`  uint32 LE mm×10 @${o}: ${le}`); break; }
+    }
+  }
+
+  // ── FALLBACK 3: ASCII text ──
+  if (meters === null) {
+    try {
+      const txt = new TextDecoder('utf-8',{fatal:true}).decode(dv.buffer).trim();
+      dbgLog(`  ASCII: "${txt}"`);
+      const mM=txt.match(/([\d.]+)\s*m(?!m)/i), mmM=txt.match(/([\d.]+)\s*mm/i), ftM=txt.match(/(\d+)\s*ft\s*([\d.]+)?\s*in?/i);
+      if(mM) { meters=parseFloat(mM[1]); dbgLog(`  → ${meters}m`); }
+      else if(mmM) { meters=parseFloat(mmM[1])/1000; dbgLog(`  → ${meters}m`); }
+      else if(ftM) { meters=((parseFloat(ftM[1])||0)*12+(parseFloat(ftM[2])||0))*.0254; dbgLog(`  → ${meters}m`); }
+    } catch {}
+  }
+
   if (!meters || meters <= 0 || meters > 200) {
-    dbgLog('  Could not parse — check raw bytes above.');
-    showToast('Got data but could not parse — check ⚙ debug', 'warn');
+    dbgLog('  Could not parse — raw bytes logged above.');
+    showToast('Could not parse measurement', 'warn');
     return;
   }
 

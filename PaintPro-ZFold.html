@@ -905,13 +905,6 @@ function refreshRoomSelect() {
 // ══════════════════════════════════════════════
 function calc(room) {
   const perimeter = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0), 0);
-  const h = parseFloat(room.height) || 0;
-  const c = parseInt(room.coats)    || 1;
-
-  // Wall SF = sum of all wall lengths × ceiling height
-  const wallSF = perimeter * h;
-function calc(room) {
-  const perimeter = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0), 0);
   const h  = parseFloat(room.height)      || 0;
   const fL = parseFloat(room.floorLength) || 0;
   const fW = parseFloat(room.floorWidth)  || 0;

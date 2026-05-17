@@ -93,9 +93,12 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .wall-row input{flex:1;height:46px;font-size:17px}
 .wall-unit{font-size:13px;color:var(--muted);flex-shrink:0}
 .wall-del{background:transparent;border:none;color:var(--red);font-size:20px;cursor:pointer;padding:0 4px;flex-shrink:0;line-height:1}
+.wall-reshoot{background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:16px;cursor:pointer;padding:0 6px;flex-shrink:0;height:36px;transition:all .15s}
+.wall-reshoot.active{border-color:var(--blue);color:var(--blue);background:#162535}
 .add-wall-btn{width:100%;height:46px;background:transparent;border:1.5px dashed var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;margin-bottom:12px;transition:all .15s}
 .add-wall-btn:hover{border-color:var(--blue);color:var(--blue)}
 .height-row{margin-bottom:12px}
+.floor-dims{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 
 /* ADD ROOM */
 #add-room-btn{width:100%;height:54px;background:transparent;border:1.5px dashed var(--blue);border-radius:var(--r);color:var(--blue);font-family:var(--font);font-size:17px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-bottom:var(--gap)}
@@ -279,6 +282,8 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
       <select id="target-field">
         <option value="wall">→ Next Wall</option>
         <option value="height">→ Height</option>
+        <option value="floorLength">→ Floor/Ceil L</option>
+        <option value="floorWidth">→ Floor/Ceil W</option>
       </select>
       <select id="target-room"></select>
     </div>
@@ -593,19 +598,34 @@ function applyMeasurement(feet, disp) {
   if (!room) return;
 
   if (field === 'wall') {
-    // Add a new wall with this measurement
+    // Check if we're reshooting a specific wall
+    if (reshootTarget) {
+      const room = rooms.find(r=>r.id===reshootTarget.roomId);
+      const wall = room?.walls.find(w=>w.id===reshootTarget.wallId);
+      if (wall) {
+        const wallIdx = room.walls.findIndex(w=>w.id===reshootTarget.wallId);
+        wall.ft = feet.toFixed(2);
+        renderWalls(room);
+        recalcRoom(room.id);
+        showToast(`${disp} → Wall ${wallIdx+1} updated · ${room.name}`);
+        reshootTarget = null; // clear after one shot
+        return;
+      }
+    }
+    // Normal — add new wall
     addWall(room.id, feet.toFixed(2));
     showToast(`${disp} → Wall ${room.walls.length} · ${room.name}`);
-  } else if (field === 'height') {
-    const el = document.getElementById(`${room.id}_height`);
+  } else if (field === 'height' || field === 'floorLength' || field === 'floorWidth') {
+    const el = document.getElementById(`${room.id}_${field}`);
     if (!el) return;
     el.value = feet.toFixed(2);
     el.classList.remove('bt-flash');
     void el.offsetWidth;
     el.classList.add('bt-flash');
     setTimeout(() => el.classList.remove('bt-flash'), 900);
-    updateField(room.id, 'height', feet.toFixed(2));
-    showToast(`${disp} → Height · ${room.name}`);
+    updateField(room.id, field, feet.toFixed(2));
+    const label = field==='height' ? 'Height' : field==='floorLength' ? 'Floor/Ceil Length' : 'Floor/Ceil Width';
+    showToast(`${disp} → ${label} · ${room.name}`);
   }
 }
 
@@ -680,8 +700,8 @@ function sendManual() {
 function addRoom() {
   const id   = 'r'+(++roomCount);
   const name = 'Room '+roomCount;
-  const room = {id, name, walls:[], height:'8',
-    surfaces:{walls:true,ceiling:false,trim:false}, product:PRODUCTS[0].name, coats:'2', open:true};
+  const room = {id, name, walls:[], height:'8', floorLength:'', floorWidth:'',
+    surfaces:{walls:true, ceiling:false, trim:false, floor:false}, product:PRODUCTS[0].name, coats:'2', open:true};
   rooms.push(room);
   renderRoom(room, rooms.length-1);
   refreshRoomSelect();
@@ -725,7 +745,22 @@ function renderRoom(room, idx) {
       <div class="surface-row">
         <button class="surf-btn${room.surfaces.walls?' on':''}" id="${room.id}_sw" onclick="toggleSurf('${room.id}','walls')">Walls</button>
         <button class="surf-btn${room.surfaces.ceiling?' on':''}" id="${room.id}_sc" onclick="toggleSurf('${room.id}','ceiling')">Ceiling</button>
+        <button class="surf-btn${room.surfaces.floor?' on':''}" id="${room.id}_sf" onclick="toggleSurf('${room.id}','floor')">Floor</button>
         <button class="surf-btn${room.surfaces.trim?' on':''}" id="${room.id}_st" onclick="toggleSurf('${room.id}','trim')">Trim</button>
+      </div>
+
+      <!-- Floor/Ceiling dimensions (shown when either is active) -->
+      <div class="floor-dims" id="${room.id}_floordims" style="display:${room.surfaces.ceiling||room.surfaces.floor?'grid':'none'}">
+        <label class="field">
+          <span>Length (ft)</span>
+          <input type="number" id="${room.id}_floorLength" value="${room.floorLength}" min="0" step="0.01" inputmode="decimal"
+            oninput="updateField('${room.id}','floorLength',this.value)"/>
+        </label>
+        <label class="field">
+          <span>Width (ft)</span>
+          <input type="number" id="${room.id}_floorWidth" value="${room.floorWidth}" min="0" step="0.01" inputmode="decimal"
+            oninput="updateField('${room.id}','floorWidth',this.value)"/>
+        </label>
       </div>
 
       <!-- Product + coats -->
@@ -772,6 +807,7 @@ function removeRoom(id) {
 
 // ── Wall management ───────────────────────────────
 let wallCount = 0;
+let reshootTarget = null; // {roomId, wallId} when rehooting a specific wall
 
 function addWall(roomId, ft='') {
   const room = rooms.find(r=>r.id===roomId); if(!room) return;
@@ -786,8 +822,28 @@ function addWall(roomId, ft='') {
 function removeWall(roomId, wallId) {
   const room = rooms.find(r=>r.id===roomId); if(!room) return;
   room.walls = room.walls.filter(w=>w.id!==wallId);
+  if(reshootTarget && reshootTarget.wallId===wallId) reshootTarget=null;
   renderWalls(room);
   recalcRoom(roomId);
+}
+
+function setReshootTarget(roomId, wallId) {
+  // Clear previous
+  document.querySelectorAll('.wall-reshoot.active').forEach(b=>b.classList.remove('active'));
+  if(reshootTarget && reshootTarget.roomId===roomId && reshootTarget.wallId===wallId) {
+    // Toggle off
+    reshootTarget = null;
+    showToast('Reshoot cancelled — back to Next Wall', 'warn');
+    return;
+  }
+  reshootTarget = {roomId, wallId};
+  // Highlight the button
+  const room = rooms.find(r=>r.id===roomId);
+  const wallIdx = room?.walls.findIndex(w=>w.id===wallId) ?? -1;
+  document.querySelector(`#${wallId}_row .wall-reshoot`)?.classList.add('active');
+  // Set BT target to wall mode
+  document.getElementById('target-field').value = 'wall';
+  showToast(`Shoot to replace Wall ${wallIdx+1}`);
 }
 
 function updateWall(roomId, wallId, val) {
@@ -811,6 +867,8 @@ function renderWalls(room) {
         inputmode="decimal" placeholder="0.00"
         oninput="updateWall('${room.id}','${wall.id}',this.value)"/>
       <span class="wall-unit">ft</span>
+      <button class="wall-reshoot" title="Reshoot this wall"
+        onclick="setReshootTarget('${room.id}','${wall.id}')">⟳</button>
       <button class="wall-del" onclick="removeWall('${room.id}','${wall.id}')">✕</button>`;
     container.appendChild(row);
   });
@@ -828,10 +886,14 @@ function updateField(id,field,val) {
   if(field==='name') refreshRoomSelect();
   recalcRoom(id);
 }
-function toggleSurf(id,surf) {
+function toggleSurf(id, surf) {
   const r=rooms.find(r=>r.id===id); if(!r) return;
   r.surfaces[surf]=!r.surfaces[surf];
-  document.getElementById(`${id}_s${surf[0]}`).classList.toggle('on',r.surfaces[surf]);
+  const btnId = surf==='floor' ? `${id}_sf` : `${id}_s${surf[0]}`;
+  document.getElementById(btnId)?.classList.toggle('on', r.surfaces[surf]);
+  // Show/hide floor/ceiling dimension inputs
+  const dims = document.getElementById(`${id}_floordims`);
+  if(dims) dims.style.display = (r.surfaces.ceiling||r.surfaces.floor) ? 'grid' : 'none';
   recalcRoom(id);
 }
 function refreshRoomSelect() {
@@ -848,18 +910,33 @@ function calc(room) {
 
   // Wall SF = sum of all wall lengths × ceiling height
   const wallSF = perimeter * h;
-  const trimLF = perimeter; // perimeter doubles as trim linear feet
+function calc(room) {
+  const perimeter = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0), 0);
+  const h  = parseFloat(room.height)      || 0;
+  const fL = parseFloat(room.floorLength) || 0;
+  const fW = parseFloat(room.floorWidth)  || 0;
+  const c  = parseInt(room.coats)         || 1;
 
-  const p   = PRODUCTS.find(x=>x.name===room.product) || PRODUCTS[0];
-  const gWall = room.surfaces.walls ? Math.ceil(wallSF*c/p.cov) : 0;
-  const gTrim = room.surfaces.trim  ? Math.ceil(trimLF*c/p.cov) : 0;
-  const gal   = gWall + gTrim;
+  const wallSF  = perimeter * h;   // walls: perimeter × height
+  const floorSF = fL * fW;         // ceiling/floor: length × width
+  const trimLF  = perimeter;
+
+  const p      = PRODUCTS.find(x=>x.name===room.product) || PRODUCTS[0];
+  const gWall  = room.surfaces.walls   ? Math.ceil(wallSF*c/p.cov)  : 0;
+  const gCeil  = room.surfaces.ceiling ? Math.ceil(floorSF*c/p.cov) : 0;
+  const gFloor = room.surfaces.floor   ? Math.ceil(floorSF*c/p.cov) : 0;
+  const gTrim  = room.surfaces.trim    ? Math.ceil(trimLF*c/p.cov)  : 0;
+  const gal    = gWall + gCeil + gFloor + gTrim;
 
   const mat = gal * p.price * MARKUP;
-  const lab = (room.surfaces.walls ? wallSF*LABOR.walls*c : 0)
-            + (room.surfaces.trim  ? trimLF*LABOR.trim*c  : 0);
+  const lab = (room.surfaces.walls   ? wallSF*LABOR.walls*c    : 0)
+            + (room.surfaces.ceiling ? floorSF*LABOR.ceiling*c : 0)
+            + (room.surfaces.floor   ? floorSF*LABOR.ceiling*c : 0)
+            + (room.surfaces.trim    ? trimLF*LABOR.trim*c     : 0);
 
-  return {wallSF, trimLF, gal, mat, lab, total:mat+lab, valid: perimeter>0 && h>0};
+  const totalSF = (room.surfaces.walls?wallSF:0)+(room.surfaces.ceiling?floorSF:0)+(room.surfaces.floor?floorSF:0);
+  const valid   = (perimeter>0&&h>0) || floorSF>0;
+  return {wallSF, floorSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, valid};
 }
 
 function recalcRoom(id) {
@@ -868,7 +945,7 @@ function recalcRoom(id) {
   if(el){
     if(c.valid){
       el.style.display='grid';
-      document.getElementById(`${id}_ssf`).textContent=room.surfaces.walls?c.wallSF.toFixed(0)+' sf':'—';
+      document.getElementById(`${id}_ssf`).textContent=c.totalSF>0?c.totalSF.toFixed(0)+' sf':'—';
       document.getElementById(`${id}_sgal`).textContent=c.gal+' gal';
       document.getElementById(`${id}_smat`).textContent=fmt(c.mat);
       document.getElementById(`${id}_slab`).textContent=fmt(c.lab);

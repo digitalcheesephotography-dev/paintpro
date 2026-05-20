@@ -197,7 +197,22 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   .mini-sum{grid-template-columns:1fr 1fr}
   .bt-selects{grid-template-columns:1fr}
 }
-@media print{
+/* ── Sub-nav ── */
+.subnav-btn{flex:1;height:40px;background:transparent;border:none;color:var(--muted);font-family:var(--font);font-size:13px;font-weight:700;letter-spacing:.5px;cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
+.subnav-btn.active{color:var(--blue);border-bottom-color:var(--blue)}
+.proj-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.proj-bidding{background:#2d1f00;color:#f59e0b;border:1px solid #f59e0b}
+.proj-scheduled{background:#162535;color:var(--blue);border:1px solid var(--blue)}
+.proj-inprogress{background:#1a2a1a;color:#4ade80;border:1px solid #4ade80}
+.proj-complete{background:#1a1a1a;color:var(--muted);border:1px solid var(--border)}
+.proj-status-badge{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;letter-spacing:.5px}
+.note-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px;cursor:pointer}
+.supply-card{background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.supply-cat-badge{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);background:#162535;border-radius:4px;padding:2px 8px;flex-shrink:0}
+.task-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.task-check{width:22px;height:22px;accent-color:var(--green);cursor:pointer;flex-shrink:0}
+.task-label{flex:1;font-size:14px}
+.task-label.done{text-decoration:line-through;color:var(--muted)}
   header,#bt-bar,#add-room-btn,#rooms-container,.job-card,#notes-wrap,#totals-strip,#gen-btn,#toast,#https-warn,#tab-bar,#contacts-section{display:none!important}
   body{padding-bottom:0}
   #bid-out{display:block!important;border-radius:0;padding:0}
@@ -282,9 +297,9 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 
 <!-- TAB BAR -->
 <div id="tab-bar">
-  <button class="tab-btn active" id="tab-estimate" onclick="switchTab('estimate')">📐 ESTIMATE</button>
-  <button class="tab-btn" id="tab-contacts" onclick="switchTab('contacts')">👥 CLIENTS</button>
-  <button class="tab-btn" id="tab-apt" onclick="switchTab('apt')">🏢 APT PRICING</button>
+  <button class="tab-btn active" id="tab-estimate" onclick="switchTab('estimate')" aria-label="Estimator tab">📐 ESTIMATE</button>
+  <button class="tab-btn" id="tab-contacts" onclick="switchTab('contacts')" aria-label="Clients tab">👥 CLIENTS</button>
+  <button class="tab-btn" id="tab-apt" onclick="switchTab('apt')" aria-label="Apt Pricing tab">🏢 APT PRICING</button>
 </div>
 
 <main id="estimator-section">
@@ -292,18 +307,18 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div class="job-card">
       <div class="row">
         <label class="field"><span>Client Name</span>
-          <input type="text" id="client-name" placeholder="e.g. Dave Reau" autocomplete="name"/></label>
+          <input type="text" id="client-name" aria-label="Client name" placeholder="e.g. Dave Reau" autocomplete="name"/></label>
         <label class="field"><span>Job Address</span>
-          <input type="text" id="job-address" placeholder="45 Oak St, Camillus NY" autocomplete="street-address"/></label>
+          <input type="text" id="job-address" aria-label="Job address" placeholder="45 Oak St, Camillus NY" autocomplete="street-address"/></label>
       </div>
     </div>
 
     <div id="rooms-container"></div>
-    <button id="add-room-btn" onclick="addRoom()">+ ADD ROOM / AREA</button>
+    <button id="add-room-btn" onclick="addRoom()" aria-label="Add room">+ ADD ROOM / AREA</button>
 
     <div id="notes-wrap">
       <label class="field"><span>Notes (optional)</span>
-        <textarea id="notes" rows="3" placeholder="Prep work, surface conditions, client notes..."></textarea>
+        <textarea id="notes" aria-label="Job notes" rows="3" placeholder="Prep work, surface conditions, client notes..."></textarea>
       </label>
     </div>
 
@@ -313,7 +328,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
       <div><div class="tot-label">Total</div><div class="tot-val" id="tot-grand" style="color:var(--green)">$0</div></div>
     </div>
 
-    <button id="gen-btn" onclick="toggleBid()">GENERATE BID SUMMARY</button>
+    <button id="gen-btn" onclick="toggleBid()" aria-label="Generate proposal">GENERATE BID SUMMARY</button>
   </div>
 
   <div class="col-right">
@@ -323,27 +338,78 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 
 <!-- CONTACTS SECTION -->
 <div id="contacts-section">
-  <div class="contacts-toolbar">
-    <input type="text" id="contact-search" placeholder="Search clients…" oninput="renderContacts()"/>
-    <button class="btn-add-contact" onclick="openContactModal(null)">+ Add</button>
+
+  <!-- Sub-nav -->
+  <div style="display:flex;border-bottom:1px solid var(--border);margin-bottom:14px;background:var(--panel)">
+    <button class="subnav-btn active" id="subnav-clients" onclick="switchSubnav('clients')" aria-label="Clients list">👥 Clients</button>
+    <button class="subnav-btn" id="subnav-projects" onclick="switchSubnav('projects')" aria-label="Projects list">📋 Projects</button>
+    <button class="subnav-btn" id="subnav-notes" onclick="switchSubnav('notes')" aria-label="Notes list">📝 Notes</button>
   </div>
 
-  <div class="status-filter">
-    <button class="sf-btn active" data-status="all" onclick="setStatusFilter('all',this)">All</button>
-    <button class="sf-btn" data-status="pending" onclick="setStatusFilter('pending',this)">Pending</button>
-    <button class="sf-btn" data-status="followup" onclick="setStatusFilter('followup',this)">Follow Up</button>
-    <button class="sf-btn" data-status="scheduled" onclick="setStatusFilter('scheduled',this)">Scheduled</button>
-    <button class="sf-btn" data-status="inprogress" onclick="setStatusFilter('inprogress',this)">In Progress</button>
-    <button class="sf-btn" data-status="completed" onclick="setStatusFilter('completed',this)">Completed</button>
+  <!-- CLIENTS sub-section -->
+  <div id="sub-clients">
+    <div class="contacts-toolbar">
+      <input type="text" id="contact-search" aria-label="Search clients" placeholder="Search clients…" oninput="renderContacts()"/>
+      <button class="btn-add-contact" onclick="openContactModal(null)" aria-label="Add new client">+ Add</button>
+    </div>
+    <div class="status-filter">
+      <button class="sf-btn active" data-status="all" onclick="setStatusFilter('all',this)" aria-label="Show all clients">All</button>
+      <button class="sf-btn" data-status="pending" onclick="setStatusFilter('pending',this)" aria-label="Filter pending">Pending</button>
+      <button class="sf-btn" data-status="followup" onclick="setStatusFilter('followup',this)" aria-label="Filter follow up">Follow Up</button>
+      <button class="sf-btn" data-status="scheduled" onclick="setStatusFilter('scheduled',this)" aria-label="Filter scheduled">Scheduled</button>
+      <button class="sf-btn" data-status="inprogress" onclick="setStatusFilter('inprogress',this)" aria-label="Filter in progress">In Progress</button>
+      <button class="sf-btn" data-status="completed" onclick="setStatusFilter('completed',this)" aria-label="Filter completed">Completed</button>
+    </div>
+    <div id="contacts-list"></div>
+    <div id="no-contacts" style="text-align:center;padding:40px 20px;color:var(--muted);display:none">
+      <div style="font-size:36px;margin-bottom:12px">👥</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">No contacts yet</div>
+      <div style="font-size:13px">Save a client from the Estimator or tap + Add</div>
+    </div>
   </div>
 
-  <div id="contacts-list"></div>
-
-  <div id="no-contacts" style="text-align:center;padding:40px 20px;color:var(--muted);display:none">
-    <div style="font-size:36px;margin-bottom:12px">👥</div>
-    <div style="font-size:16px;font-weight:700;margin-bottom:6px">No contacts yet</div>
-    <div style="font-size:13px">Save a client from the Estimator or tap + Add</div>
+  <!-- PROJECTS sub-section -->
+  <div id="sub-projects" style="display:none">
+    <div style="display:flex;gap:10px;margin-bottom:14px">
+      <select id="proj-filter" onchange="renderProjects()" aria-label="Filter projects by status"
+        style="flex:1;height:var(--tap);font-size:14px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 12px;-webkit-appearance:none">
+        <option value="all">All Projects</option>
+        <option value="bidding">Bidding</option>
+        <option value="scheduled">Scheduled</option>
+        <option value="inprogress">In Progress</option>
+        <option value="complete">Complete</option>
+      </select>
+      <button onclick="openProjectModal(null)"
+        style="height:var(--tap);padding:0 18px;background:var(--blue);border:none;border-radius:10px;color:#fff;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">
+        + Project
+      </button>
+    </div>
+    <div id="projects-list"></div>
+    <div id="no-projects" style="text-align:center;padding:40px 20px;color:var(--muted)">
+      <div style="font-size:36px;margin-bottom:12px">📋</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text)">No projects yet</div>
+      <div style="font-size:13px">Tap + Project to add your first job</div>
+    </div>
   </div>
+
+  <!-- NOTES sub-section -->
+  <div id="sub-notes" style="display:none">
+    <div style="display:flex;gap:10px;margin-bottom:14px">
+      <input type="text" id="note-search" aria-label="Search notes" placeholder="Search notes…" oninput="renderNotes()"
+        style="flex:1;height:var(--tap);font-size:15px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 14px;outline:none"/>
+      <button onclick="openNoteModal(null)"
+        style="height:var(--tap);padding:0 18px;background:var(--blue);border:none;border-radius:10px;color:#fff;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">
+        + Note
+      </button>
+    </div>
+    <div id="notes-list"></div>
+    <div id="no-notes" style="text-align:center;padding:40px 20px;color:var(--muted)">
+      <div style="font-size:36px;margin-bottom:12px">📝</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text)">No notes yet</div>
+      <div style="font-size:13px">Tap + Note to add a general note or reminder</div>
+    </div>
+  </div>
+
 </div>
 
 <!-- APT PRICING SECTION -->
@@ -351,11 +417,11 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 
   <!-- Location selector -->
   <div style="display:flex;gap:10px;margin-bottom:14px">
-    <select id="apt-loc-select" onchange="aptSelectLoc(this.value)"
+    <select id="apt-loc-select" onchange="aptSelectLoc(this.value)" aria-label="Select property"
       style="flex:1;height:var(--tap);font-size:15px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 12px;-webkit-appearance:none;appearance:none">
       <option value="">— Select Property —</option>
     </select>
-    <button onclick="aptOpenAddLoc()"
+    <button onclick="aptOpenAddLoc()" aria-label="Add new property"
       style="height:var(--tap);padding:0 18px;background:var(--blue);border:none;border-radius:10px;color:#fff;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;white-space:nowrap">
       + Property
     </button>
@@ -368,7 +434,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
         <div id="apt-loc-name" style="font-size:18px;font-weight:700;color:var(--text)"></div>
         <div id="apt-loc-addr" style="font-size:13px;color:var(--muted);margin-top:2px"></div>
       </div>
-      <button id="apt-remove-loc-btn" onclick="aptRemoveLoc()"
+      <button id="apt-remove-loc-btn" onclick="aptRemoveLoc()" aria-label="Remove this property"
         style="background:transparent;border:1px solid var(--red);color:var(--red);border-radius:8px;padding:6px 12px;font-family:var(--font);font-size:13px;cursor:pointer">
         Remove
       </button>
@@ -395,7 +461,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   </div>
 
   <!-- Add unit button -->
-  <button id="apt-add-unit-btn" onclick="aptOpenAddUnit()" style="display:none;width:100%;height:54px;background:transparent;border:1.5px dashed var(--blue);border-radius:var(--r);color:var(--blue);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;margin-bottom:14px">
+  <button id="apt-add-unit-btn" onclick="aptOpenAddUnit()" aria-label="Add unit type and price" style="display:none;width:100%;height:54px;background:transparent;border:1.5px dashed var(--blue);border-radius:var(--r);color:var(--blue);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;margin-bottom:14px">
     + Add Unit Type / Price
   </button>
 
@@ -404,6 +470,50 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div style="font-size:36px;margin-bottom:12px">🏢</div>
     <div style="font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text)">No property selected</div>
     <div style="font-size:13px">Tap + Property to add a location</div>
+  </div>
+
+  <!-- PAINT SUPPLIES section -->
+  <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-family:var(--head);font-size:18px;color:var(--text);letter-spacing:1px">🎨 PAINT SUPPLIES</div>
+      <button onclick="openSupplyModal()" aria-label="Add paint supply"
+        style="height:40px;padding:0 14px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">
+        + Add
+      </button>
+    </div>
+    <div id="supplies-list"></div>
+    <div id="no-supplies" style="text-align:center;padding:20px;color:var(--muted);font-size:13px">
+      No supplies added yet — tap + Add to build your reference list
+    </div>
+  </div>
+</div>
+
+<!-- SUPPLY MODAL -->
+<div id="supply-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:600;overflow-y:auto;padding:20px 16px">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:20px">
+    <div style="font-family:var(--head);font-size:22px;color:var(--blue);letter-spacing:2px;margin-bottom:16px" id="supply-modal-title">ADD SUPPLY</div>
+    <input type="hidden" id="supply-modal-id"/>
+    <label class="field" style="display:block;margin-bottom:10px"><span>Product Name *</span>
+      <input type="text" id="supply-name" placeholder="e.g. BM Regal Select — Exterior"/></label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <label class="field"><span>Category</span>
+        <select id="supply-cat" style="height:var(--tap);font-size:14px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 10px;width:100%;-webkit-appearance:none">
+          <option>Paint</option><option>Primer</option><option>Stain</option><option>Sealer</option>
+          <option>Brush</option><option>Roller</option><option>Tape</option><option>Drop Cloth</option>
+          <option>Caulk</option><option>Sandpaper</option><option>Other</option>
+        </select></label>
+      <label class="field"><span>Price</span>
+        <input type="text" id="supply-price" placeholder="e.g. $72/gal"/></label>
+    </div>
+    <label class="field" style="display:block;margin-bottom:10px"><span>Coverage / Size</span>
+      <input type="text" id="supply-coverage" placeholder="e.g. 400 sf/gal or 9-inch roller"/></label>
+    <label class="field" style="display:block;margin-bottom:16px"><span>Notes</span>
+      <input type="text" id="supply-notes" placeholder="e.g. Best for exterior wood siding"/></label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button onclick="saveSupply()" aria-label="Save supply" style="height:50px;background:var(--green);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Save</button>
+      <button onclick="closeSupplyModal()" aria-label="Cancel" style="height:50px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Cancel</button>
+    </div>
+    <button id="supply-delete-btn" aria-label="Delete supply" style="display:none;width:100%;height:44px;margin-top:8px;background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer" onclick="deleteSupply()">Delete</button>
   </div>
 </div>
 
@@ -416,8 +526,8 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <label class="field" style="display:block;margin-bottom:16px"><span>Address (optional)</span>
       <input type="text" id="apt-loc-addr-input" placeholder="e.g. 10 Cedarwood Blvd, Baldwinsville NY"/></label>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <button onclick="aptSaveLoc()" style="height:50px;background:var(--green);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Save</button>
-      <button onclick="aptCloseLocModal()" style="height:50px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Cancel</button>
+      <button onclick="aptSaveLoc()" aria-label="Save property" style="height:50px;background:var(--green);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Save</button>
+      <button onclick="aptCloseLocModal()" aria-label="Cancel" style="height:50px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Cancel</button>
     </div>
   </div>
 </div>
@@ -441,8 +551,8 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <label class="field" style="display:block;margin-bottom:16px"><span>Notes</span>
       <input type="text" id="apt-unit-notes" placeholder="e.g. includes hallways"/></label>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <button onclick="aptSaveUnit()" style="height:50px;background:var(--green);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Save Unit</button>
-      <button onclick="aptCloseUnitModal()" style="height:50px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Cancel</button>
+      <button onclick="aptSaveUnit()" aria-label="Save unit pricing" style="height:50px;background:var(--green);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Save Unit</button>
+      <button onclick="aptCloseUnitModal()" aria-label="Cancel" style="height:50px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Cancel</button>
     </div>
   </div>
 </div>
@@ -473,10 +583,66 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
         <textarea id="modal-notes" rows="3" placeholder="Job details, follow-up date, etc."></textarea></label>
     </div>
     <div class="modal-actions">
-      <button class="modal-cancel" onclick="closeContactModal()">Cancel</button>
-      <button class="modal-save" onclick="saveContact()">Save Client</button>
+      <button class="modal-cancel" onclick="closeContactModal()" aria-label="Cancel">Cancel</button>
+      <button class="modal-save" onclick="saveContact()" aria-label="Save client">Save Client</button>
     </div>
-    <button class="modal-delete" id="modal-delete-btn" style="display:none" onclick="deleteContact()">Delete Contact</button>
+    <button class="modal-delete" id="modal-delete-btn" aria-label="Delete contact" style="display:none" onclick="deleteContact()">Delete Contact</button>
+  </div>
+</div>
+
+<!-- PROJECT MODAL -->
+<div id="project-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:600;overflow-y:auto;padding:20px 16px calc(20px + var(--safe-b))">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:20px">
+    <div style="font-family:var(--head);font-size:22px;color:var(--blue);letter-spacing:2px;margin-bottom:16px" id="proj-modal-title">ADD PROJECT</div>
+    <input type="hidden" id="proj-modal-id"/>
+    <label class="field" style="display:block;margin-bottom:10px"><span>Project Name *</span>
+      <input type="text" id="proj-name" placeholder="e.g. Reau Exterior — Camillus"/></label>
+    <label class="field" style="display:block;margin-bottom:10px"><span>Client</span>
+      <input type="text" id="proj-client" placeholder="e.g. Dave Reau"/></label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <label class="field"><span>Status</span>
+        <select id="proj-status" style="height:var(--tap);font-size:14px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 10px;width:100%;-webkit-appearance:none">
+          <option value="bidding">Bidding</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="inprogress">In Progress</option>
+          <option value="complete">Complete</option>
+        </select></label>
+      <label class="field"><span>Start Date</span>
+        <input type="date" id="proj-date" style="height:var(--tap);font-size:14px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 10px;width:100%;outline:none"/></label>
+    </div>
+    <label class="field" style="display:block;margin-bottom:10px"><span>Estimate Value</span>
+      <input type="text" id="proj-value" placeholder="e.g. $4,200.00"/></label>
+    <label class="field" style="display:block;margin-bottom:10px"><span>Notes</span>
+      <textarea id="proj-notes" rows="3" placeholder="Scope, materials, special conditions..."></textarea></label>
+    <!-- Tasks -->
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Tasks / Checklist</div>
+    <div id="proj-tasks-list" style="margin-bottom:8px"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <input type="text" id="proj-task-input" placeholder="Add a task…" style="flex:1;height:44px;font-size:14px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 12px;outline:none"/>
+      <button onclick="projAddTask()" aria-label="Add task" style="height:44px;padding:0 16px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--blue);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer">Add</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button onclick="saveProject()" aria-label="Save project" style="height:50px;background:var(--green);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Save Project</button>
+      <button onclick="closeProjectModal()" aria-label="Cancel" style="height:50px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Cancel</button>
+    </div>
+    <button id="proj-delete-btn" aria-label="Delete project" style="display:none;width:100%;height:44px;margin-top:8px;background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer" onclick="deleteProject()">Delete Project</button>
+  </div>
+</div>
+
+<!-- NOTE MODAL -->
+<div id="note-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:600;overflow-y:auto;padding:20px 16px calc(20px + var(--safe-b))">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:20px">
+    <div style="font-family:var(--head);font-size:22px;color:var(--blue);letter-spacing:2px;margin-bottom:16px" id="note-modal-title">ADD NOTE</div>
+    <input type="hidden" id="note-modal-id"/>
+    <label class="field" style="display:block;margin-bottom:10px"><span>Title</span>
+      <input type="text" id="note-title" placeholder="e.g. Paint prices — Benjamin Moore"/></label>
+    <label class="field" style="display:block;margin-bottom:16px"><span>Note</span>
+      <textarea id="note-body" rows="8" placeholder="Write anything — reminders, ideas, measurements, pricing notes..."></textarea></label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button onclick="saveNote()" aria-label="Save note" style="height:50px;background:var(--green);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Save Note</button>
+      <button onclick="closeNoteModal()" aria-label="Cancel" style="height:50px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Cancel</button>
+    </div>
+    <button id="note-delete-btn" aria-label="Delete note" style="display:none;width:100%;height:44px;margin-top:8px;background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer" onclick="deleteNote()">Delete Note</button>
   </div>
 </div>
 
@@ -484,6 +650,12 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 
 <!-- STICKY BT BAR -->
 <div id="bt-bar">
+  <!-- Voice status strip — shown when listening -->
+  <div id="voice-strip" style="display:none;align-items:center;gap:10px;margin-bottom:8px;padding:6px 10px;background:#1a0a2e;border:1px solid #a78bfa;border-radius:8px">
+    <div style="width:10px;height:10px;border-radius:50%;background:#a78bfa;animation:pulse 1s infinite;flex-shrink:0"></div>
+    <span style="font-size:13px;font-weight:700;color:#a78bfa;flex-shrink:0">Listening…</span>
+    <span id="voice-heard" style="font-size:13px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+  </div>
   <div class="bt-row1">
     <div class="bt-status-pill">
       <div class="bt-dot" id="bt-dot"></div>
@@ -492,22 +664,23 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div id="last-reading">— ft</div>
   </div>
   <div class="bt-row2">
-    <button id="bt-connect-btn" onclick="handleBtButton()">
+    <button id="bt-connect-btn" onclick="handleBtButton()" aria-label="Connect DISTO D2">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
         <path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/>
       </svg>
       <span id="bt-btn-label">Connect DISTO</span>
     </button>
     <div class="bt-selects">
-      <select id="target-field">
+      <select id="target-field" aria-label="Bluetooth fill target">
         <option value="wall">→ Next Wall</option>
         <option value="height">→ Height</option>
         <option value="floorLength">→ Floor/Ceil L</option>
         <option value="floorWidth">→ Floor/Ceil W</option>
       </select>
-      <select id="target-room"></select>
+      <select id="target-room" aria-label="Target room"></select>
     </div>
-    <button class="dbg-gear" onclick="openDebug()" title="Manual entry / Debug">⚙</button>
+    <button class="dbg-gear" onclick="openDebug()" title="Manual entry / Debug" aria-label="Open debug and manual entry">⚙</button>
+    <button id="mic-btn" onclick="toggleVoice()" title="Voice commands" aria-label="Start voice commands" style="background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);width:44px;height:var(--tap);font-size:20px;cursor:pointer;flex-shrink:0;transition:all .2s">🎤</button>
   </div>
 </div>
 
@@ -515,7 +688,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 <div id="debug-panel">
   <div class="dbg-header">
     <div class="dbg-title">Manual Entry &amp; Debug</div>
-    <button class="dbg-close" onclick="closeDebug()">✕ Close</button>
+    <button class="dbg-close" onclick="closeDebug()" aria-label="Close debug panel">✕ Close</button>
   </div>
 
   <!-- Manual measurement entry — the always-working fallback -->
@@ -535,8 +708,8 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div class="dbg-card-title">Bluetooth Status</div>
     <div id="dbg-status-detail" style="font-size:13px;color:var(--text);line-height:1.7">No connection yet.</div>
     <div class="dbg-action-row" style="margin-top:10px">
-      <button class="dbg-action-btn" style="background:var(--blue);color:#fff" onclick="closeDebug();handleBtButton()">Connect DISTO</button>
-      <button class="dbg-action-btn" style="background:var(--panel);color:var(--muted);border:1px solid var(--border)" onclick="clearLog()">Clear Log</button>
+      <button class="dbg-action-btn" style="background:var(--blue);color:#fff" onclick="closeDebug();handleBtButton()" aria-label="Connect DISTO D2">Connect DISTO</button>
+      <button class="dbg-action-btn" style="background:var(--panel);color:var(--muted);border:1px solid var(--border)" onclick="clearLog()" aria-label="Clear debug log">Clear Log</button>
     </div>
   </div>
 
@@ -951,7 +1124,7 @@ function renderRoom(room, idx) {
         <span class="walls-perimeter" id="${room.id}_perim"></span>
       </div>
       <div class="walls-list" id="${room.id}_walls"></div>
-      <button class="add-wall-btn" onclick="addWall('${room.id}')">+ Add Wall</button>
+      <button class="add-wall-btn" onclick="addWall('${room.id}')" aria-label="Add wall to ${room.name}">+ Add Wall</button>
 
       <!-- Ceiling height -->
       <div class="height-row">
@@ -964,10 +1137,10 @@ function renderRoom(room, idx) {
 
       <!-- Surfaces -->
       <div class="surface-row">
-        <button class="surf-btn${room.surfaces.walls?' on':''}" id="${room.id}_sw" onclick="toggleSurf('${room.id}','walls')">Walls</button>
-        <button class="surf-btn${room.surfaces.ceiling?' on':''}" id="${room.id}_sc" onclick="toggleSurf('${room.id}','ceiling')">Ceiling</button>
-        <button class="surf-btn${room.surfaces.floor?' on':''}" id="${room.id}_sf" onclick="toggleSurf('${room.id}','floor')">Floor</button>
-        <button class="surf-btn${room.surfaces.trim?' on':''}" id="${room.id}_st" onclick="toggleSurf('${room.id}','trim')">Trim</button>
+        <button class="surf-btn${room.surfaces.walls?' on':''}" id="${room.id}_sw" onclick="toggleSurf('${room.id}','walls')" aria-label="Toggle walls">Walls</button>
+        <button class="surf-btn${room.surfaces.ceiling?' on':''}" id="${room.id}_sc" onclick="toggleSurf('${room.id}','ceiling')" aria-label="Toggle ceiling">Ceiling</button>
+        <button class="surf-btn${room.surfaces.floor?' on':''}" id="${room.id}_sf" onclick="toggleSurf('${room.id}','floor')" aria-label="Toggle floor">Floor</button>
+        <button class="surf-btn${room.surfaces.trim?' on':''}" id="${room.id}_st" onclick="toggleSurf('${room.id}','trim')" aria-label="Toggle trim">Trim</button>
       </div>
 
       <!-- Floor/Ceiling dimensions (shown when either is active) -->
@@ -1006,7 +1179,7 @@ function renderRoom(room, idx) {
         <div><div class="sum-label">Labor</div><div class="sum-val" id="${room.id}_slab">—</div></div>
       </div>
 
-      <button class="room-remove" onclick="removeRoom('${room.id}')">✕ Remove This Room</button>
+      <button class="room-remove" onclick="removeRoom('${room.id}')" aria-label="Remove ${room.name}">✕ Remove This Room</button>
     </div>`;
   document.getElementById('rooms-container').appendChild(card);
   renderWalls(room);
@@ -1392,8 +1565,8 @@ function switchTab(tab) {
   document.getElementById('tab-estimate').classList.toggle('active', tab==='estimate');
   document.getElementById('tab-contacts').classList.toggle('active', tab==='contacts');
   document.getElementById('tab-apt').classList.toggle('active', tab==='apt');
-  if(tab==='contacts') renderContacts();
-  if(tab==='apt') aptRender();
+  if(tab==='contacts') { renderContacts(); switchSubnav('clients'); }
+  if(tab==='apt') { aptRender(); renderSupplies(); }
 }
 
 // ══════════════════════════════════════════════
@@ -1463,8 +1636,8 @@ function buildContactCard(c) {
       ${c.notes?`<span style="color:var(--muted);font-size:12px">${c.notes.substring(0,60)}${c.notes.length>60?'…':''}</span>`:''}
     </div>
     <div class="contact-actions">
-      <button class="ca-btn ca-text" onclick="toggleQuickTexts('${c.id}')">💬 Quick Text</button>
-      <button class="ca-btn ca-edit" onclick="openContactModal('${c.id}')">✏️ Edit</button>
+      <button class="ca-btn ca-text" onclick="toggleQuickTexts('${c.id}')" aria-label="Quick text ${c.name}">💬 Quick Text</button>
+      <button class="ca-btn ca-edit" onclick="openContactModal('${c.id}')" aria-label="Edit ${c.name}">✏️ Edit</button>
     </div>
     <div class="quick-texts" id="qt_${c.id}">
       ${buildQuickTexts(c)}
@@ -1620,9 +1793,434 @@ function showToast(msg, type='') {
   toastT=setTimeout(()=>el.className='',2600);
 }
 
+// ── Sub-nav switching ─────────────────────────
+function switchSubnav(sub) {
+  ['clients','projects','notes'].forEach(s => {
+    document.getElementById('sub-'+s).style.display = s===sub ? 'block' : 'none';
+    document.getElementById('subnav-'+s).classList.toggle('active', s===sub);
+  });
+  if(sub==='projects') renderProjects();
+  if(sub==='notes') renderNotes();
+}
+
 // ══════════════════════════════════════════════
-// APT PRICING
+// PROJECTS
 // ══════════════════════════════════════════════
+const PROJ_KEY = 'ingersoll_projects_v1';
+let projTasks  = []; // temp tasks while modal is open
+
+function projLoad() {
+  try { return JSON.parse(localStorage.getItem(PROJ_KEY)) || []; }
+  catch { return []; }
+}
+function projSave(data) { localStorage.setItem(PROJ_KEY, JSON.stringify(data)); }
+
+const PROJ_STATUS = {bidding:'Bidding',scheduled:'Scheduled',inprogress:'In Progress',complete:'Complete'};
+
+function renderProjects() {
+  const projects = projLoad();
+  const filter   = document.getElementById('proj-filter').value;
+  const list     = document.getElementById('projects-list');
+  const none     = document.getElementById('no-projects');
+  const filtered = filter==='all' ? projects : projects.filter(p=>p.status===filter);
+  none.style.display = filtered.length===0 ? 'block' : 'none';
+  list.innerHTML = '';
+  filtered.forEach(p => {
+    const done  = (p.tasks||[]).filter(t=>t.done).length;
+    const total = (p.tasks||[]).length;
+    const div   = document.createElement('div');
+    div.className = 'proj-card';
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div style="font-size:16px;font-weight:700;flex:1">${p.name}</div>
+        <span class="proj-status-badge proj-${p.status}">${PROJ_STATUS[p.status]||p.status}</span>
+      </div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:6px">
+        ${p.client?'👤 '+p.client+'&nbsp;&nbsp;':''}
+        ${p.date?'📅 '+p.date+'&nbsp;&nbsp;':''}
+        ${p.value?'💰 '+p.value:''}
+      </div>
+      ${p.notes?`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">${p.notes.substring(0,80)}${p.notes.length>80?'…':''}</div>`:''}
+      ${total>0?`<div style="font-size:12px;color:var(--blue);margin-bottom:10px">✓ ${done}/${total} tasks complete</div>`:''}
+      ${(p.tasks||[]).map(t=>`
+        <div class="task-row">
+          <input type="checkbox" class="task-check" ${t.done?'checked':''} onchange="projToggleTask('${p.id}','${t.id}',this.checked)"/>
+          <span class="task-label${t.done?' done':''}">${t.text}</span>
+        </div>`).join('')}
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button onclick="openProjectModal('${p.id}')" style="flex:1;height:40px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">✏️ Edit</button>
+      </div>`;
+    list.appendChild(div);
+  });
+}
+
+function projToggleTask(projId, taskId, done) {
+  const projects = projLoad();
+  const proj = projects.find(p=>p.id===projId);
+  if(!proj) return;
+  const task = (proj.tasks||[]).find(t=>t.id===taskId);
+  if(task) task.done = done;
+  projSave(projects);
+  renderProjects();
+}
+
+function openProjectModal(id) {
+  const projects = projLoad();
+  const p = id ? projects.find(x=>x.id===id) : null;
+  projTasks = p ? JSON.parse(JSON.stringify(p.tasks||[])) : [];
+  document.getElementById('proj-modal-title').textContent = p ? 'EDIT PROJECT' : 'ADD PROJECT';
+  document.getElementById('proj-modal-id').value  = p?.id||'';
+  document.getElementById('proj-name').value      = p?.name||'';
+  document.getElementById('proj-client').value    = p?.client||'';
+  document.getElementById('proj-status').value    = p?.status||'bidding';
+  document.getElementById('proj-date').value      = p?.date||'';
+  document.getElementById('proj-value').value     = p?.value||'';
+  document.getElementById('proj-notes').value     = p?.notes||'';
+  document.getElementById('proj-task-input').value= '';
+  document.getElementById('proj-delete-btn').style.display = p ? 'block' : 'none';
+  renderProjTasks();
+  document.getElementById('project-modal').style.display = 'block';
+}
+function closeProjectModal() { document.getElementById('project-modal').style.display='none'; }
+
+function projAddTask() {
+  const inp = document.getElementById('proj-task-input');
+  const txt = inp.value.trim();
+  if(!txt) return;
+  projTasks.push({id:'t'+Date.now(), text:txt, done:false});
+  inp.value='';
+  renderProjTasks();
+}
+
+function renderProjTasks() {
+  document.getElementById('proj-tasks-list').innerHTML = projTasks.map((t,i)=>`
+    <div class="task-row">
+      <input type="checkbox" class="task-check" ${t.done?'checked':''} onchange="projTasks[${i}].done=this.checked"/>
+      <span class="task-label${t.done?' done':''}">${t.text}</span>
+      <button onclick="projTasks.splice(${i},1);renderProjTasks()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px">✕</button>
+    </div>`).join('');
+}
+
+function saveProject() {
+  const name = document.getElementById('proj-name').value.trim();
+  if(!name) return showToast('Enter a project name','warn');
+  const projects = projLoad();
+  const id = document.getElementById('proj-modal-id').value || 'p'+Date.now();
+  const existing = projects.findIndex(p=>p.id===id);
+  const proj = {
+    id, name,
+    client: document.getElementById('proj-client').value.trim(),
+    status: document.getElementById('proj-status').value,
+    date:   document.getElementById('proj-date').value,
+    value:  document.getElementById('proj-value').value.trim(),
+    notes:  document.getElementById('proj-notes').value.trim(),
+    tasks:  projTasks,
+    updatedAt: Date.now(),
+  };
+  if(existing>=0) projects[existing]=proj; else projects.unshift(proj);
+  projSave(projects);
+  closeProjectModal();
+  renderProjects();
+  showToast(name+' saved');
+}
+
+function deleteProject() {
+  const id = document.getElementById('proj-modal-id').value;
+  if(!id) return;
+  projSave(projLoad().filter(p=>p.id!==id));
+  closeProjectModal();
+  renderProjects();
+}
+
+// ══════════════════════════════════════════════
+// NOTES
+// ══════════════════════════════════════════════
+const NOTES_KEY = 'ingersoll_notes_v1';
+
+function notesLoad() {
+  try { return JSON.parse(localStorage.getItem(NOTES_KEY)) || []; }
+  catch { return []; }
+}
+function notesSave(data) { localStorage.setItem(NOTES_KEY, JSON.stringify(data)); }
+
+function renderNotes() {
+  const notes  = notesLoad();
+  const query  = (document.getElementById('note-search')?.value||'').toLowerCase();
+  const list   = document.getElementById('notes-list');
+  const none   = document.getElementById('no-notes');
+  const filtered = notes.filter(n=>
+    !query || (n.title||'').toLowerCase().includes(query) || (n.body||'').toLowerCase().includes(query)
+  );
+  none.style.display = filtered.length===0 ? 'block' : 'none';
+  list.innerHTML = '';
+  filtered.forEach(n => {
+    const div = document.createElement('div');
+    div.className = 'note-card';
+    div.onclick = () => openNoteModal(n.id);
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div style="font-size:15px;font-weight:700;flex:1">${n.title||'Untitled'}</div>
+        <div style="font-size:11px;color:var(--muted);flex-shrink:0;margin-left:8px">${new Date(n.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+      </div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.5">${(n.body||'').substring(0,120)}${(n.body||'').length>120?'…':''}</div>`;
+    list.appendChild(div);
+  });
+}
+
+function openNoteModal(id) {
+  const notes = notesLoad();
+  const n = id ? notes.find(x=>x.id===id) : null;
+  document.getElementById('note-modal-title').textContent = n ? 'EDIT NOTE' : 'ADD NOTE';
+  document.getElementById('note-modal-id').value = n?.id||'';
+  document.getElementById('note-title').value    = n?.title||'';
+  document.getElementById('note-body').value     = n?.body||'';
+  document.getElementById('note-delete-btn').style.display = n ? 'block' : 'none';
+  document.getElementById('note-modal').style.display = 'block';
+  setTimeout(()=>document.getElementById('note-body').focus(),100);
+}
+function closeNoteModal() { document.getElementById('note-modal').style.display='none'; }
+
+function saveNote() {
+  const notes = notesLoad();
+  const id = document.getElementById('note-modal-id').value || 'n'+Date.now();
+  const existing = notes.findIndex(n=>n.id===id);
+  const note = {
+    id,
+    title: document.getElementById('note-title').value.trim(),
+    body:  document.getElementById('note-body').value.trim(),
+    createdAt: existing>=0 ? notes[existing].createdAt : Date.now(),
+    updatedAt: Date.now(),
+  };
+  if(existing>=0) notes[existing]=note; else notes.unshift(note);
+  notesSave(notes);
+  closeNoteModal();
+  renderNotes();
+  showToast('Note saved');
+}
+
+function deleteNote() {
+  const id = document.getElementById('note-modal-id').value;
+  if(!id) return;
+  notesSave(notesLoad().filter(n=>n.id!==id));
+  closeNoteModal();
+  renderNotes();
+}
+
+// ══════════════════════════════════════════════
+// PAINT SUPPLIES
+// ══════════════════════════════════════════════
+const SUPPLY_KEY = 'ingersoll_supplies_v1';
+
+function supplyLoad() {
+  try { return JSON.parse(localStorage.getItem(SUPPLY_KEY)) || []; }
+  catch { return []; }
+}
+function supplySave(data) { localStorage.setItem(SUPPLY_KEY, JSON.stringify(data)); }
+
+function renderSupplies() {
+  const supplies = supplyLoad();
+  const list = document.getElementById('supplies-list');
+  const none = document.getElementById('no-supplies');
+  if(!list) return;
+  none.style.display = supplies.length===0 ? 'block' : 'none';
+  list.innerHTML = '';
+  supplies.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'supply-card';
+    div.innerHTML = `
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span class="supply-cat-badge">${s.cat}</span>
+        </div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:2px">${s.name}</div>
+        ${s.price?`<div style="font-size:14px;color:var(--green);font-weight:700">${s.price}</div>`:''}
+        ${s.coverage?`<div style="font-size:12px;color:var(--muted)">${s.coverage}</div>`:''}
+        ${s.notes?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${s.notes}</div>`:''}
+      </div>
+      <button onclick="openSupplyModal('${s.id}')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);padding:6px 10px;cursor:pointer;font-size:14px;flex-shrink:0">✏️</button>`;
+    list.appendChild(div);
+  });
+}
+
+function openSupplyModal(id) {
+  const supplies = supplyLoad();
+  const s = id ? supplies.find(x=>x.id===id) : null;
+  document.getElementById('supply-modal-title').textContent = s ? 'EDIT SUPPLY' : 'ADD SUPPLY';
+  document.getElementById('supply-modal-id').value   = s?.id||'';
+  document.getElementById('supply-name').value       = s?.name||'';
+  document.getElementById('supply-cat').value        = s?.cat||'Paint';
+  document.getElementById('supply-price').value      = s?.price||'';
+  document.getElementById('supply-coverage').value   = s?.coverage||'';
+  document.getElementById('supply-notes').value      = s?.notes||'';
+  document.getElementById('supply-delete-btn').style.display = s ? 'block' : 'none';
+  document.getElementById('supply-modal').style.display = 'block';
+}
+function closeSupplyModal() { document.getElementById('supply-modal').style.display='none'; }
+
+function saveSupply() {
+  const name = document.getElementById('supply-name').value.trim();
+  if(!name) return showToast('Enter a product name','warn');
+  const supplies = supplyLoad();
+  const id = document.getElementById('supply-modal-id').value || 's'+Date.now();
+  const existing = supplies.findIndex(s=>s.id===id);
+  const supply = {
+    id, name,
+    cat:      document.getElementById('supply-cat').value,
+    price:    document.getElementById('supply-price').value.trim(),
+    coverage: document.getElementById('supply-coverage').value.trim(),
+    notes:    document.getElementById('supply-notes').value.trim(),
+  };
+  if(existing>=0) supplies[existing]=supply; else supplies.unshift(supply);
+  supplySave(supplies);
+  closeSupplyModal();
+  renderSupplies();
+  showToast(name+' saved');
+}
+
+function deleteSupply() {
+  const id = document.getElementById('supply-modal-id').value;
+  if(!id) return;
+  supplySave(supplyLoad().filter(s=>s.id!==id));
+  closeSupplyModal();
+  renderSupplies();
+}
+
+// ══════════════════════════════════════════════
+// VOICE COMMANDS
+// ══════════════════════════════════════════════
+let voiceRecog  = null;
+let voiceActive = false;
+
+const NUM_WORDS = {
+  zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,
+  ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,
+  seventeen:17,eighteen:18,nineteen:19,twenty:20,thirty:30,forty:40,fifty:50,
+  sixty:60,seventy:70,eighty:80,ninety:90,hundred:100,'and':0
+};
+
+function wordToNum(word) {
+  if (!word) return null;
+  const n = parseFloat(word);
+  if (!isNaN(n)) return n;
+  const w = word.toLowerCase().trim();
+  if (NUM_WORDS.hasOwnProperty(w)) return NUM_WORDS[w];
+  for (const [key, val] of Object.entries(NUM_WORDS)) {
+    if (w.startsWith(key) && w.length > key.length) {
+      const rest = wordToNum(w.slice(key.length));
+      if (rest !== null) return val + rest;
+    }
+  }
+  return null;
+}
+
+function parseSpokenNumber(text) {
+  const direct = parseFloat(text);
+  if (!isNaN(direct) && direct > 0) return direct;
+
+  // "twelve feet six inches"
+  const ftIn = text.match(/(\w+)\s+feet?\s+(\w+)\s+inch/i) || text.match(/(\w+)\s+ft\s+(\w+)/i);
+  if (ftIn) { const ft=wordToNum(ftIn[1]), ins=wordToNum(ftIn[2]); if(ft!==null&&ins!==null) return ft+ins/12; }
+
+  // "twelve feet"
+  const ftOnly = text.match(/(\d+\.?\d*|\w+)\s+feet?/i);
+  if (ftOnly) { const n=wordToNum(ftOnly[1]); if(n!==null) return n; }
+
+  // "twelve point five"
+  const pt = text.match(/(\w+)\s+point\s+(\w+)/i);
+  if (pt) { const w=wordToNum(pt[1]),d=wordToNum(pt[2]); if(w!==null&&d!==null) return parseFloat(w+'.'+d); }
+
+  // "twelve five" shorthand
+  const two = text.match(/^(\w+)\s+(\w+)$/i);
+  if (two) {
+    const a=wordToNum(two[1]), b=wordToNum(two[2]);
+    if (a!==null&&b!==null&&b<12) return a+b/12;
+    if (a!==null&&b!==null) return parseFloat(a+'.'+b);
+  }
+  return wordToNum(text);
+}
+
+function processVoiceCommand(transcript) {
+  const t = transcript.toLowerCase().trim();
+  document.getElementById('voice-heard').textContent = '"'+transcript+'"';
+  dbgLog('\n🎤 Voice: "'+transcript+'"');
+
+  // Navigation
+  if (/estimat|measure/i.test(t)&&!/add/i.test(t))         { switchTab('estimate');                          return showToast('📐 Estimator'); }
+  if (/\bcontact|client/i.test(t)&&!/add|new/i.test(t))    { switchTab('contacts');switchSubnav('clients');  return showToast('👥 Clients'); }
+  if (/\bproject/i.test(t)&&!/add|new/i.test(t))           { switchTab('contacts');switchSubnav('projects'); return showToast('📋 Projects'); }
+  if (/\bnote/i.test(t)&&!/add|new/i.test(t))              { switchTab('contacts');switchSubnav('notes');    return showToast('📝 Notes'); }
+  if (/pricing|apartment|apt/i.test(t))                    { switchTab('apt');                               return showToast('🏢 Apt Pricing'); }
+  if (/add room|new room/i.test(t))                        { switchTab('estimate');addRoom();                return showToast('Room added'); }
+  if (/generate|bid|proposal/i.test(t))                    { switchTab('estimate');if(!bidOpen)toggleBid(); return showToast('Proposal generated'); }
+  if (/connect|bluetooth/i.test(t))                        { connectBT();                                    return; }
+  if (/add client|add contact|new client/i.test(t))        { switchTab('contacts');switchSubnav('clients');openContactModal(null); return; }
+  if (/add project|new project/i.test(t))                  { switchTab('contacts');switchSubnav('projects');openProjectModal(null); return; }
+  if (/add note|new note/i.test(t))                        { switchTab('contacts');switchSubnav('notes');openNoteModal(null); return; }
+
+  // Measurements
+  let target=null, numStr=t;
+  if      (/^wall\s+/i.test(t))    { target='wall';        numStr=t.replace(/^wall\s+/i,''); }
+  else if (/^height\s+/i.test(t))  { target='height';      numStr=t.replace(/^height\s+/i,''); }
+  else if (/^ceiling\s+/i.test(t)) { target='height';      numStr=t.replace(/^ceiling\s+/i,''); }
+  else if (/^length\s+/i.test(t))  { target='floorLength'; numStr=t.replace(/^length\s+/i,''); }
+  else if (/^width\s+/i.test(t))   { target='floorWidth';  numStr=t.replace(/^width\s+/i,''); }
+  else if (/^floor\s+/i.test(t))   { target='floorLength'; numStr=t.replace(/^floor\s+/i,''); }
+
+  const feet = parseSpokenNumber(numStr.trim());
+  if (feet && feet>0 && feet<500) {
+    if (target && target!=='wall') document.getElementById('target-field').value = target;
+    if (target==='wall' || !target) document.getElementById('target-field').value = 'wall';
+    const fw=Math.floor(feet), ins=Math.round((feet-fw)*12);
+    applyMeasurement(feet, `${fw}'${ins}"`);
+    return;
+  }
+
+  if (target) showToast('Could not parse number','warn');
+  else { showToast('Command not recognized','warn'); dbgLog('  Not recognized'); }
+}
+
+function toggleVoice() { voiceActive ? stopVoice() : startVoice(); }
+
+function startVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return showToast('Voice needs Chrome browser','err');
+  voiceRecog = new SR();
+  voiceRecog.lang = 'en-US';
+  voiceRecog.continuous = true;
+  voiceRecog.interimResults = true;
+  voiceRecog.onstart = () => {
+    voiceActive = true;
+    const btn = document.getElementById('mic-btn');
+    if(btn){btn.style.background='#2d1a4e';btn.style.borderColor='#a78bfa';btn.style.color='#a78bfa';}
+    document.getElementById('voice-strip').style.display = 'flex';
+  };
+  voiceRecog.onresult = (e) => {
+    let interim='', final='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      if(e.results[i].isFinal) final+=e.results[i][0].transcript;
+      else interim+=e.results[i][0].transcript;
+    }
+    document.getElementById('voice-heard').textContent = interim||final;
+    if(final.trim()) processVoiceCommand(final.trim());
+  };
+  voiceRecog.onerror = (e) => {
+    if(e.error==='not-allowed') showToast('Mic permission denied','err');
+    else if(e.error!=='no-speech') showToast('Voice error: '+e.error,'warn');
+  };
+  voiceRecog.onend = () => { if(voiceActive) voiceRecog.start(); };
+  voiceRecog.start();
+  showToast('🎤 Listening — speak a command');
+}
+
+function stopVoice() {
+  voiceActive = false;
+  if(voiceRecog){voiceRecog.onend=null;voiceRecog.stop();voiceRecog=null;}
+  const btn = document.getElementById('mic-btn');
+  if(btn){btn.style.background='';btn.style.borderColor='';btn.style.color='';}
+  document.getElementById('voice-strip').style.display = 'none';
+  showToast('🎤 Voice off');
+}
+
 const APT_KEY = 'ingersoll_apt_pricing_v1';
 let aptActiveLoc = null;
 

@@ -282,8 +282,9 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 
 <!-- TAB BAR -->
 <div id="tab-bar">
-  <button class="tab-btn active" id="tab-estimate" onclick="switchTab('estimate')">📐 ESTIMATOR</button>
-  <button class="tab-btn" id="tab-contacts" onclick="switchTab('contacts')">👥 CONTACTS</button>
+  <button class="tab-btn active" id="tab-estimate" onclick="switchTab('estimate')">📐 ESTIMATE</button>
+  <button class="tab-btn" id="tab-contacts" onclick="switchTab('contacts')">👥 CLIENTS</button>
+  <button class="tab-btn" id="tab-apt" onclick="switchTab('apt')">🏢 APT PRICING</button>
 </div>
 
 <main id="estimator-section">
@@ -345,7 +346,106 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   </div>
 </div>
 
-<!-- CONTACT MODAL -->
+<!-- APT PRICING SECTION -->
+<div id="apt-section" style="display:none;padding:14px 14px 0">
+
+  <!-- Location selector -->
+  <div style="display:flex;gap:10px;margin-bottom:14px">
+    <select id="apt-loc-select" onchange="aptSelectLoc(this.value)"
+      style="flex:1;height:var(--tap);font-size:15px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 12px;-webkit-appearance:none;appearance:none">
+      <option value="">— Select Property —</option>
+    </select>
+    <button onclick="aptOpenAddLoc()"
+      style="height:var(--tap);padding:0 18px;background:var(--blue);border:none;border-radius:10px;color:#fff;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;white-space:nowrap">
+      + Property
+    </button>
+  </div>
+
+  <!-- Active location display -->
+  <div id="apt-loc-header" style="display:none;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div id="apt-loc-name" style="font-size:18px;font-weight:700;color:var(--text)"></div>
+        <div id="apt-loc-addr" style="font-size:13px;color:var(--muted);margin-top:2px"></div>
+      </div>
+      <button id="apt-remove-loc-btn" onclick="aptRemoveLoc()"
+        style="background:transparent;border:1px solid var(--red);color:var(--red);border-radius:8px;padding:6px 12px;font-family:var(--font);font-size:13px;cursor:pointer">
+        Remove
+      </button>
+    </div>
+  </div>
+
+  <!-- Summary cards -->
+  <div id="apt-summary" style="display:none;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px"></div>
+
+  <!-- Unit table -->
+  <div id="apt-table-wrap" style="display:none;background:#fff;border-radius:var(--r);overflow:hidden;margin-bottom:14px">
+    <table style="width:100%;border-collapse:collapse;font-family:Georgia,serif;font-size:13px">
+      <thead>
+        <tr style="background:#1c2b3a">
+          <th style="color:#7eb5d4;padding:10px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:normal">Unit Type</th>
+          <th style="color:#7eb5d4;padding:10px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:normal">Sq Ft</th>
+          <th style="color:#7eb5d4;padding:10px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:normal">Our Price</th>
+          <th style="color:#7eb5d4;padding:10px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:normal">Notes</th>
+          <th style="padding:10px 4px"></th>
+        </tr>
+      </thead>
+      <tbody id="apt-unit-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Add unit button -->
+  <button id="apt-add-unit-btn" onclick="aptOpenAddUnit()" style="display:none;width:100%;height:54px;background:transparent;border:1.5px dashed var(--blue);border-radius:var(--r);color:var(--blue);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;margin-bottom:14px">
+    + Add Unit Type / Price
+  </button>
+
+  <!-- Empty state -->
+  <div id="apt-empty" style="text-align:center;padding:40px 20px;color:var(--muted)">
+    <div style="font-size:36px;margin-bottom:12px">🏢</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text)">No property selected</div>
+    <div style="font-size:13px">Tap + Property to add a location</div>
+  </div>
+</div>
+
+<!-- APT ADD LOCATION MODAL -->
+<div id="apt-loc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:600;overflow-y:auto;padding:20px 16px">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:20px">
+    <div style="font-family:var(--head);font-size:22px;color:var(--blue);letter-spacing:2px;margin-bottom:16px">ADD PROPERTY</div>
+    <label class="field" style="display:block;margin-bottom:10px"><span>Property Name *</span>
+      <input type="text" id="apt-loc-name-input" placeholder="e.g. Cedarwood Crossings"/></label>
+    <label class="field" style="display:block;margin-bottom:16px"><span>Address (optional)</span>
+      <input type="text" id="apt-loc-addr-input" placeholder="e.g. 10 Cedarwood Blvd, Baldwinsville NY"/></label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button onclick="aptSaveLoc()" style="height:50px;background:var(--green);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Save</button>
+      <button onclick="aptCloseLocModal()" style="height:50px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- APT ADD UNIT MODAL -->
+<div id="apt-unit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:600;overflow-y:auto;padding:20px 16px">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:20px">
+    <div style="font-family:var(--head);font-size:22px;color:var(--blue);letter-spacing:2px;margin-bottom:16px">ADD UNIT PRICING</div>
+    <label class="field" style="display:block;margin-bottom:10px"><span>Unit Type</span>
+      <select id="apt-unit-type" style="height:var(--tap);font-size:15px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 12px;width:100%;-webkit-appearance:none">
+        <option>Efficiency</option><option>Studio</option><option>1 BR</option><option selected>2 BR</option>
+        <option>3 BR</option><option>4 BR</option><option>5 BR</option><option>6 BR</option><option>7 BR</option>
+        <option>Common Area</option><option>Hallway/Stairwell</option><option>Exterior</option><option>Other</option>
+      </select></label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <label class="field"><span>Sq Ft (optional)</span>
+        <input type="number" id="apt-unit-sqft" placeholder="e.g. 750" inputmode="numeric"/></label>
+      <label class="field"><span>Our Price *</span>
+        <input type="number" id="apt-unit-price" placeholder="e.g. 1200" inputmode="decimal"/></label>
+    </div>
+    <label class="field" style="display:block;margin-bottom:16px"><span>Notes</span>
+      <input type="text" id="apt-unit-notes" placeholder="e.g. includes hallways"/></label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button onclick="aptSaveUnit()" style="height:50px;background:var(--green);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Save Unit</button>
+      <button onclick="aptCloseUnitModal()" style="height:50px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Cancel</button>
+    </div>
+  </div>
+</div>
 <div id="contact-modal">
   <div class="modal-card">
     <div class="modal-title" id="modal-title">ADD CLIENT</div>
@@ -1287,10 +1387,13 @@ Family Owned Since 1978`;
 function switchTab(tab) {
   document.getElementById('estimator-section').style.display = tab==='estimate' ? '' : 'none';
   document.getElementById('contacts-section').classList.toggle('active', tab==='contacts');
+  document.getElementById('apt-section').style.display = tab==='apt' ? 'block' : 'none';
   document.getElementById('bt-bar').style.display = tab==='estimate' ? '' : 'none';
   document.getElementById('tab-estimate').classList.toggle('active', tab==='estimate');
   document.getElementById('tab-contacts').classList.toggle('active', tab==='contacts');
+  document.getElementById('tab-apt').classList.toggle('active', tab==='apt');
   if(tab==='contacts') renderContacts();
+  if(tab==='apt') aptRender();
 }
 
 // ══════════════════════════════════════════════
@@ -1515,6 +1618,149 @@ function showToast(msg, type='') {
   el.className='show'+(type?' '+type:'');
   clearTimeout(toastT);
   toastT=setTimeout(()=>el.className='',2600);
+}
+
+// ══════════════════════════════════════════════
+// APT PRICING
+// ══════════════════════════════════════════════
+const APT_KEY = 'ingersoll_apt_pricing_v1';
+let aptActiveLoc = null;
+
+function aptLoad() {
+  try { return JSON.parse(localStorage.getItem(APT_KEY)) || {locations:[]}; }
+  catch { return {locations:[]}; }
+}
+function aptSaveData(data) { localStorage.setItem(APT_KEY, JSON.stringify(data)); }
+
+function aptRender() {
+  const data = aptLoad();
+  const sel  = document.getElementById('apt-loc-select');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">— Select Property —</option>';
+  data.locations.forEach(loc => {
+    const opt = document.createElement('option');
+    opt.value = loc.id;
+    opt.textContent = loc.name;
+    sel.appendChild(opt);
+  });
+  if(aptActiveLoc) sel.value = aptActiveLoc;
+  else if(prev) sel.value = prev;
+  aptActiveLoc = sel.value || null;
+  aptRenderActive(data);
+}
+
+function aptRenderActive(data) {
+  const loc = data.locations.find(l=>l.id===aptActiveLoc);
+  document.getElementById('apt-empty').style.display        = !loc ? 'block' : 'none';
+  document.getElementById('apt-loc-header').style.display   = loc ? 'flex' : 'none';
+  document.getElementById('apt-add-unit-btn').style.display = loc ? 'block' : 'none';
+  if(!loc) {
+    document.getElementById('apt-summary').style.display    = 'none';
+    document.getElementById('apt-table-wrap').style.display = 'none';
+    return;
+  }
+  document.getElementById('apt-loc-name').textContent = loc.name;
+  document.getElementById('apt-loc-addr').textContent = loc.address || '';
+  document.getElementById('apt-loc-addr').style.display = loc.address ? 'block' : 'none';
+
+  const sumEl = document.getElementById('apt-summary');
+  if(loc.units.length > 0) {
+    const prices = loc.units.map(u=>parseFloat(u.price)||0);
+    const avg    = Math.round(prices.reduce((a,b)=>a+b,0)/prices.length);
+    sumEl.style.display = 'grid';
+    sumEl.innerHTML = [
+      {label:'Unit Types', val:loc.units.length},
+      {label:'Avg Price',  val:'$'+avg.toLocaleString()},
+      {label:'Lowest',     val:'$'+Math.min(...prices).toLocaleString()},
+      {label:'Highest',    val:'$'+Math.max(...prices).toLocaleString()},
+    ].map(c=>`<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+      <div style="font-family:var(--head);font-size:20px;color:var(--blue);letter-spacing:1px">${c.val}</div>
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-top:3px">${c.label}</div>
+    </div>`).join('');
+  } else { sumEl.style.display = 'none'; }
+
+  const tbody = document.getElementById('apt-unit-tbody');
+  const tableWrap = document.getElementById('apt-table-wrap');
+  if(loc.units.length > 0) {
+    tableWrap.style.display = 'block';
+    tbody.innerHTML = loc.units.map(u=>`
+      <tr style="border-bottom:1px solid #f0ece6">
+        <td style="padding:11px 12px"><span style="background:#e8f4fb;color:#1c6a96;border-radius:5px;padding:3px 10px;font-size:12px;font-weight:700">${u.type}</span></td>
+        <td style="padding:11px 12px;color:#555;font-size:13px">${u.sqft?u.sqft+' sf':'—'}</td>
+        <td style="padding:11px 12px;font-weight:700;color:#1c6a96;font-size:15px">$${parseFloat(u.price).toLocaleString()}</td>
+        <td style="padding:11px 12px;color:#888;font-size:12px">${u.notes||'—'}</td>
+        <td style="padding:11px 8px"><button onclick="aptRemoveUnit('${u.id}')" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:16px;padding:2px 6px">✕</button></td>
+      </tr>`).join('');
+  } else { tableWrap.style.display = 'none'; }
+}
+
+function aptSelectLoc(id) { aptActiveLoc = id||null; aptRenderActive(aptLoad()); }
+
+function aptOpenAddLoc() {
+  document.getElementById('apt-loc-name-input').value = '';
+  document.getElementById('apt-loc-addr-input').value = '';
+  document.getElementById('apt-loc-modal').style.display = 'block';
+  setTimeout(()=>document.getElementById('apt-loc-name-input').focus(),100);
+}
+function aptCloseLocModal() { document.getElementById('apt-loc-modal').style.display='none'; }
+function aptSaveLoc() {
+  const name = document.getElementById('apt-loc-name-input').value.trim();
+  if(!name) return showToast('Enter a property name','warn');
+  const addr = document.getElementById('apt-loc-addr-input').value.trim();
+  const data = aptLoad();
+  const loc  = {id:'loc'+Date.now(), name, address:addr, units:[]};
+  data.locations.push(loc);
+  aptSaveData(data);
+  aptActiveLoc = loc.id;
+  aptCloseLocModal();
+  aptRender();
+  showToast(name+' added');
+}
+function aptRemoveLoc() {
+  if(!aptActiveLoc) return;
+  const data = aptLoad();
+  const loc  = data.locations.find(l=>l.id===aptActiveLoc);
+  if(!loc || !confirm('Remove "'+loc.name+'" and all its unit pricing?')) return;
+  data.locations = data.locations.filter(l=>l.id!==aptActiveLoc);
+  aptSaveData(data);
+  aptActiveLoc = data.locations[0]?.id||null;
+  aptRender();
+}
+
+function aptOpenAddUnit() {
+  document.getElementById('apt-unit-sqft').value  = '';
+  document.getElementById('apt-unit-price').value = '';
+  document.getElementById('apt-unit-notes').value = '';
+  document.getElementById('apt-unit-modal').style.display = 'block';
+  setTimeout(()=>document.getElementById('apt-unit-price').focus(),100);
+}
+function aptCloseUnitModal() { document.getElementById('apt-unit-modal').style.display='none'; }
+function aptSaveUnit() {
+  const price = document.getElementById('apt-unit-price').value.trim();
+  if(!price) return showToast('Enter a price','warn');
+  const unit = {
+    id:    'u'+Date.now(),
+    type:  document.getElementById('apt-unit-type').value,
+    sqft:  document.getElementById('apt-unit-sqft').value.trim(),
+    price: price,
+    notes: document.getElementById('apt-unit-notes').value.trim(),
+  };
+  const data = aptLoad();
+  const loc  = data.locations.find(l=>l.id===aptActiveLoc);
+  if(!loc) return;
+  loc.units.push(unit);
+  aptSaveData(data);
+  aptCloseUnitModal();
+  aptRenderActive(data);
+  showToast(unit.type+' — $'+parseFloat(price).toLocaleString()+' saved');
+}
+function aptRemoveUnit(unitId) {
+  const data = aptLoad();
+  const loc  = data.locations.find(l=>l.id===aptActiveLoc);
+  if(!loc) return;
+  loc.units = loc.units.filter(u=>u.id!==unitId);
+  aptSaveData(data);
+  aptRenderActive(data);
 }
 </script>
 </body>

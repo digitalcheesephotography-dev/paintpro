@@ -795,6 +795,60 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <button class="dbg-close" onclick="closeDebug()" aria-label="Close debug panel">✕ Close</button>
   </div>
 
+  <!-- Voice Commands Cheat Sheet -->
+  <div class="dbg-card">
+    <div class="dbg-card-title">🎤 Voice Commands</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">
+      Tap the mic 🎤 then say one of these. Most commands work with or without "add" / "put" / "set" in front.
+    </p>
+
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);margin-bottom:6px;margin-top:4px;font-weight:700">Measurements</div>
+    <div style="font-size:13px;color:var(--text);line-height:1.9;margin-bottom:10px">
+      <div>"<b>wall fourteen</b>" — fills next wall (14 ft)</div>
+      <div>"<b>wall twelve five</b>" — 12 ft 5 in</div>
+      <div>"<b>height nine</b>" — ceiling height</div>
+      <div>"<b>length twenty</b>" — floor/ceiling length</div>
+      <div>"<b>width sixteen</b>" — floor/ceiling width</div>
+    </div>
+
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);margin-bottom:6px;font-weight:700">Doors &amp; Windows</div>
+    <div style="font-size:13px;color:var(--text);line-height:1.9;margin-bottom:10px">
+      <div>"<b>six doors</b>" or "<b>doors six</b>"</div>
+      <div>"<b>add seventeen doors</b>"</div>
+      <div>"<b>eight windows</b>" or "<b>windows eight</b>"</div>
+      <div>"<b>put twelve windows</b>"</div>
+    </div>
+
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);margin-bottom:6px;font-weight:700">Switch Tabs</div>
+    <div style="font-size:13px;color:var(--text);line-height:1.9;margin-bottom:10px">
+      <div>"<b>estimator</b>" or "<b>measure</b>"</div>
+      <div>"<b>clients</b>" or "<b>contacts</b>"</div>
+      <div>"<b>projects</b>"</div>
+      <div>"<b>materials</b>" or "<b>shopping list</b>"</div>
+      <div>"<b>notes</b>"</div>
+      <div>"<b>apt pricing</b>" or "<b>apartment</b>"</div>
+    </div>
+
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);margin-bottom:6px;font-weight:700">Add New</div>
+    <div style="font-size:13px;color:var(--text);line-height:1.9;margin-bottom:10px">
+      <div>"<b>add room</b>" or "<b>new room</b>"</div>
+      <div>"<b>add client</b>" or "<b>new contact</b>"</div>
+      <div>"<b>add project</b>"</div>
+      <div>"<b>add note</b>"</div>
+      <div>"<b>add materials</b>" or "<b>new list</b>"</div>
+    </div>
+
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);margin-bottom:6px;font-weight:700">Actions</div>
+    <div style="font-size:13px;color:var(--text);line-height:1.9;margin-bottom:10px">
+      <div>"<b>generate bid</b>" or "<b>proposal</b>"</div>
+      <div>"<b>connect</b>" or "<b>bluetooth</b>"</div>
+    </div>
+
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border);line-height:1.5">
+      💡 Numbers can be spoken ("seventeen") or said as digits ("17"). For wall fractions, say the inches: "wall twelve five" = 12'5".
+    </div>
+  </div>
+
   <!-- Manual measurement entry — the always-working fallback -->
   <div class="dbg-card">
     <div class="dbg-card-title">Manual Measurement (always works)</div>
@@ -2503,8 +2557,14 @@ function processVoiceCommand(transcript) {
   if (/add note|new note/i.test(t))                        { switchTab('contacts');switchSubnav('notes');openNoteModal(null); return; }
   if (/add material|new material|add shopping|new shopping|add list|new list/i.test(t)) { switchTab('contacts');switchSubnav('materials');openMaterialsModal(null); return; }
 
-  // Doors & Windows count — accepts "six doors", "doors six", "17 doors", etc.
-  const doorMatch = t.match(/^doors?\s+(.+)$/i) || t.match(/^(.+?)\s+doors?$/i);
+  // Doors & Windows count — accepts "six doors", "doors six", "17 doors",
+  // and the same with leading filler verbs: "add six doors", "put six doors", "set six doors", etc.
+  let dwText = t;
+  const fillerStrip = t.match(/^(?:add|put(?:\s+in)?|set|make(?:\s+it)?|do|change(?:\s+to)?|gimme|give\s+me)\s+(.+)$/i);
+  if (fillerStrip && /\bdoors?\b|\bwindows?\b/i.test(fillerStrip[1])) {
+    dwText = fillerStrip[1].trim();
+  }
+  const doorMatch = dwText.match(/^doors?\s+(.+)$/i) || dwText.match(/^(.+?)\s+doors?$/i);
   if (doorMatch) {
     const n = parseSpokenNumber(doorMatch[1].trim());
     if (n !== null && n >= 0 && n < 1000) {
@@ -2515,7 +2575,7 @@ function processVoiceCommand(transcript) {
       return showToast(`🚪 ${count} door${count===1?'':'s'}`);
     }
   }
-  const winMatch = t.match(/^windows?\s+(.+)$/i) || t.match(/^(.+?)\s+windows?$/i);
+  const winMatch = dwText.match(/^windows?\s+(.+)$/i) || dwText.match(/^(.+?)\s+windows?$/i);
   if (winMatch) {
     const n = parseSpokenNumber(winMatch[1].trim());
     if (n !== null && n >= 0 && n < 1000) {

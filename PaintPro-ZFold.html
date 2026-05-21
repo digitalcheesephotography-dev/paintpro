@@ -2503,6 +2503,30 @@ function processVoiceCommand(transcript) {
   if (/add note|new note/i.test(t))                        { switchTab('contacts');switchSubnav('notes');openNoteModal(null); return; }
   if (/add material|new material|add shopping|new shopping|add list|new list/i.test(t)) { switchTab('contacts');switchSubnav('materials');openMaterialsModal(null); return; }
 
+  // Doors & Windows count — accepts "six doors", "doors six", "17 doors", etc.
+  const doorMatch = t.match(/^doors?\s+(.+)$/i) || t.match(/^(.+?)\s+doors?$/i);
+  if (doorMatch) {
+    const n = parseSpokenNumber(doorMatch[1].trim());
+    if (n !== null && n >= 0 && n < 1000) {
+      const count = Math.round(n);
+      switchTab('estimate');
+      document.getElementById('job-door-count').value = count;
+      updateJobField('doorCount', String(count));
+      return showToast(`🚪 ${count} door${count===1?'':'s'}`);
+    }
+  }
+  const winMatch = t.match(/^windows?\s+(.+)$/i) || t.match(/^(.+?)\s+windows?$/i);
+  if (winMatch) {
+    const n = parseSpokenNumber(winMatch[1].trim());
+    if (n !== null && n >= 0 && n < 1000) {
+      const count = Math.round(n);
+      switchTab('estimate');
+      document.getElementById('job-win-count').value = count;
+      updateJobField('winCount', String(count));
+      return showToast(`🪟 ${count} window${count===1?'':'s'}`);
+    }
+  }
+
   // Measurements
   let target=null, numStr=t;
   if      (/^wall\s+/i.test(t))    { target='wall';        numStr=t.replace(/^wall\s+/i,''); }

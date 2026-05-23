@@ -1,0 +1,39 @@
+---
+interface Props {
+  title: string;
+  description: string;
+  href: string;
+  icon?: string;
+}
+
+const { title, description, href, icon = '' } = Astro.props;
+---
+
+<a
+  href={href}
+  class="group flex flex-col gap-3 bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md hover:border-[#2baae1] transition-all duration-200"
+>
+  {icon && (
+    <div class="text-[#2baae1] text-4xl leading-none" aria-hidden="true">
+      {icon}
+    </div>
+  )}
+  <h3
+    class="text-2xl text-gray-900 group-hover:text-[#2baae1] transition-colors leading-tight"
+    style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.06em;"
+  >
+    {title}
+  </h3>
+  <p
+    class="text-gray-600 text-base leading-relaxed flex-1"
+    style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.05rem;"
+  >
+    {description}
+  </p>
+  <span
+    class="text-[#2baae1] font-medium text-base group-hover:underline mt-auto"
+    style="font-family: 'Barlow Condensed', sans-serif; font-size: 1rem;"
+  >
+    Learn More &rarr;
+  </span>
+</a>

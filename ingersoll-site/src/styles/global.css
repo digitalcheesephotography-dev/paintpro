@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-blue: #2baae1;
+  --color-brand-green: #2e8b1e;
+  --color-brand-red: #c0392b;
+  --color-brand-black: #000000;
+  --color-dark: #0d1117;
+  --color-panel: #161b22;
+
+  --font-heading: 'Bebas Neue', sans-serif;
+  --font-body: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-body);
+    background-color: #ffffff;
+    color: #1a1a1a;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    letter-spacing: 0.05em;
+  }
+}

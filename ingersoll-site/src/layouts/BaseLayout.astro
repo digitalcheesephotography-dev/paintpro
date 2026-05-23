@@ -1,0 +1,107 @@
+---
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  ogImage?: string;
+}
+
+const {
+  title,
+  description = 'Ingersoll Painting LLC — Professional painting, renovation, and home improvement services in Oswego, Onondaga, and Cayuga counties since 1978.',
+  ogImage = '/logo.jpg',
+} = Astro.props;
+
+const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={new URL(ogImage, Astro.site).toString()} />
+    <meta property="og:url" content={canonicalURL.toString()} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Ingersoll Painting LLC" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={new URL(ogImage, Astro.site).toString()} />
+
+    <link rel="canonical" href={canonicalURL.toString()} />
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+
+    <title>{title}</title>
+
+    <!-- LocalBusiness JSON-LD Schema -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "PaintingContractor",
+        "name": "Ingersoll Painting LLC",
+        "url": "https://ingersollpaintingllc.com",
+        "logo": "https://ingersollpaintingllc.com/logo.jpg",
+        "image": "https://ingersollpaintingllc.com/logo.jpg",
+        "telephone": "(315) 952-8259",
+        "email": "info@ingersollpaintingllc.com",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "496 Phinney Road",
+          "addressLocality": "Hannibal",
+          "addressRegion": "NY",
+          "postalCode": "13074",
+          "addressCountry": "US"
+        },
+        "geo": {
+          "@type": "GeoCoordinates",
+          "latitude": 43.3168,
+          "longitude": -76.3896
+        },
+        "foundingDate": "1978",
+        "areaServed": [
+          { "@type": "County", "name": "Oswego County, NY" },
+          { "@type": "County", "name": "Onondaga County, NY" },
+          { "@type": "County", "name": "Cayuga County, NY" }
+        ],
+        "description": "Family-owned painting and renovation contractor serving Central New York since 1978. Specializing in interior and exterior painting, deck building, cabinet refinishing, drywall, remodeling, and more.",
+        "priceRange": "$$",
+        "aggregateRating": {
+          "@type": "AggregateRating",
+          "ratingValue": "5",
+          "reviewCount": "47"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:px-4 focus:py-2 focus:bg-[#2baae1] focus:text-white">
+      Skip to main content
+    </a>
+    <Header />
+    <main id="main-content">
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

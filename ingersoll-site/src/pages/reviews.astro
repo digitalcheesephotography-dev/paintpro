@@ -1,9 +1,215 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-const title = 'Ingersoll Painting LLC';
+import CtaBand from '../components/CtaBand.astro';
+
+const reviews = [
+  {
+    name: 'Mike T.',
+    location: 'Oswego, NY',
+    stars: 5,
+    service: 'Cabinet Refinishing',
+    quote: 'James and his crew did an amazing job on our kitchen cabinets. They look brand new and saved us thousands over a full replacement. Professional from start to finish.',
+  },
+  {
+    name: 'Sarah M.',
+    location: 'Fulton, NY',
+    stars: 5,
+    service: 'Interior Painting',
+    quote: 'Had the whole interior painted before we moved in. Clean, fast, and the color came out exactly right. They were in and out in three days and left zero mess. Will use them again.',
+  },
+  {
+    name: 'Dave & Carol R.',
+    location: 'Mexico, NY',
+    stars: 5,
+    service: 'Deck Building & Staining',
+    quote: 'Built us a beautiful deck and stained it all in the same week. Fair price, quality materials, and they cleaned everything up perfectly. Couldn\'t be happier.',
+  },
+  {
+    name: 'Linda K.',
+    location: 'Phoenix, NY',
+    stars: 5,
+    service: 'Exterior Painting',
+    quote: 'Our house hadn\'t been painted in 15 years and was really showing it. Ingersoll scraped it all down, primed everything, and the finished result looks like a new house. James was easy to deal with and kept us updated.',
+  },
+  {
+    name: 'Tom B.',
+    location: 'Baldwinsville, NY',
+    stars: 5,
+    service: 'Basement Remodeling',
+    quote: 'James finished our basement - framing, drywall, flooring, and paint. Came in on budget and on time. The crew was respectful of our home and cleaned up every day. Highly recommend.',
+  },
+  {
+    name: 'Pam H.',
+    location: 'Hannibal, NY',
+    stars: 5,
+    service: 'Interior Painting',
+    quote: 'I\'ve used Ingersoll Painting twice now - living room the first time, master bedroom and bath the second. Same great work both times. James is honest about pricing and there are never any surprises.',
+  },
+  {
+    name: 'Joe & Terri S.',
+    location: 'Pulaski, NY',
+    stars: 5,
+    service: 'Bathroom Remodeling',
+    quote: 'New tile floor, new vanity, and a fresh coat of paint. They did everything in about four days and it looks incredible. The tile work especially - very clean and level.',
+  },
+  {
+    name: 'Randy C.',
+    location: 'Oswego, NY',
+    stars: 5,
+    service: 'Cabinet Refinishing',
+    quote: 'The before and after on our kitchen is hard to believe. Old oak cabinets that looked tired are now a beautiful gray-blue that looks completely custom. James recommended the color and he was right.',
+  },
+  {
+    name: 'Kathy W.',
+    location: 'Fulton, NY',
+    stars: 5,
+    service: 'Drywall Repair',
+    quote: 'Had some water damage that left a big mess on two walls. They patched it, blended the texture, and painted over it. You cannot tell anything was ever there. Fair price and done in one day.',
+  },
+];
+
+function stars(n: number) {
+  return Array.from({ length: 5 }, (_, i) => i < n);
+}
 ---
-<BaseLayout title={title}>
-  <section class="py-20 text-center px-4">
-    <h1 style="font-family:'Bebas Neue',sans-serif;font-size:3rem;color:#2baae1;">Coming Soon</h1>
+
+<BaseLayout
+  title="Customer Reviews | Ingersoll Painting LLC"
+  description="Read what customers across Oswego, Onondaga, and Cayuga counties say about Ingersoll Painting LLC. 5-star reviews for interior painting, exterior painting, cabinet refinishing, and remodeling."
+>
+
+  <!-- Hero -->
+  <section class="bg-gray-900 py-16 px-4">
+    <div class="max-w-4xl mx-auto text-center">
+      <p
+        class="text-[#2baae1] uppercase tracking-widest text-sm mb-3"
+        style="font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.15em;"
+      >
+        Testimonials
+      </p>
+      <h1
+        class="text-white text-6xl sm:text-7xl lg:text-8xl leading-none mb-5"
+        style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.04em;"
+      >
+        What Our Customers Say
+      </h1>
+      <p
+        class="text-gray-400 text-xl max-w-xl mx-auto mb-8"
+        style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.15rem;"
+      >
+        We've been earning 5-star reviews across Central New York since 1978. Here's what our customers say.
+      </p>
+      <!-- Aggregate rating display -->
+      <div class="inline-flex items-center gap-3 bg-white/10 rounded-2xl px-6 py-4">
+        <div class="flex gap-1">
+          {Array.from({length: 5}).map(() => (
+            <svg class="w-6 h-6 text-yellow-400 fill-current" viewBox="0 0 20 20">
+              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+            </svg>
+          ))}
+        </div>
+        <span
+          class="text-white text-2xl"
+          style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.06em;"
+        >
+          5.0 Average Rating
+        </span>
+      </div>
+    </div>
   </section>
+
+  <!-- Review grid -->
+  <section class="py-20 px-4 bg-gray-50">
+    <div class="max-w-6xl mx-auto">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {reviews.map(r => (
+          <article class="bg-white rounded-2xl p-7 shadow-sm border border-gray-100 flex flex-col gap-4">
+            <!-- Stars -->
+            <div class="flex gap-1" aria-label="5 out of 5 stars">
+              {stars(r.stars).map(filled => (
+                <svg class={`w-5 h-5 fill-current ${filled ? 'text-yellow-400' : 'text-gray-200'}`} viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+              ))}
+            </div>
+            <!-- Service badge -->
+            <span
+              class="self-start bg-blue-50 text-[#2baae1] text-xs px-3 py-1 rounded-full"
+              style="font-family: 'Barlow Condensed', sans-serif; font-size: 0.85rem; letter-spacing: 0.05em;"
+            >
+              {r.service}
+            </span>
+            <!-- Quote -->
+            <blockquote
+              class="text-gray-700 leading-relaxed flex-1 italic"
+              style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+            >
+              "{r.quote}"
+            </blockquote>
+            <!-- Reviewer -->
+            <div class="flex items-center gap-3 pt-2 border-t border-gray-50">
+              <div class="w-9 h-9 rounded-full bg-[#2baae1] flex items-center justify-center text-white font-bold text-sm shrink-0" aria-hidden="true">
+                {r.name.charAt(0)}
+              </div>
+              <div>
+                <p
+                  class="text-gray-900 font-semibold leading-tight"
+                  style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.05rem;"
+                >
+                  {r.name}
+                </p>
+                <p
+                  class="text-gray-400 text-sm leading-tight"
+                  style="font-family: 'Barlow Condensed', sans-serif;"
+                >
+                  {r.location}
+                </p>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <!-- Google review CTA -->
+      <div class="mt-14 text-center bg-white rounded-2xl border border-gray-100 shadow-sm px-8 py-12">
+        <h2
+          class="text-4xl sm:text-5xl text-gray-900 mb-3"
+          style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.05em;"
+        >
+          Had Work Done by Us?
+        </h2>
+        <p
+          class="text-gray-500 text-lg mb-8 max-w-xl mx-auto"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+        >
+          We'd really appreciate a Google review. It takes two minutes and helps other homeowners find us.
+        </p>
+        <a
+          href="https://g.page/r/CYDCDulxA5keEBE/review"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-3 bg-white border-2 border-gray-200 hover:border-[#2baae1] text-gray-700 hover:text-[#2baae1] font-semibold px-8 py-4 rounded-xl transition-all shadow-sm hover:shadow-md text-lg"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.15rem;"
+        >
+          <svg class="w-6 h-6 shrink-0" viewBox="0 0 24 24">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Leave a Google Review
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <CtaBand
+    heading="Ready to Be Our Next Happy Customer?"
+    subtext="Free estimates. No pressure. Just honest work at a fair price."
+    primaryLabel="Get Free Estimate"
+    primaryHref="/contact"
+    secondaryLabel="Call (315) 952-8259"
+    secondaryHref="tel:+13159528259"
+  />
+
 </BaseLayout>

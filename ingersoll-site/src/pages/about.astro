@@ -1,9 +1,301 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-const title = 'Ingersoll Painting LLC';
+import CtaBand from '../components/CtaBand.astro';
+
+const values = [
+  {
+    icon: '🔨',
+    title: 'Quality',
+    body: 'We use the right products, do the prep work, and don\'t cut corners. Every job gets the same attention whether it\'s one room or a full renovation.',
+  },
+  {
+    icon: '🤝',
+    title: 'Honesty',
+    body: 'You get a straight answer on what something costs, how long it takes, and what to expect. No upsells, no surprise invoices.',
+  },
+  {
+    icon: '🎨',
+    title: 'Craft',
+    body: 'Painting and renovation are trades that reward skill and patience. We take pride in the finish - the clean line, the smooth coat, the tight seam.',
+  },
+  {
+    icon: '🏘️',
+    title: 'Community',
+    body: 'We live and work in Central New York. The homes we paint are our neighbors\' homes. That matters to how we show up.',
+  },
+];
+
+const team = [
+  {
+    name: 'James Bailey',
+    role: 'Owner & Founder',
+    photo: '/team/team-james.jpg',
+    bio: 'James started Ingersoll Painting in 1978 and has run it ever since. He handles estimating, project management, and still picks up a brush on every job. When you call, you\'re talking to the owner.',
+  },
+  {
+    name: 'Brandon',
+    role: 'Lead Painter & Craftsman',
+    photo: '/team/team-brandon.jpg',
+    bio: 'Brandon has been with the crew for years and handles the detail work that separates a good paint job from a great one. Cabinet refinishing, trim work, and exterior prep are his strengths.',
+  },
+  {
+    name: 'Tomi',
+    role: 'Painter & Renovator',
+    photo: '/team/team-crew.jpg',
+    bio: 'Tomi rounds out the core crew and brings energy and precision to every project. From basement framing to bathroom tile, he\'s learned the trade the right way.',
+  },
+];
+
+const credentials = [
+  { label: 'Est. 1978', sub: '46+ years in business' },
+  { label: 'BBB A+', sub: 'Accredited since 2010' },
+  { label: 'Fully Insured', sub: 'NY licensed & insured' },
+  { label: '1-Year Warranty', sub: 'On all workmanship' },
+  { label: 'Benjamin Moore', sub: 'Authorized applicator' },
+];
 ---
-<BaseLayout title={title}>
-  <section class="py-20 text-center px-4">
-    <h1 style="font-family:'Bebas Neue',sans-serif;font-size:3rem;color:#2baae1;">Coming Soon</h1>
+
+<BaseLayout
+  title="About Us | Ingersoll Painting LLC - Family-Owned Since 1978"
+  description="Ingersoll Painting LLC has been serving Central New York since 1978. Owner James Bailey leads a small, skilled crew committed to quality painting and renovation work in Oswego, Onondaga, and Cayuga counties."
+>
+
+  <!-- ===== Hero Band ===== -->
+  <section class="bg-gray-900 py-16 px-4">
+    <div class="max-w-4xl mx-auto text-center">
+      <p
+        class="text-[#2baae1] uppercase tracking-widest text-sm mb-3"
+        style="font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.15em;"
+      >
+        Who We Are
+      </p>
+      <h1
+        class="text-white text-6xl sm:text-7xl lg:text-8xl leading-none mb-5"
+        style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.04em;"
+      >
+        About Ingersoll Painting
+      </h1>
+      <p
+        class="text-gray-400 text-xl max-w-2xl mx-auto"
+        style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.15rem;"
+      >
+        Family-owned. Hannibal, NY. Doing this since 1978.
+      </p>
+    </div>
   </section>
+
+  <!-- ===== Our Story ===== -->
+  <section class="py-20 px-4 bg-white">
+    <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-14 items-start">
+
+      <!-- Photo -->
+      <div class="lg:sticky lg:top-24">
+        <img
+          src="/photos/cabinets-blue-gray-kitchen.jpg"
+          alt="Cabinet refinishing project - two-tone blue and gray kitchen"
+          class="rounded-2xl shadow-xl w-full object-cover"
+          width="700"
+          height="525"
+          loading="eager"
+        />
+        <div class="mt-4 grid grid-cols-2 gap-3">
+          <img
+            src="/photos/exterior-lakefront-house.jpg"
+            alt="Exterior house painting"
+            class="rounded-xl shadow object-cover w-full aspect-video"
+            width="340"
+            height="191"
+            loading="lazy"
+          />
+          <img
+            src="/photos/deck-stain-before-after.jpg"
+            alt="Deck staining before and after"
+            class="rounded-xl shadow object-cover w-full aspect-video"
+            width="340"
+            height="191"
+            loading="lazy"
+          />
+        </div>
+      </div>
+
+      <!-- Copy -->
+      <div class="space-y-6">
+        <h2
+          class="text-5xl sm:text-6xl text-gray-900 leading-tight"
+          style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.04em;"
+        >
+          A Business Built to Last
+        </h2>
+
+        <p
+          class="text-gray-600 leading-relaxed"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+        >
+          Ingersoll Painting LLC opened in 1978 in Hannibal, New York. James Bailey founded the business on a simple idea: show up, do the work right, and stand behind it. Forty-six years later, that's still the whole business plan.
+        </p>
+        <p
+          class="text-gray-600 leading-relaxed"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+        >
+          James runs the operation personally. He does the estimates, manages the projects, and works on the job site. When you hire Ingersoll Painting, you're not dealing with a salesperson who hands you off to a crew you've never met. The person who looks at your house is the person who paints it.
+        </p>
+        <p
+          class="text-gray-600 leading-relaxed"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+        >
+          Today James works alongside Brandon and Tomi - a small, skilled team that handles painting, cabinet refinishing, drywall, decks, and full renovations across Oswego, Onondaga, and Cayuga counties. No subcontractors. No crews you haven't met. The same people show up every day until the job is done.
+        </p>
+        <p
+          class="text-gray-600 leading-relaxed"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+        >
+          One of the things James is most proud of is passing the trade down. Brandon and Tomi didn't learn shortcuts - they learned the right way. That means the next generation of this business will deliver the same standard the first generation built.
+        </p>
+
+        <div class="flex flex-wrap gap-4 pt-2">
+          <a
+            href="/contact"
+            class="inline-block bg-[#2baae1] hover:bg-[#1e8fc4] text-white font-medium px-8 py-3 rounded-lg transition-colors"
+            style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+          >
+            Get Free Estimate
+          </a>
+          <a
+            href="/our-work"
+            class="inline-block border-2 border-gray-300 hover:border-[#2baae1] text-gray-600 hover:text-[#2baae1] font-medium px-8 py-3 rounded-lg transition-colors"
+            style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+          >
+            See Our Work
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== What We Stand For ===== -->
+  <section class="py-20 px-4 bg-gray-50">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-14">
+        <h2
+          class="text-5xl sm:text-6xl text-gray-900 mb-3"
+          style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.05em;"
+        >
+          What We Stand For
+        </h2>
+        <p
+          class="text-gray-500 text-lg max-w-xl mx-auto"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+        >
+          Four things that have guided this business since 1978.
+        </p>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {values.map(v => (
+          <div class="bg-white rounded-2xl p-7 shadow-sm border border-gray-100 text-center">
+            <div class="text-5xl mb-4" aria-hidden="true">{v.icon}</div>
+            <h3
+              class="text-2xl text-gray-900 mb-3"
+              style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.07em;"
+            >
+              {v.title}
+            </h3>
+            <p
+              class="text-gray-500 leading-relaxed"
+              style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.05rem;"
+            >
+              {v.body}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Meet the Team ===== -->
+  <section class="py-20 px-4 bg-white">
+    <div class="max-w-5xl mx-auto">
+      <div class="text-center mb-14">
+        <h2
+          class="text-5xl sm:text-6xl text-gray-900 mb-3"
+          style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.05em;"
+        >
+          Meet the Crew
+        </h2>
+        <p
+          class="text-gray-500 text-lg"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+        >
+          Small team. Big results.
+        </p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {team.map(member => (
+          <div class="text-center">
+            <div class="mb-5 mx-auto w-44 h-44 rounded-full overflow-hidden shadow-lg border-4 border-gray-100">
+              <img
+                src={member.photo}
+                alt={member.name}
+                class="w-full h-full object-cover object-top"
+                loading="lazy"
+                width="176"
+                height="176"
+              />
+            </div>
+            <h3
+              class="text-2xl text-gray-900 mb-1"
+              style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.07em;"
+            >
+              {member.name}
+            </h3>
+            <p
+              class="text-[#2baae1] text-sm uppercase tracking-widest mb-3"
+              style="font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.12em;"
+            >
+              {member.role}
+            </p>
+            <p
+              class="text-gray-500 leading-relaxed"
+              style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.05rem;"
+            >
+              {member.bio}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Credentials Strip ===== -->
+  <section class="py-12 px-4 bg-gray-900">
+    <div class="max-w-5xl mx-auto">
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6">
+        {credentials.map(c => (
+          <div class="text-center">
+            <div
+              class="text-white text-2xl mb-1"
+              style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.08em;"
+            >
+              {c.label}
+            </div>
+            <div
+              class="text-gray-400 text-sm"
+              style="font-family: 'Barlow Condensed', sans-serif; font-size: 0.9rem;"
+            >
+              {c.sub}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <CtaBand
+    heading="Let's Talk About Your Project"
+    subtext="Free estimates, honest pricing, and a crew that shows up when they say they will."
+    primaryLabel="Get Free Estimate"
+    primaryHref="/contact"
+    secondaryLabel="Call (315) 952-8259"
+    secondaryHref="tel:+13159528259"
+  />
+
 </BaseLayout>

@@ -1,0 +1,14 @@
+{
+  "name": "Ingersoll Painting LLC",
+  "short_name": "Ingersoll Painting",
+  "description": "Family-owned painting and renovation contractor serving Central New York since 1978.",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#ffffff",
+  "theme_color": "#2baae1",
+  "icons": [
+    { "src": "/favicon-16.png", "sizes": "16x16", "type": "image/png" },
+    { "src": "/favicon-32.png", "sizes": "32x32", "type": "image/png" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

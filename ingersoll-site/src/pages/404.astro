@@ -1,0 +1,17 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+<BaseLayout title="Page Not Found | Ingersoll Painting LLC" description="The page you're looking for doesn't exist.">
+  <section class="py-32 px-4 text-center">
+    <p class="text-[#2baae1] text-8xl mb-4" style="font-family:'Bebas Neue',sans-serif;">404</p>
+    <h1 class="text-5xl text-gray-900 mb-4" style="font-family:'Bebas Neue',sans-serif;letter-spacing:0.05em;">Page Not Found</h1>
+    <p class="text-gray-500 text-xl mb-10 max-w-md mx-auto" style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;">
+      That page doesn't exist. Try one of these instead.
+    </p>
+    <div class="flex flex-wrap gap-4 justify-center">
+      <a href="/" class="bg-[#2baae1] hover:bg-[#1e8fc4] text-white font-medium px-7 py-3 rounded-lg transition-colors" style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;">Home</a>
+      <a href="/services" class="border-2 border-gray-300 hover:border-[#2baae1] text-gray-600 hover:text-[#2baae1] font-medium px-7 py-3 rounded-lg transition-colors" style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;">Services</a>
+      <a href="/contact" class="border-2 border-gray-300 hover:border-[#2baae1] text-gray-600 hover:text-[#2baae1] font-medium px-7 py-3 rounded-lg transition-colors" style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;">Contact</a>
+    </div>
+  </section>
+</BaseLayout>

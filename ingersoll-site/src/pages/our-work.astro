@@ -1,9 +1,405 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-const title = 'Ingersoll Painting LLC';
+import CtaBand from '../components/CtaBand.astro';
+
+const photos = [
+  {
+    src: '/photos/cabinets-blue-gray-kitchen.jpg',
+    alt: 'Two-tone blue and gray kitchen cabinet refinishing — full kitchen view',
+    category: 'cabinets',
+    label: 'Cabinet Refinishing',
+    caption: 'Two-tone kitchen refinish — gray uppers, blue island. Benjamin Moore Advance.',
+  },
+  {
+    src: '/photos/cabinets-blue-island.jpg',
+    alt: 'Blue kitchen island close-up — cabinet refinishing',
+    category: 'cabinets',
+    label: 'Cabinet Refinishing',
+    caption: 'Island close-up from the same two-tone kitchen job.',
+  },
+  {
+    src: '/photos/exterior-lakefront-house.jpg',
+    alt: 'Exterior painting on lakefront home — white siding, dark lower level',
+    category: 'exterior',
+    label: 'Exterior Painting',
+    caption: 'Full exterior repaint on a lakefront home — white siding, painted lower foundation.',
+  },
+  {
+    src: '/photos/interior-mudroom-barn-doors.jpg',
+    alt: 'Mudroom with custom barn doors and built-in shelving',
+    category: 'interior',
+    label: 'Interior Painting',
+    caption: 'Mudroom — painted trim, barn doors, and built-in shelving.',
+  },
+  {
+    src: '/photos/deck-stain-before-after.jpg',
+    alt: 'Deck staining before and after — weathered boards restored to rich brown',
+    category: 'decks',
+    label: 'Deck Staining',
+    caption: 'Before and after: pressure wash and solid stain on an aging deck.',
+  },
+  {
+    src: '/photos/cabinets-wanda-after.jpg',
+    alt: 'White kitchen cabinet refinishing — after',
+    category: 'cabinets',
+    label: 'Cabinet Refinishing',
+    caption: 'Complete kitchen cabinet refinish — bright white, new hardware.',
+  },
+  {
+    src: '/photos/cabinets-wanda-before.jpg',
+    alt: 'Kitchen cabinets before refinishing — original oak finish',
+    category: 'cabinets',
+    label: 'Cabinet Refinishing',
+    caption: 'Same kitchen before — original oak with dated hardware.',
+  },
+  {
+    src: '/photos/cabinets-kitchen-finished.jpg',
+    alt: 'White kitchen cabinets after refinishing with stainless appliances',
+    category: 'cabinets',
+    label: 'Cabinet Refinishing',
+    caption: 'Finished kitchen cabinet refinish with stainless appliances.',
+  },
+  {
+    src: '/photos/cabinets-spraying-process.jpg',
+    alt: 'Spraying cabinet doors laid flat — cabinet refinishing process',
+    category: 'cabinets',
+    label: 'Cabinet Refinishing',
+    caption: 'Cabinet doors sprayed flat for a factory-quality finish.',
+  },
+  {
+    src: '/photos/interior-hallway-painted.jpg',
+    alt: 'Interior hallway with painted olive walls and hardwood floors',
+    category: 'interior',
+    label: 'Interior Painting',
+    caption: 'Whole-house interior — hallway painted in warm olive with white trim.',
+  },
+  {
+    src: '/photos/interior-hallway-2.jpg',
+    alt: 'Interior hallway — second angle showing staircase railing',
+    category: 'interior',
+    label: 'Interior Painting',
+    caption: 'Same hallway from the staircase landing.',
+  },
+  {
+    src: '/photos/bathroom-tile-install.jpg',
+    alt: 'Bathroom tile floor installation in progress with leveling clips',
+    category: 'bathroom',
+    label: 'Bathroom Remodeling',
+    caption: 'Wood-look tile floor install mid-project — leveling clips set.',
+  },
+  {
+    src: '/photos/basement-remodel-framing.jpg',
+    alt: 'Basement remodel framing and stair build in progress',
+    category: 'basement',
+    label: 'Basement Remodeling',
+    caption: 'Basement finish in progress — framing and stair construction.',
+  },
+];
+
+const categories = [
+  { id: 'all', label: 'All Projects' },
+  { id: 'cabinets', label: 'Cabinet Refinishing' },
+  { id: 'interior', label: 'Interior' },
+  { id: 'exterior', label: 'Exterior' },
+  { id: 'decks', label: 'Decks' },
+  { id: 'bathroom', label: 'Bathroom' },
+  { id: 'basement', label: 'Basement' },
+];
 ---
-<BaseLayout title={title}>
-  <section class="py-20 text-center px-4">
-    <h1 style="font-family:'Bebas Neue',sans-serif;font-size:3rem;color:#2baae1;">Coming Soon</h1>
+
+<BaseLayout
+  title="Our Work | Ingersoll Painting LLC Photo Gallery"
+  description="Browse completed projects from Ingersoll Painting LLC — cabinet refinishing, interior and exterior painting, deck staining, bathroom tile, and basement remodeling across Central New York."
+>
+
+  <!-- Hero -->
+  <section class="bg-gray-900 py-16 px-4">
+    <div class="max-w-4xl mx-auto text-center">
+      <p
+        class="text-[#2baae1] uppercase tracking-widest text-sm mb-3"
+        style="font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.15em;"
+      >
+        Portfolio
+      </p>
+      <h1
+        class="text-white text-6xl sm:text-7xl lg:text-8xl leading-none mb-5"
+        style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.04em;"
+      >
+        Our Work
+      </h1>
+      <p
+        class="text-gray-400 text-xl max-w-xl mx-auto"
+        style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.15rem;"
+      >
+        {photos.length} projects across Central New York. Every one done by the same small crew.
+      </p>
+    </div>
   </section>
+
+  <!-- Gallery -->
+  <section class="py-16 px-4 bg-white">
+    <div class="max-w-7xl mx-auto">
+
+      <!-- Filter pills -->
+      <div
+        class="flex flex-wrap gap-2 mb-10 justify-center"
+        role="group"
+        aria-label="Filter projects by category"
+      >
+        {categories.map(cat => (
+          <button
+            data-filter={cat.id}
+            class={`filter-btn px-5 py-2.5 rounded-full border font-medium transition-all text-sm min-h-[44px] ${
+              cat.id === 'all'
+                ? 'bg-[#2baae1] border-[#2baae1] text-white'
+                : 'bg-white border-gray-200 text-gray-600 hover:border-[#2baae1] hover:text-[#2baae1]'
+            }`}
+            style="font-family: 'Barlow Condensed', sans-serif; font-size: 1rem;"
+            aria-pressed={cat.id === 'all' ? 'true' : 'false'}
+          >
+            {cat.label}
+          </button>
+        ))}
+      </div>
+
+      <!-- Count -->
+      <p
+        id="photo-count"
+        class="text-center text-gray-400 text-sm mb-8"
+        style="font-family: 'Barlow Condensed', sans-serif; font-size: 1rem;"
+        aria-live="polite"
+      >
+        Showing all {photos.length} projects
+      </p>
+
+      <!-- Grid -->
+      <div
+        id="gallery-grid"
+        class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4"
+      >
+        {photos.map((photo, i) => (
+          <button
+            class="gallery-item group relative overflow-hidden rounded-xl aspect-[4/3] block w-full cursor-zoom-in"
+            data-category={photo.category}
+            data-src={photo.src}
+            data-alt={photo.alt}
+            data-caption={photo.caption}
+            data-index={i}
+            aria-label={`View full size: ${photo.alt}`}
+          >
+            <img
+              src={photo.src}
+              alt={photo.alt}
+              class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+              loading="lazy"
+              width="400"
+              height="300"
+            />
+            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/55 transition-all duration-300 flex flex-col justify-end p-3 sm:p-4">
+              <span
+                class="inline-block bg-[#2baae1] text-white text-xs px-2 py-1 rounded mb-1.5 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 self-start"
+                style="font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.08em; font-size: 0.75rem;"
+                aria-hidden="true"
+              >
+                {photo.label}
+              </span>
+              <span
+                class="text-white text-sm leading-snug translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 delay-75 text-left"
+                style="font-family: 'Barlow Condensed', sans-serif; font-size: 0.95rem;"
+                aria-hidden="true"
+              >
+                {photo.caption}
+              </span>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <!-- Empty state -->
+      <p
+        id="no-results"
+        class="hidden text-center text-gray-400 py-16 text-xl"
+        style="font-family: 'Barlow Condensed', sans-serif;"
+      >
+        No projects in that category yet. Check back soon.
+      </p>
+
+    </div>
+  </section>
+
+  <!-- Lightbox -->
+  <div
+    id="lightbox"
+    class="fixed inset-0 z-50 hidden bg-black/90 flex items-center justify-center p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Photo lightbox"
+  >
+    <button
+      id="lb-close"
+      class="absolute top-4 right-4 text-white/70 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/10"
+      aria-label="Close lightbox"
+    >
+      <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    </button>
+
+    <button
+      id="lb-prev"
+      class="absolute left-3 sm:left-6 text-white/70 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/10"
+      aria-label="Previous photo"
+    >
+      <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+    </button>
+
+    <button
+      id="lb-next"
+      class="absolute right-3 sm:right-6 text-white/70 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/10"
+      aria-label="Next photo"
+    >
+      <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+      </svg>
+    </button>
+
+    <div class="max-w-5xl w-full mx-12 sm:mx-20">
+      <img
+        id="lb-img"
+        src=""
+        alt=""
+        class="max-h-[80vh] w-full object-contain rounded-lg shadow-2xl"
+        width="1000"
+        height="750"
+      />
+      <p
+        id="lb-caption"
+        class="text-gray-300 text-center mt-4 text-base"
+        style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.05rem;"
+      ></p>
+      <p
+        id="lb-counter"
+        class="text-gray-500 text-center mt-1 text-sm"
+        style="font-family: 'Barlow Condensed', sans-serif;"
+      ></p>
+    </div>
+  </div>
+
+  <CtaBand
+    heading="Like What You See?"
+    subtext="Get a free estimate and let's talk about what we can do for your home or property."
+    primaryLabel="Get Free Estimate"
+    primaryHref="/contact"
+    secondaryLabel="Call (315) 952-8259"
+    secondaryHref="tel:+13159528259"
+  />
+
 </BaseLayout>
+
+<script>
+  // ---- Filter ----
+  const filterBtns = document.querySelectorAll<HTMLButtonElement>('.filter-btn');
+  const galleryItems = document.querySelectorAll<HTMLButtonElement>('.gallery-item');
+  const countEl = document.getElementById('photo-count');
+  const noResults = document.getElementById('no-results');
+  const grid = document.getElementById('gallery-grid');
+
+  let activeFilter = 'all';
+
+  function applyFilter(filter: string) {
+    activeFilter = filter;
+    let visible = 0;
+
+    galleryItems.forEach(item => {
+      const cat = item.dataset.category ?? '';
+      const show = filter === 'all' || cat === filter;
+      item.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+
+    filterBtns.forEach(btn => {
+      const isActive = btn.dataset.filter === filter;
+      btn.classList.toggle('bg-[#2baae1]', isActive);
+      btn.classList.toggle('border-[#2baae1]', isActive);
+      btn.classList.toggle('text-white', isActive);
+      btn.classList.toggle('bg-white', !isActive);
+      btn.classList.toggle('border-gray-200', !isActive);
+      btn.classList.toggle('text-gray-600', !isActive);
+      btn.setAttribute('aria-pressed', String(isActive));
+    });
+
+    const label = filter === 'all' ? 'all projects' : `${filter} projects`;
+    if (countEl) countEl.textContent = `Showing ${visible} ${label}`;
+    noResults?.classList.toggle('hidden', visible > 0);
+    grid?.classList.toggle('hidden', visible === 0);
+  }
+
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      applyFilter(btn.dataset.filter ?? 'all');
+    });
+  });
+
+  // ---- Lightbox ----
+  const lightbox = document.getElementById('lightbox');
+  const lbImg = document.getElementById('lb-img') as HTMLImageElement;
+  const lbCaption = document.getElementById('lb-caption');
+  const lbCounter = document.getElementById('lb-counter');
+  const lbClose = document.getElementById('lb-close');
+  const lbPrev = document.getElementById('lb-prev');
+  const lbNext = document.getElementById('lb-next');
+
+  let currentIndex = 0;
+
+  function getVisibleItems(): HTMLButtonElement[] {
+    return Array.from(galleryItems).filter(item => item.style.display !== 'none');
+  }
+
+  function openLightbox(index: number) {
+    const visible = getVisibleItems();
+    if (!visible[index]) return;
+    currentIndex = index;
+    const item = visible[index];
+    if (lbImg) { lbImg.src = item.dataset.src ?? ''; lbImg.alt = item.dataset.alt ?? ''; }
+    if (lbCaption) lbCaption.textContent = item.dataset.caption ?? '';
+    if (lbCounter) lbCounter.textContent = `${index + 1} / ${visible.length}`;
+    lightbox?.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeLightbox() {
+    lightbox?.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  function navigate(dir: 1 | -1) {
+    const visible = getVisibleItems();
+    const next = (currentIndex + dir + visible.length) % visible.length;
+    openLightbox(next);
+  }
+
+  galleryItems.forEach((item, i) => {
+    item.addEventListener('click', () => {
+      const visible = getVisibleItems();
+      const visibleIndex = visible.indexOf(item);
+      openLightbox(visibleIndex >= 0 ? visibleIndex : 0);
+    });
+  });
+
+  lbClose?.addEventListener('click', closeLightbox);
+  lbPrev?.addEventListener('click', () => navigate(-1));
+  lbNext?.addEventListener('click', () => navigate(1));
+
+  lightbox?.addEventListener('click', (e) => {
+    if (e.target === lightbox) closeLightbox();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (lightbox?.classList.contains('hidden')) return;
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'ArrowLeft') navigate(-1);
+    if (e.key === 'ArrowRight') navigate(1);
+  });
+</script>

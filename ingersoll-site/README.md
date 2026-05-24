@@ -1,43 +1,64 @@
-# Astro Starter Kit: Minimal
+# Ingersoll Painting LLC — Website
 
-```sh
-npm create astro@latest -- --template minimal
+Marketing website for Ingersoll Painting LLC, Hannibal NY.
+Built with Astro + Tailwind CSS. Deployed on Cloudflare Pages.
+
+**Live site:** https://ingersollpaintingllc.com
+
+---
+
+## Local Development
+
+```bash
+cd ingersoll-site
+npm install
+npm run dev
+# → http://localhost:4321
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+## Build
 
-## 🚀 Project Structure
+```bash
+npm run build
+# Output goes to ./dist/
+```
 
-Inside of your Astro project, you'll see the following folders and files:
+## Project structure
 
-```text
-/
+```
+ingersoll-site/
 ├── public/
+│   ├── photos/          # Project photos
+│   ├── team/            # Team portraits
+│   ├── logo.png         # Wide logo (header/footer)
+│   ├── logo-square.png  # Square logo (OG image source)
+│   └── og-image.jpg     # Social share image
 ├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
+│   ├── components/      # Header, Footer, ServiceCard, CtaBand
+│   ├── layouts/         # BaseLayout (head, schema, fonts)
+│   └── pages/           # index, services, about, our-work, reviews, contact, 404
+└── astro.config.mjs
 ```
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+## Cloudflare Pages deploy settings
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+| Setting | Value |
+|---------|-------|
+| Framework preset | Astro |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Root directory | `ingersoll-site` |
+| Branch | `main` |
 
-Any static assets, like images, can be placed in the `public/` directory.
+## Adding photos
 
-## 🧞 Commands
+Drop new photos in `public/photos/`, then add an entry to the `photos` array
+in `src/pages/our-work.astro`. Commit and push — Cloudflare redeploys automatically.
 
-All commands are run from the root of the project, from a terminal:
+## Updating reviews
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
+Edit the `reviews` array at the top of `src/pages/reviews.astro`.
 
-## 👀 Want to learn more?
+## Contact form
 
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+Uses Web3Forms (https://web3forms.com). Access key is set in `src/pages/contact.astro`.

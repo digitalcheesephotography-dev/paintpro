@@ -1,24 +1,486 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import ServiceCard from '../components/ServiceCard.astro';
+import CtaBand from '../components/CtaBand.astro';
+
+const services = [
+  {
+    title: 'Interior Painting',
+    description: 'Walls, ceilings, trim, and color consultation. Clean, precise work with zero mess left behind.',
+    href: '/services#interior',
+    icon: '🖌️',
+  },
+  {
+    title: 'Exterior Painting',
+    description: 'Full prep, prime, and paint on siding and trim. Benjamin Moore Woodluxe and High Build products.',
+    href: '/services#exterior',
+    icon: '🏠',
+  },
+  {
+    title: 'Cabinet Refinishing',
+    description: 'Sand, prime, and spray your existing cabinets to a factory-quality finish — for a fraction of replacement cost.',
+    href: '/services#cabinets',
+    icon: '🚪',
+  },
+  {
+    title: 'Deck Building & Staining',
+    description: 'New deck builds, restoration, pressure washing, and solid stain. Built to last Central NY winters.',
+    href: '/services#decks',
+    icon: '🏗️',
+  },
+  {
+    title: 'Drywall & Remodeling',
+    description: 'Patches, full installs, skim coats, basement finishing, bathroom renovations, and more.',
+    href: '/services#drywall',
+    icon: '🔨',
+  },
+  {
+    title: 'Commercial Painting',
+    description: 'Apartments, offices, and commercial spaces. Efficient scheduling to minimize disruption.',
+    href: '/services#commercial',
+    icon: '🏢',
+  },
+];
+
+const trustItems = [
+  { icon: '📅', label: 'Est. 1978', sub: 'Family owned & operated' },
+  { icon: '⭐', label: 'BBB A+ Rated', sub: 'Accredited business' },
+  { icon: '🛡️', label: '1-Year Warranty', sub: 'On all workmanship' },
+  { icon: '🎨', label: 'Benjamin Moore', sub: 'Authorized applicator' },
+];
+
+const whyUs = [
+  {
+    icon: '👨‍👩‍👦',
+    title: 'Family Business',
+    body: 'James Bailey has run Ingersoll Painting since 1978. You deal with the owner directly — not a call center.',
+  },
+  {
+    icon: '✅',
+    title: 'Quality Guaranteed',
+    body: 'Every job backed by a 1-year workmanship warranty. We don\'t leave until you\'re satisfied.',
+  },
+  {
+    icon: '📋',
+    title: 'Fully Insured',
+    body: 'Licensed and fully insured in New York State. Your home and investment are protected.',
+  },
+  {
+    icon: '💬',
+    title: 'Free Estimates',
+    body: 'Detailed, written estimates with no pressure and no surprises. Know exactly what you\'re getting.',
+  },
+];
+
+const galleryPhotos = [
+  { src: '/photos/cabinets-blue-gray-kitchen.jpg', alt: 'Two-tone blue and gray kitchen cabinet refinishing', label: 'Cabinet Refinishing' },
+  { src: '/photos/exterior-lakefront-house.jpg', alt: 'Exterior house painting on lakefront home', label: 'Exterior Painting' },
+  { src: '/photos/interior-mudroom-barn-doors.jpg', alt: 'Custom mudroom with barn doors and built-in shelving', label: 'Interior Painting' },
+  { src: '/photos/deck-stain-before-after.jpg', alt: 'Deck staining before and after', label: 'Deck Staining' },
+  { src: '/photos/cabinets-wanda-after.jpg', alt: 'White kitchen cabinet refinishing after', label: 'Cabinet Refinishing' },
+  { src: '/photos/interior-hallway-painted.jpg', alt: 'Interior hallway with painted walls', label: 'Interior Painting' },
+];
+
+const testimonials = [
+  {
+    name: 'Mike T.',
+    location: 'Oswego, NY',
+    stars: 5,
+    quote: 'James and his crew did an amazing job on our kitchen cabinets. They look brand new — saved us thousands over a full replacement. Highly recommend.',
+  },
+  {
+    name: 'Sarah M.',
+    location: 'Fulton, NY',
+    stars: 5,
+    quote: 'Had the whole interior of our house painted before we moved in. Clean, fast, and the color came out exactly right. Will definitely use Ingersoll again.',
+  },
+  {
+    name: 'Dave & Carol R.',
+    location: 'Mexico, NY',
+    stars: 5,
+    quote: 'Built us a beautiful deck and stained it all in the same week. Fair price, quality materials, and they cleaned everything up perfectly. Great people to work with.',
+  },
+];
 ---
 
 <BaseLayout
   title="Ingersoll Painting LLC | Painting & Renovation in Oswego County, NY"
-  description="Family-owned painting and renovation contractor serving Oswego, Onondaga, and Cayuga counties since 1978. Interior, exterior, decks, cabinets, remodeling, and more."
+  description="Family-owned painting and renovation contractor serving Oswego, Onondaga, and Cayuga counties since 1978. Interior, exterior, cabinets, decks, remodeling, and more. Free estimates."
 >
-  <!-- Homepage built in Step 2 -->
-  <section class="py-20 text-center px-4">
-    <h1 style="font-family: 'Bebas Neue', sans-serif; font-size: 4rem; color: #2baae1; line-height:1.1;">
-      Ingersoll Painting LLC
-    </h1>
-    <p style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.4rem; color: #444; margin-top: 1rem;">
-      Central New York's trusted painting &amp; renovation team since 1978.
-    </p>
-    <a
-      href="/contact"
-      style="display:inline-block; margin-top:2rem; background:#2baae1; color:white; font-family:'Barlow Condensed',sans-serif; font-size:1.2rem; padding:1rem 2.5rem; border-radius:8px; text-decoration:none;"
-    >
-      Get Free Estimate
-    </a>
+
+  <!-- ===== 1. HERO ===== -->
+  <section class="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
+    <div
+      class="absolute inset-0 bg-cover bg-center bg-no-repeat"
+      style="background-image: url('/photos/exterior-lakefront-house.jpg');"
+      aria-hidden="true"
+    ></div>
+    <div class="absolute inset-0 bg-black/60" aria-hidden="true"></div>
+    <div class="relative z-10 text-center px-4 max-w-5xl mx-auto">
+      <p
+        class="text-[#2baae1] text-xl sm:text-2xl mb-3 tracking-widest uppercase"
+        style="font-family: 'Barlow Condensed', sans-serif;"
+      >
+        Serving Central New York Since 1978
+      </p>
+      <h1
+        class="text-white text-6xl sm:text-8xl lg:text-9xl leading-none mb-6"
+        style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.04em;"
+      >
+        Built on Quality.<br />Finished with Pride.
+      </h1>
+      <p
+        class="text-gray-200 text-xl sm:text-2xl max-w-2xl mx-auto mb-10 leading-relaxed"
+        style="font-family: 'Barlow Condensed', sans-serif;"
+      >
+        Ingersoll Painting LLC handles everything from a single room to a full renovation — interior painting, exterior, cabinets, decks, drywall, and remodeling.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a
+          href="/contact"
+          class="inline-flex items-center justify-center bg-[#2baae1] hover:bg-[#1e8fc4] text-white font-semibold px-10 py-4 rounded-lg transition-colors text-lg min-h-[54px]"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.2rem; letter-spacing: 0.05em;"
+        >
+          Get Free Estimate
+        </a>
+        <a
+          href="/our-work"
+          class="inline-flex items-center justify-center bg-white/10 hover:bg-white/20 border-2 border-white text-white font-semibold px-10 py-4 rounded-lg transition-colors text-lg min-h-[54px] backdrop-blur-sm"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.2rem; letter-spacing: 0.05em;"
+        >
+          See Our Work
+        </a>
+      </div>
+    </div>
+    <!-- Scroll indicator -->
+    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/60 animate-bounce" aria-hidden="true">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+      </svg>
+    </div>
   </section>
+
+  <!-- ===== 2. TRUST STRIP ===== -->
+  <section class="bg-[#2baae1] py-5">
+    <div class="max-w-5xl mx-auto px-4">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {trustItems.map(item => (
+          <div class="flex items-center gap-3 justify-center lg:justify-start">
+            <span class="text-2xl" aria-hidden="true">{item.icon}</span>
+            <div>
+              <div
+                class="text-white font-semibold leading-tight"
+                style="font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; letter-spacing: 0.06em;"
+              >
+                {item.label}
+              </div>
+              <div
+                class="text-white/80 text-xs leading-tight"
+                style="font-family: 'Barlow Condensed', sans-serif; font-size: 0.9rem;"
+              >
+                {item.sub}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 3. SERVICES PREVIEW ===== -->
+  <section class="py-20 px-4 bg-gray-50">
+    <div class="max-w-7xl mx-auto">
+      <div class="text-center mb-12">
+        <h2
+          class="text-5xl sm:text-6xl text-gray-900 mb-3"
+          style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.05em;"
+        >
+          What We Do
+        </h2>
+        <p
+          class="text-gray-500 text-lg max-w-xl mx-auto"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.15rem;"
+        >
+          Painting is the start. We handle the full scope — from surface prep to finishing touches.
+        </p>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        {services.map(s => (
+          <ServiceCard
+            title={s.title}
+            description={s.description}
+            href={s.href}
+            icon={s.icon}
+          />
+        ))}
+      </div>
+      <div class="text-center mt-10">
+        <a
+          href="/services"
+          class="inline-block border-2 border-[#2baae1] text-[#2baae1] hover:bg-[#2baae1] hover:text-white font-medium px-8 py-3 rounded-lg transition-colors"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+        >
+          View All Services
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 4. ABOUT TEASER ===== -->
+  <section class="py-20 px-4 bg-white">
+    <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+      <div class="order-2 lg:order-1">
+        <img
+          src="/team/team-crew.jpg"
+          alt="The Ingersoll Painting crew — James, Brandon, and Tomi"
+          class="rounded-2xl shadow-xl w-full object-cover aspect-[4/3]"
+          loading="lazy"
+          width="640"
+          height="480"
+        />
+      </div>
+      <div class="order-1 lg:order-2">
+        <p
+          class="text-[#2baae1] uppercase tracking-widest text-sm mb-3"
+          style="font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.15em;"
+        >
+          About Ingersoll Painting
+        </p>
+        <h2
+          class="text-5xl sm:text-6xl text-gray-900 mb-5 leading-tight"
+          style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.04em;"
+        >
+          46 Years of Putting the Work First
+        </h2>
+        <p
+          class="text-gray-600 text-lg leading-relaxed mb-5"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+        >
+          Ingersoll Painting LLC was founded in 1978 in Hannibal, NY. James Bailey has run the operation since the beginning — same values, same commitment, same determination to do it right the first time.
+        </p>
+        <p
+          class="text-gray-600 text-lg leading-relaxed mb-8"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+        >
+          Today James works alongside Brandon and Tomi, building a team that carries the trade forward. No subcontractors, no shortcuts — just craftsmen who take pride in their work.
+        </p>
+        <a
+          href="/about"
+          class="inline-block bg-[#2baae1] hover:bg-[#1e8fc4] text-white font-medium px-8 py-3 rounded-lg transition-colors"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+        >
+          Our Story
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 5. WHY CHOOSE US ===== -->
+  <section class="py-20 px-4 bg-gray-900">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-14">
+        <h2
+          class="text-5xl sm:text-6xl text-white mb-3"
+          style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.05em;"
+        >
+          Why Homeowners Choose Us
+        </h2>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+        {whyUs.map(item => (
+          <div class="text-center">
+            <div class="text-5xl mb-4" aria-hidden="true">{item.icon}</div>
+            <h3
+              class="text-white text-2xl mb-3"
+              style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.06em;"
+            >
+              {item.title}
+            </h3>
+            <p
+              class="text-gray-400 leading-relaxed"
+              style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.05rem;"
+            >
+              {item.body}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 6. PROJECT GALLERY TEASER ===== -->
+  <section class="py-20 px-4 bg-white">
+    <div class="max-w-7xl mx-auto">
+      <div class="text-center mb-12">
+        <h2
+          class="text-5xl sm:text-6xl text-gray-900 mb-3"
+          style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.05em;"
+        >
+          Recent Projects
+        </h2>
+        <p
+          class="text-gray-500 text-lg"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+        >
+          A sample of what we've been working on across Central New York.
+        </p>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+        {galleryPhotos.map(photo => (
+          <a
+            href="/our-work"
+            class="group relative overflow-hidden rounded-xl aspect-[4/3] block"
+          >
+            <img
+              src={photo.src}
+              alt={photo.alt}
+              class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+              loading="lazy"
+              width="600"
+              height="450"
+            />
+            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all duration-300 flex items-end p-4">
+              <span
+                class="text-white text-lg font-semibold translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300"
+                style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.08em; font-size: 1.3rem;"
+              >
+                {photo.label}
+              </span>
+            </div>
+          </a>
+        ))}
+      </div>
+      <div class="text-center mt-10">
+        <a
+          href="/our-work"
+          class="inline-block bg-gray-900 hover:bg-gray-700 text-white font-medium px-10 py-4 rounded-lg transition-colors"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.15rem; letter-spacing: 0.05em;"
+        >
+          View Full Gallery
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 7. SERVICE AREA ===== -->
+  <section class="py-16 px-4 bg-gray-50 border-y border-gray-200">
+    <div class="max-w-4xl mx-auto text-center">
+      <h2
+        class="text-5xl sm:text-6xl text-gray-900 mb-4"
+        style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.05em;"
+      >
+        Where We Work
+      </h2>
+      <p
+        class="text-gray-600 text-xl leading-relaxed max-w-2xl mx-auto mb-8"
+        style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.15rem;"
+      >
+        Based in Hannibal, NY, we serve residential and commercial customers throughout <strong>Oswego, Onondaga, and Cayuga counties</strong> — including Oswego, Fulton, Phoenix, Mexico, Pulaski, Syracuse, Auburn, and surrounding communities.
+      </p>
+      <div class="flex flex-wrap justify-center gap-3">
+        {['Oswego', 'Fulton', 'Phoenix', 'Mexico', 'Pulaski', 'Hannibal', 'Syracuse', 'Auburn', 'Baldwinsville'].map(town => (
+          <span
+            class="bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-full text-sm shadow-sm"
+            style="font-family: 'Barlow Condensed', sans-serif; font-size: 1rem;"
+          >
+            {town}
+          </span>
+        ))}
+        <span
+          class="bg-white border border-gray-200 text-gray-400 px-4 py-2 rounded-full text-sm shadow-sm"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1rem;"
+        >
+          & more
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 8. TESTIMONIALS ===== -->
+  <section class="py-20 px-4 bg-white">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-12">
+        <h2
+          class="text-5xl sm:text-6xl text-gray-900 mb-3"
+          style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.05em;"
+        >
+          What Customers Say
+        </h2>
+        <p
+          class="text-gray-500 text-lg"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+        >
+          Don't take our word for it.
+        </p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {testimonials.map(t => (
+          <div class="bg-gray-50 border border-gray-100 rounded-2xl p-7 flex flex-col gap-4">
+            <div class="flex gap-1" aria-label={`${t.stars} out of 5 stars`}>
+              {Array.from({length: t.stars}).map(() => (
+                <svg class="w-5 h-5 text-yellow-400 fill-current" viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+              ))}
+            </div>
+            <blockquote
+              class="text-gray-700 leading-relaxed flex-1 italic"
+              style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+            >
+              "{t.quote}"
+            </blockquote>
+            <div>
+              <p
+                class="text-gray-900 font-semibold"
+                style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.05rem;"
+              >
+                {t.name}
+              </p>
+              <p
+                class="text-gray-400 text-sm"
+                style="font-family: 'Barlow Condensed', sans-serif;"
+              >
+                {t.location}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div class="text-center mt-10">
+        <a
+          href="https://g.page/r/CYDCDulxA5keEBE/review"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-2 border-2 border-gray-300 hover:border-[#2baae1] text-gray-600 hover:text-[#2baae1] font-medium px-8 py-3 rounded-lg transition-colors"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+        >
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Leave Us a Google Review
+        </a>
+        <a
+          href="/reviews"
+          class="ml-4 text-[#2baae1] hover:underline font-medium"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.05rem;"
+        >
+          Read more reviews
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 9. FINAL CTA ===== -->
+  <CtaBand
+    heading="Ready to Start Your Project?"
+    subtext="Get a free, no-obligation estimate from Central New York's most trusted painting and renovation team. We'll come to you."
+    primaryLabel="Get Free Estimate"
+    primaryHref="/contact"
+    secondaryLabel="Call (315) 952-8259"
+    secondaryHref="tel:+13159528259"
+  />
+
 </BaseLayout>

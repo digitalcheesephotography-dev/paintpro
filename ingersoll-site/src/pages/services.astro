@@ -1,9 +1,268 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-const title = 'Ingersoll Painting LLC';
+import CtaBand from '../components/CtaBand.astro';
+
+const services = [
+  {
+    id: 'interior',
+    title: 'Interior Painting',
+    icon: '🖌️',
+    photo: '/photos/interior-hallway-painted.jpg',
+    photoAlt: 'Interior hallway with freshly painted olive walls and hardwood floors',
+    body: [
+      'A fresh coat of paint is one of the fastest ways to transform a space — but the difference between a good paint job and a great one comes down to preparation. Ingersoll Painting treats every interior project the same way: furniture moved, floors protected, trim taped, and surfaces properly primed before a drop of finish coat goes on.',
+      'We handle walls, ceilings, trim, doors, and closets. We work with you on color selection and can advise on Benjamin Moore products that will hold up in high-traffic areas, kitchens, bathrooms, and anywhere else that sees daily use. Every job gets two coats minimum unless the existing color is a near-match.',
+      'When we\'re done, we do a final walkthrough with you to make sure everything is exactly right. That\'s the 1-year workmanship warranty in action - we stand behind the finish.',
+    ],
+    features: ['Walls, ceilings & trim', 'Color consultation', 'Benjamin Moore products', 'Full prep & protection', '1-year warranty'],
+  },
+  {
+    id: 'exterior',
+    title: 'Exterior Painting',
+    icon: '🏠',
+    photo: '/photos/exterior-lakefront-house.jpg',
+    photoAlt: 'Exterior painting on lakefront home with white siding and dark lower level',
+    body: [
+      'Exterior painting in Central New York takes more than a good brush - it takes the right products and the right prep. Ingersoll Painting uses Benjamin Moore Woodluxe and High Build formulas built to handle the freeze-thaw cycles, UV exposure, and moisture that come with Oswego County winters.',
+      'Every exterior job starts with a thorough inspection: loose paint scraped, bare wood primed, caulk replaced around windows and trim, and any rot addressed before we touch a brush. Painting over a bad surface just delays the problem - we fix it first.',
+      'We handle siding, trim, soffits, fascia, shutters, doors, and porches. We protect your landscaping, windows, and hardscape throughout the job and clean up completely when we\'re finished.',
+    ],
+    features: ['Full surface prep & scraping', 'Benjamin Moore Woodluxe & High Build', 'Caulking & minor rot repair', 'Siding, trim, soffits & fascia', 'Porches & shutters'],
+  },
+  {
+    id: 'decks',
+    title: 'Deck Building, Staining & Pressure Washing',
+    icon: '🏗️',
+    photo: '/photos/deck-stain-before-after.jpg',
+    photoAlt: 'Deck staining before and after - weathered gray boards restored to rich brown',
+    body: [
+      'We build decks from the ground up and restore existing ones that have seen better days. New builds use pressure-treated lumber, composite decking, or cedar depending on your budget and preference - all framed and finished to code with proper footings, ledger attachment, and railing.',
+      'For existing decks, we pressure wash first to strip off dirt, mildew, and oxidized wood fibers, then apply a solid or semi-transparent stain that soaks into the wood and protects it from the inside. A properly stained deck in Oswego County can go 3-5 years before it needs attention again.',
+      'Pressure washing is also available as a standalone service for decks, driveways, siding, and concrete - a good first step before any painting or staining project.',
+    ],
+    features: ['New deck construction', 'Deck restoration & repair', 'Pressure washing', 'Solid & semi-transparent staining', 'Composite & wood decking'],
+  },
+  {
+    id: 'cabinets',
+    title: 'Cabinet Refinishing',
+    icon: '🚪',
+    photo: '/photos/cabinets-blue-gray-kitchen.jpg',
+    photoAlt: 'Two-tone blue and gray kitchen cabinet refinishing - finished result',
+    body: [
+      'Kitchen cabinet replacement costs $15,000-$50,000. Cabinet refinishing from Ingersoll Painting costs a fraction of that and delivers a finish you can\'t tell from new - because we spray it the same way a cabinet shop would.',
+      'Every door and drawer front comes off. Hardware is removed. Surfaces are sanded, degreased, and primed. We spray 2-3 coats of finish in your chosen color - Benjamin Moore Advance is our standard recommendation, a waterborne alkyd that cures hard and levels beautifully. Then everything goes back on with new hardware if you want it.',
+      'We\'ve done full kitchens in a single color, two-tone combinations with a contrasting island, and everything in between. The before-and-after on a cabinet job is one of the most dramatic transformations in home renovation.',
+    ],
+    features: ['All doors & drawers removed', 'Full sand, degrease & prime', 'Spray finish - Benjamin Moore Advance', 'Single color or two-tone', 'Hardware installation available'],
+  },
+  {
+    id: 'drywall',
+    title: 'Drywall Installation & Repair',
+    icon: '🔧',
+    photo: '/photos/interior-mudroom-barn-doors.jpg',
+    photoAlt: 'Finished interior with clean drywall and built-in shelving',
+    body: [
+      'Clean drywall is the foundation of a good paint job - and Ingersoll Painting handles both sides of it. We repair everything from small nail holes and drywall cracks to water-damaged sections and full room installations.',
+      'For repairs, we match the existing texture as closely as possible so patches disappear under paint. For new installs, we hang, tape, mud, and sand to a smooth finish ready for primer. We also do skim coating over existing walls to remove texture and get a modern flat finish.',
+      'Popcorn ceiling removal is a popular add-on - we wet the texture, scrape it clean, skim coat if needed, and leave you with a flat ceiling that looks like it was never textured. Ask about bundling drywall work with a paint job for the best pricing.',
+    ],
+    features: ['Patch & repair (all sizes)', 'Full drywall installation', 'Skim coating', 'Popcorn ceiling removal', 'Texture matching'],
+  },
+  {
+    id: 'epoxy',
+    title: 'Epoxy Floor Coatings',
+    icon: '✨',
+    body: [
+      'Epoxy floor coatings turn a bare concrete floor into a durable, cleanable surface that looks sharp and holds up to heavy use. Garages, basements, and commercial floors all benefit from a proper epoxy system.',
+      'The prep work is everything with epoxy. We grind or acid-etch the concrete to open the surface, fill cracks and control joints, and apply a moisture-blocking primer before the epoxy goes down. A cheap roll-on kit from the hardware store peels because the prep was skipped - we don\'t skip it.',
+      'Standard finish is a solid color base coat with broadcast color flakes and a clear polyaspartic topcoat that resists UV yellowing, hot tire pickup, and chemical spills. Most residential garage floors are done in one day with 24-hour return to light traffic.',
+    ],
+    features: ['Concrete grinding & prep', 'Crack filling & priming', 'Full broadcast flake system', 'Polyaspartic topcoat', 'Garages, basements & commercial'],
+  },
+  {
+    id: 'basement',
+    title: 'Basement Remodeling',
+    icon: '🏘️',
+    photo: '/photos/basement-remodel-framing.jpg',
+    photoAlt: 'Basement remodel framing in progress',
+    body: [
+      'An unfinished basement is the most underused square footage in your home. Ingersoll Painting does full basement finishes - framing, insulation, drywall, flooring, paint, and trim - turning raw concrete space into livable rooms.',
+      'We work from your floor plan or help you lay one out. Typical basement projects include a main living area, a bedroom or two, a bathroom rough-in, and a utility/storage area. We coordinate the work so everything happens in the right sequence and nothing has to be redone.',
+      'Basement work is priced by the project, not the hour. You get a written estimate before anything starts, and we stick to it.',
+    ],
+    features: ['Framing & insulation', 'Drywall & painting', 'Flooring installation', 'Trim & door installation', 'Full finish, top to bottom'],
+  },
+  {
+    id: 'bathroom',
+    title: 'Bathroom Remodeling',
+    icon: '🚿',
+    photo: '/photos/bathroom-tile-install.jpg',
+    photoAlt: 'Bathroom tile floor installation in progress',
+    body: [
+      'Bathrooms are small spaces that take a disproportionate amount of skill to do right. Waterproofing, tile work, and tight tolerances matter more here than anywhere else in the house. Ingersoll Painting handles full bathroom renovations - demo, tile, vanity, fixtures, paint, and finish.',
+      'We do floor and wall tile including large-format and wood-look planks. Vanity swaps, toilet replacement, mirror and light fixture installation, and caulk/grout work are all in scope. We also do bathroom paint using moisture-resistant products that won\'t peel or blister.',
+      'Whether you want a full gut-and-rebuild or a cosmetic refresh, we can scope it out and give you a written estimate. Most cosmetic bathroom renovations are done in 3-5 days.',
+    ],
+    features: ['Floor & wall tile', 'Vanity & fixture installation', 'Moisture-resistant paint', 'Caulk & grout work', 'Full gut-and-rebuild available'],
+  },
+  {
+    id: 'commercial',
+    title: 'Commercial Painting & Renovation',
+    icon: '🏢',
+    body: [
+      'Ingersoll Painting works with property owners, landlords, and businesses throughout Oswego, Onondaga, and Cayuga counties on commercial and multi-unit painting projects. We\'ve done apartment complexes, office buildings, government facilities, and retail spaces.',
+      'Commercial work requires scheduling discipline and efficiency - we understand that vacant units cost money and occupied buildings need minimal disruption. We can work off-hours, phase projects across occupied units, and turn around apartment turnovers on tight timelines.',
+      'All commercial work is fully insured with certificates of insurance available on request. We can handle the paint, or supply-and-install depending on the project.',
+    ],
+    features: ['Apartment turnovers', 'Office & retail spaces', 'Government & institutional', 'Off-hours scheduling available', 'COI provided on request'],
+  },
+];
 ---
-<BaseLayout title={title}>
-  <section class="py-20 text-center px-4">
-    <h1 style="font-family:'Bebas Neue',sans-serif;font-size:3rem;color:#2baae1;">Coming Soon</h1>
+
+<BaseLayout
+  title="Painting & Renovation Services | Ingersoll Painting LLC"
+  description="Interior painting, exterior painting, cabinet refinishing, deck building, drywall, epoxy floors, basement and bathroom remodeling. Serving Oswego, Onondaga, and Cayuga counties since 1978."
+>
+
+  <!-- Page Hero -->
+  <section class="bg-gray-900 py-16 px-4">
+    <div class="max-w-4xl mx-auto text-center">
+      <p
+        class="text-[#2baae1] uppercase tracking-widest text-sm mb-3"
+        style="font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.15em;"
+      >
+        What We Do
+      </p>
+      <h1
+        class="text-white text-6xl sm:text-7xl lg:text-8xl leading-none mb-5"
+        style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.04em;"
+      >
+        Our Services
+      </h1>
+      <p
+        class="text-gray-400 text-xl max-w-2xl mx-auto"
+        style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.15rem;"
+      >
+        Painting is where we started. Renovation is where we've grown. One crew, one call, one company you can count on.
+      </p>
+    </div>
   </section>
+
+  <!-- Content: sticky sidebar + service sections -->
+  <div class="max-w-7xl mx-auto px-4 py-16 flex gap-12 items-start">
+
+    <!-- Sticky sidebar nav — desktop only -->
+    <aside class="hidden lg:block w-52 shrink-0 sticky top-24 self-start">
+      <p
+        class="text-xs uppercase tracking-widest text-gray-400 mb-3"
+        style="font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.2em;"
+      >
+        Jump to
+      </p>
+      <nav aria-label="Services in-page navigation">
+        <ul class="space-y-0.5">
+          {services.map(s => (
+            <li>
+              <a
+                href={`#${s.id}`}
+                class="flex items-center gap-2 text-gray-500 hover:text-[#2baae1] py-2 px-3 rounded-lg hover:bg-blue-50 transition-colors"
+                style="font-family: 'Barlow Condensed', sans-serif; font-size: 0.95rem;"
+              >
+                <span aria-hidden="true">{s.icon}</span>
+                {s.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <div class="mt-6 pt-5 border-t border-gray-100">
+        <a
+          href="/contact"
+          class="block text-center bg-[#2baae1] hover:bg-[#1e8fc4] text-white font-medium py-3 px-4 rounded-lg transition-colors"
+          style="font-family: 'Barlow Condensed', sans-serif; font-size: 1rem;"
+        >
+          Free Estimate
+        </a>
+      </div>
+    </aside>
+
+    <!-- Service sections -->
+    <div class="flex-1 min-w-0 space-y-20">
+      {services.map((s, i) => (
+        <section id={s.id} class="scroll-mt-28">
+
+          <div class="flex items-center gap-4 mb-6">
+            <span class="text-4xl" aria-hidden="true">{s.icon}</span>
+            <h2
+              class="text-4xl sm:text-5xl text-gray-900 leading-none"
+              style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.05em;"
+            >
+              {s.title}
+            </h2>
+          </div>
+
+          {s.photo && (
+            <div class="mb-7 rounded-2xl overflow-hidden shadow-lg">
+              <img
+                src={s.photo}
+                alt={s.photoAlt}
+                class="w-full object-cover max-h-72"
+                loading="lazy"
+                width="900"
+                height="288"
+              />
+            </div>
+          )}
+
+          <div class="space-y-4 mb-7">
+            {s.body.map(para => (
+              <p
+                class="text-gray-600 leading-relaxed"
+                style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;"
+              >
+                {para}
+              </p>
+            ))}
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-6 items-start">
+            <ul class="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {s.features.map(f => (
+                <li
+                  class="flex items-center gap-2 text-gray-700"
+                  style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.05rem;"
+                >
+                  <svg class="w-4 h-4 text-[#2baae1] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                  </svg>
+                  {f}
+                </li>
+              ))}
+            </ul>
+            <a
+              href="/contact"
+              class="shrink-0 bg-[#2baae1] hover:bg-[#1e8fc4] text-white font-medium px-7 py-3 rounded-lg transition-colors whitespace-nowrap"
+              style="font-family: 'Barlow Condensed', sans-serif; font-size: 1.05rem;"
+            >
+              Request an Estimate
+            </a>
+          </div>
+
+          {i < services.length - 1 && (
+            <hr class="mt-16 border-gray-100" />
+          )}
+        </section>
+      ))}
+    </div>
+  </div>
+
+  <CtaBand
+    heading="Not Sure Where to Start?"
+    subtext="Call or send a message and we'll walk through the project with you. Free estimates, no pressure."
+    primaryLabel="Get Free Estimate"
+    primaryHref="/contact"
+    secondaryLabel="Call (315) 952-8259"
+    secondaryHref="tel:+13159528259"
+  />
+
 </BaseLayout>

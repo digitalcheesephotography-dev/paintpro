@@ -4,7 +4,13 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="PaintPro"/>
 <meta name="theme-color" content="#0d1117"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png"/>
+<link rel="apple-touch-icon" href="apple-touch-icon.png"/>
 <title>PaintPro — Ingersoll Painting</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
@@ -316,6 +322,30 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
           <input type="text" id="client-name" aria-label="Client name" placeholder="e.g. Dave Reau" autocomplete="name"/></label>
         <label class="field"><span>Job Address</span>
           <input type="text" id="job-address" aria-label="Job address" placeholder="45 Oak St, Camillus NY" autocomplete="street-address"/></label>
+      </div>
+    </div>
+
+    <!-- DEFAULT LABOR RATES (whole-job; rooms can override) -->
+    <div id="rates-card" style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--r);margin-bottom:14px;overflow:hidden">
+      <div onclick="toggleRatesCard()" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;cursor:pointer">
+        <div style="font-family:var(--head);font-size:14px;color:var(--text);letter-spacing:1.5px">💲 LABOR RATES — $/SF</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span id="rates-summary" style="font-size:11px;color:var(--muted)"></span>
+          <svg id="rates-chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--muted)" stroke-width="2.5" stroke-linecap="round" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+      </div>
+      <div id="rates-body" style="display:none;padding:0 14px 14px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.4">Set your default $/sf here (trim is $/linear ft). These apply to every room unless you turn on custom rates inside a room.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <label class="field"><span>Walls $/sf</span>
+            <input type="number" id="rate-walls" min="0" step="any" inputmode="decimal" oninput="updateGlobalRate('walls',this.value)"/></label>
+          <label class="field"><span>Ceiling $/sf</span>
+            <input type="number" id="rate-ceiling" min="0" step="any" inputmode="decimal" oninput="updateGlobalRate('ceiling',this.value)"/></label>
+          <label class="field"><span>Floor $/sf</span>
+            <input type="number" id="rate-floor" min="0" step="any" inputmode="decimal" oninput="updateGlobalRate('floor',this.value)"/></label>
+          <label class="field"><span>Trim $/lf</span>
+            <input type="number" id="rate-trim" min="0" step="any" inputmode="decimal" oninput="updateGlobalRate('trim',this.value)"/></label>
+        </div>
       </div>
     </div>
 
@@ -916,8 +946,22 @@ const PRODUCTS = [
   {name:"BM Porch & Floor",           price:62, cov:400},
   {name:"Custom Product",             price:65, cov:400},
 ];
-const LABOR  = {walls:1.85, ceiling:1.65, trim:3.50};
 const MARKUP = 1.20;
+
+// Labor rates ($/sf per coat; trim is $/linear ft). Editable + persisted as the
+// whole-job default. Individual rooms can override via room.rates.
+const RATES_KEY = 'ingersoll_rates_v1';
+const DEFAULT_RATES = { walls:1.85, ceiling:1.65, floor:1.65, trim:3.50 };
+function loadRates() {
+  try {
+    const s = JSON.parse(localStorage.getItem(RATES_KEY));
+    if (s) return { walls:+s.walls||DEFAULT_RATES.walls, ceiling:+s.ceiling||DEFAULT_RATES.ceiling,
+                    floor:+s.floor||DEFAULT_RATES.floor, trim:+s.trim||DEFAULT_RATES.trim };
+  } catch {}
+  return { ...DEFAULT_RATES };
+}
+let rates = loadRates();
+function saveRates() { localStorage.setItem(RATES_KEY, JSON.stringify(rates)); }
 
 // Known BLE candidates — tried in order.
 // If the D2 uses a different UUID we'll discover it via enumeration.
@@ -959,6 +1003,7 @@ window.addEventListener('DOMContentLoaded', () => {
   if (loader) loader.remove();
 
   addRoom();
+  syncRatesUI();
 
   if (location.protocol === 'file:') {
     document.getElementById('https-warn').classList.add('show');
@@ -1288,7 +1333,7 @@ function addRoom() {
   const id   = 'r'+(++roomCount);
   const name = 'Room '+roomCount;
   const room = {id, name, walls:[], height:'8', floorLength:'', floorWidth:'',
-    surfaces:{walls:true, ceiling:false, trim:false, floor:false}, product:PRODUCTS[0].name, coats:'2', open:true};
+    surfaces:{walls:true, ceiling:false, trim:false, floor:false}, product:PRODUCTS[0].name, coats:'2', rates:null, open:true};
   rooms.push(room);
   renderRoom(room, rooms.length-1);
   refreshRoomSelect();
@@ -1371,6 +1416,26 @@ function renderRoom(room, idx) {
         <div><div class="sum-label">Gallons</div><div class="sum-val" id="${room.id}_sgal">—</div></div>
         <div><div class="sum-label">Materials</div><div class="sum-val" id="${room.id}_smat">—</div></div>
         <div><div class="sum-label">Labor</div><div class="sum-val" id="${room.id}_slab">—</div></div>
+      </div>
+
+      <!-- Per-room custom rate override -->
+      <div style="margin-top:4px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 0">
+          <input type="checkbox" id="${room.id}_ratetoggle" ${room.rates?'checked':''}
+            onchange="toggleRoomRates('${room.id}',this.checked)"
+            style="width:20px;height:20px;accent-color:var(--blue);cursor:pointer"/>
+          <span style="font-size:13px;color:var(--muted)">Custom $/sf rates for this room</span>
+        </label>
+        <div id="${room.id}_rategrid" style="display:${room.rates?'grid':'none'};grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+          <label class="field"><span>Walls $/sf</span>
+            <input type="number" id="${room.id}_rate_walls" value="${(room.rates||rates).walls}" min="0" step="any" inputmode="decimal" oninput="updateRoomRate('${room.id}','walls',this.value)"/></label>
+          <label class="field"><span>Ceiling $/sf</span>
+            <input type="number" id="${room.id}_rate_ceiling" value="${(room.rates||rates).ceiling}" min="0" step="any" inputmode="decimal" oninput="updateRoomRate('${room.id}','ceiling',this.value)"/></label>
+          <label class="field"><span>Floor $/sf</span>
+            <input type="number" id="${room.id}_rate_floor" value="${(room.rates||rates).floor}" min="0" step="any" inputmode="decimal" oninput="updateRoomRate('${room.id}','floor',this.value)"/></label>
+          <label class="field"><span>Trim $/lf</span>
+            <input type="number" id="${room.id}_rate_trim" value="${(room.rates||rates).trim}" min="0" step="any" inputmode="decimal" oninput="updateRoomRate('${room.id}','trim',this.value)"/></label>
+        </div>
       </div>
 
       <button class="room-remove" onclick="removeRoom('${room.id}')" aria-label="Remove ${room.name}">✕ Remove This Room</button>
@@ -1509,15 +1574,68 @@ function calc(room) {
   const gTrim  = room.surfaces.trim    ? Math.ceil(trimLF*c/p.cov)  : 0;
   const gal    = gWall + gCeil + gFloor + gTrim;
 
+  const r   = room.rates || rates;   // per-room override, else whole-job default
   const mat = gal * p.price * MARKUP;
-  const lab = (room.surfaces.walls   ? wallSF*LABOR.walls*c    : 0)
-            + (room.surfaces.ceiling ? floorSF*LABOR.ceiling*c : 0)
-            + (room.surfaces.floor   ? floorSF*LABOR.ceiling*c : 0)
-            + (room.surfaces.trim    ? trimLF*LABOR.trim*c     : 0);
+  const lab = (room.surfaces.walls   ? wallSF*r.walls*c    : 0)
+            + (room.surfaces.ceiling ? floorSF*r.ceiling*c : 0)
+            + (room.surfaces.floor   ? floorSF*r.floor*c   : 0)
+            + (room.surfaces.trim    ? trimLF*r.trim*c     : 0);
 
   const totalSF = (room.surfaces.walls?wallSF:0)+(room.surfaces.ceiling?floorSF:0)+(room.surfaces.floor?floorSF:0);
   const valid   = (perimeter>0&&h>0) || floorSF>0;
   return {wallSF, floorSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, valid};
+}
+
+// ── Labor rate controls ──
+function syncRatesUI() {
+  const w=document.getElementById('rate-walls'); if(!w) return;
+  w.value = rates.walls;
+  document.getElementById('rate-ceiling').value = rates.ceiling;
+  document.getElementById('rate-floor').value   = rates.floor;
+  document.getElementById('rate-trim').value    = rates.trim;
+  const sum = document.getElementById('rates-summary');
+  if (sum) sum.textContent = `W $${rates.walls} · C $${rates.ceiling} · F $${rates.floor} · T $${rates.trim}`;
+}
+function toggleRatesCard() {
+  const body = document.getElementById('rates-body');
+  const chev = document.getElementById('rates-chevron');
+  const open = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  chev.style.transform = open ? 'rotate(180deg)' : '';
+}
+function updateGlobalRate(key, val) {
+  rates[key] = parseFloat(val) || 0;
+  saveRates();
+  // Push the new default into any room that is NOT using a custom override
+  rooms.forEach(r => {
+    if (!r.rates) {
+      ['walls','ceiling','floor','trim'].forEach(k => {
+        const el = document.getElementById(`${r.id}_rate_${k}`);
+        if (el) el.value = rates[k];
+      });
+    }
+  });
+  syncRatesUI();
+  recalcAll();
+}
+function toggleRoomRates(id, on) {
+  const r = rooms.find(x=>x.id===id); if(!r) return;
+  r.rates = on ? { ...rates } : null;   // copy current defaults when enabling
+  const grid = document.getElementById(id+'_rategrid');
+  if (grid) grid.style.display = on ? 'grid' : 'none';
+  if (on) {
+    ['walls','ceiling','floor','trim'].forEach(k => {
+      const el = document.getElementById(`${id}_rate_${k}`);
+      if (el) el.value = r.rates[k];
+    });
+  }
+  recalcRoom(id);
+}
+function updateRoomRate(id, key, val) {
+  const r = rooms.find(x=>x.id===id); if(!r) return;
+  if (!r.rates) r.rates = { ...rates };
+  r.rates[key] = parseFloat(val) || 0;
+  recalcRoom(id);
 }
 
 function recalcRoom(id) {
@@ -2790,6 +2908,59 @@ function aptRemoveUnit(unitId) {
   aptSaveData(data);
   aptRenderActive(data);
 }
+</script>
+
+<!-- PWA service worker registration — gives the app offline support and home-screen installability -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => {
+      console.warn('Service worker registration failed:', err);
+    });
+  });
+}
+
+// Install prompt — when Chrome decides the app qualifies, capture the event
+// and show a small banner the user can dismiss.
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  // Don't show if user dismissed before, or if already installed
+  if (localStorage.getItem('pwa_install_dismissed') === '1') return;
+  if (window.matchMedia('(display-mode: standalone)').matches) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'pwa-install-banner';
+  banner.style.cssText = 'position:fixed;left:14px;right:14px;bottom:calc(180px + env(safe-area-inset-bottom));background:#0a0e14;border:1.5px solid #2baae1;border-radius:12px;padding:14px;z-index:500;box-shadow:0 6px 24px rgba(0,0,0,.6);display:flex;align-items:center;gap:12px;font-family:"Barlow Condensed",sans-serif';
+  banner.innerHTML = `
+    <div style="flex:1;color:#e5e7eb">
+      <div style="font-weight:700;font-size:15px;color:#2baae1;margin-bottom:3px">📲 Install PaintPro?</div>
+      <div style="font-size:13px;color:#9ca3af;line-height:1.3">Adds to your home screen — works offline, full-screen, no browser bar.</div>
+    </div>
+    <button id="pwa-install-yes" style="background:#2baae1;color:#fff;border:none;border-radius:8px;padding:10px 14px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit">Install</button>
+    <button id="pwa-install-no"  style="background:transparent;color:#9ca3af;border:none;font-size:24px;cursor:pointer;padding:4px 8px" aria-label="Dismiss">×</button>
+  `;
+  document.body.appendChild(banner);
+  document.getElementById('pwa-install-yes').onclick = async () => {
+    banner.remove();
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+    }
+  };
+  document.getElementById('pwa-install-no').onclick = () => {
+    banner.remove();
+    localStorage.setItem('pwa_install_dismissed', '1');
+  };
+});
+
+window.addEventListener('appinstalled', () => {
+  const banner = document.getElementById('pwa-install-banner');
+  if (banner) banner.remove();
+  localStorage.setItem('pwa_install_dismissed', '1');
+});
 </script>
 </body>
 </html>

@@ -102,6 +102,14 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .wall-del{background:transparent;border:none;color:var(--red);font-size:20px;cursor:pointer;padding:0 4px;flex-shrink:0;line-height:1}
 .wall-reshoot{background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:16px;cursor:pointer;padding:0 6px;flex-shrink:0;height:36px;transition:all .15s}
 .wall-reshoot.active{border-color:var(--blue);color:var(--blue);background:#162535}
+.dim-shoot{background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:16px;cursor:pointer;padding:0 10px;flex-shrink:0;height:var(--tap);transition:all .15s}
+.dim-shoot.active{border-color:var(--blue);color:var(--blue);background:#162535}
+.next-room-btn{width:100%;height:54px;background:var(--green);border:none;border-radius:10px;color:#fff;font-family:var(--head);font-size:18px;font-weight:700;letter-spacing:2px;cursor:pointer;margin-top:10px;margin-bottom:4px;transition:filter .15s}
+.next-room-btn:hover{filter:brightness(1.1)}
+.next-room-btn:active{filter:brightness(.9)}
+#save-indicator{text-align:right;font-size:11px;letter-spacing:.5px;padding:6px 10px 0;font-family:var(--font);font-weight:600;transition:color .3s}
+#save-indicator.saved-fresh{color:var(--green)}
+#save-indicator.saved-stale{color:var(--muted);font-weight:400}
 .add-wall-btn{width:100%;height:46px;background:transparent;border:1.5px dashed var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;margin-bottom:12px;transition:all .15s}
 .add-wall-btn:hover{border-color:var(--blue);color:var(--blue)}
 .height-row{margin-bottom:12px}
@@ -316,6 +324,10 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 
 <main id="estimator-section">
   <div class="col-left">
+    <!-- Jobs button (open the saved jobs modal) -->
+    <button id="current-job-badge" onclick="openJobsModal()" aria-label="Open jobs"
+      style="width:100%;height:42px;background:var(--panel);border:1.5px solid var(--border);border-radius:8px;color:var(--blue);font-family:var(--head);font-size:14px;font-weight:700;letter-spacing:1.5px;cursor:pointer;margin-bottom:12px">📁 Jobs</button>
+
     <div class="job-card">
       <div class="row">
         <label class="field"><span>Client Name</span>
@@ -390,6 +402,8 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
         <textarea id="notes" aria-label="Job notes" rows="3" placeholder="Prep work, surface conditions, client notes..."></textarea>
       </label>
     </div>
+
+    <div id="save-indicator" class="saved-fresh" aria-live="polite">● Saved</div>
 
     <div id="totals-strip">
       <div><div class="tot-label">Materials</div><div class="tot-val" id="tot-mat" style="color:var(--muted)">$0</div></div>
@@ -738,6 +752,36 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 
 <div id="toast"></div>
 
+<!-- JOBS (saved snapshots) MODAL -->
+<div id="jobs-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:600;overflow-y:auto;padding:20px 16px calc(20px + var(--safe-b))">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:20px;max-width:520px;margin:0 auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-family:var(--head);font-size:22px;color:var(--blue);letter-spacing:2px">📁 SAVED JOBS</div>
+      <button onclick="closeJobsModal()" style="background:transparent;border:none;color:var(--muted);font-size:24px;cursor:pointer;padding:4px 8px" aria-label="Close">×</button>
+    </div>
+
+    <!-- Save current as a snapshot -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;font-weight:700">Save Current Job</div>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
+        <input type="text" id="job-snapshot-name" placeholder="e.g. Reau Exterior — May 30"
+          style="height:44px;font-size:14px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 12px;outline:none"/>
+        <button onclick="saveSnapshot()" style="height:44px;padding:0 16px;background:var(--green);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-weight:700;font-size:14px;cursor:pointer">💾 Save</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4">Your in-progress job auto-saves on every change. Save here when you want a named snapshot to come back to.</div>
+    </div>
+
+    <!-- Start a new blank job -->
+    <button onclick="startNewJob()" style="width:100%;height:44px;background:transparent;border:1.5px solid var(--blue);border-radius:8px;color:var(--blue);font-family:var(--font);font-weight:700;font-size:14px;cursor:pointer;margin-bottom:14px">🆕 Start a New Blank Job</button>
+
+    <!-- List of saved snapshots -->
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;font-weight:700">Your Saved Jobs</div>
+    <div id="jobs-list"></div>
+
+    <button onclick="closeJobsModal()" style="width:100%;height:44px;margin-top:8px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-weight:700;font-size:14px;cursor:pointer">Close</button>
+  </div>
+</div>
+
 <!-- MATERIALS LIST MODAL -->
 <div id="materials-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:600;overflow-y:auto;padding:20px 16px calc(20px + var(--safe-b))">
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:20px">
@@ -807,9 +851,9 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div class="bt-selects">
       <select id="target-field" aria-label="Bluetooth fill target">
         <option value="wall">→ Next Wall</option>
-        <option value="height">→ Height</option>
-        <option value="floorLength">→ Floor/Ceil L</option>
-        <option value="floorWidth">→ Floor/Ceil W</option>
+        <option value="height">→ Ceiling Height</option>
+        <option value="floorLength">→ Ceiling/Floor Length</option>
+        <option value="floorWidth">→ Ceiling/Floor Width</option>
       </select>
       <select id="target-room" aria-label="Target room"></select>
     </div>
@@ -977,6 +1021,13 @@ let rooms = [], roomCount = 0;
 let btDevice = null, btConnected = false, activeChar = null;
 let bidOpen = false;
 
+// Auto-save / restore — see saveActiveJob, loadActiveJob, markDirty
+const ACTIVE_JOB_KEY = 'ingersoll_active_job_v1';
+const SAVED_JOBS_KEY = 'ingersoll_jobs_v1';
+let currentJobName = '';   // name of the currently-loaded snapshot, or '' if unsaved
+let saveTimer = null;
+let saveIndicatorTimer = null;
+
 // Whole-job extras (doors and windows priced per unit)
 let job = { doorCount:'', doorPrice:'75', winCount:'', winPrice:'50' };
 
@@ -1002,8 +1053,27 @@ window.addEventListener('DOMContentLoaded', () => {
   const loader = document.getElementById('js-loading');
   if (loader) loader.remove();
 
-  addRoom();
+  // Restore in-progress job from localStorage; only add a fresh blank room if nothing was saved
+  const restored = loadActiveJob();
+  if (!restored) addRoom();
   syncRatesUI();
+  syncJobBadge();
+
+  // Wire auto-save for text fields that don't already trigger recalcAll
+  ['client-name','job-address','notes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', markDirty);
+  });
+
+  // Safety net: flush a synchronous save whenever the app is hidden or about to unload
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') saveActiveJob();
+  });
+  window.addEventListener('pagehide', saveActiveJob);
+  window.addEventListener('beforeunload', saveActiveJob);
+
+  // Initial save so the indicator shows from the start
+  saveActiveJob();
 
   if (location.protocol === 'file:') {
     document.getElementById('https-warn').classList.add('show');
@@ -1258,6 +1328,17 @@ function applyMeasurement(feet, disp) {
     updateField(room.id, field, feet.toFixed(2));
     const label = field==='height' ? 'Height' : field==='floorLength' ? 'Floor/Ceil Length' : 'Floor/Ceil Width';
     showToast(`${disp} → ${label} · ${room.name}`);
+    // Clear the shoot-button highlight for the field we just filled
+    document.querySelectorAll('.dim-shoot.active').forEach(b=>b.classList.remove('active'));
+    // After Length, auto-advance to Width so the ceiling is a smooth two-shot flow
+    if (field === 'floorLength') {
+      document.getElementById('target-field').value = 'floorWidth';
+      document.getElementById(`${room.id}_floorWidth_shoot`)?.classList.add('active');
+      showToast('📐 Now shoot for Width');
+    } else if (field === 'floorWidth') {
+      // Done with the ceiling/floor — go back to walls for the next shot
+      document.getElementById('target-field').value = 'wall';
+    }
   }
 }
 
@@ -1340,6 +1421,35 @@ function addRoom() {
   rooms.forEach(r => { if(r.id!==id) setOpen(r.id,false); });
 }
 
+// Called from the "Done — Next Room" button. Collapses the current room and
+// either expands the next existing one OR adds a new one, then scrolls to it
+// and points the Bluetooth target-room at it for the next laser shot.
+function nextRoom(currentId) {
+  setOpen(currentId, false);
+  const currentIdx = rooms.findIndex(r => r.id === currentId);
+  let targetIdx;
+  if (currentIdx >= 0 && currentIdx + 1 < rooms.length) {
+    targetIdx = currentIdx + 1;
+    setOpen(rooms[targetIdx].id, true);
+  } else {
+    addRoom();
+    targetIdx = rooms.length - 1;
+  }
+  // Set BT target-room dropdown and reset target-field to "Next Wall"
+  const tr = document.getElementById('target-room');
+  if (tr) tr.value = targetIdx;
+  const tf = document.getElementById('target-field');
+  if (tf) tf.value = 'wall';
+  // Clear any active dim-shoot highlights
+  document.querySelectorAll('.dim-shoot.active, .wall-reshoot.active').forEach(b => b.classList.remove('active'));
+  // Scroll to the target room
+  setTimeout(() => {
+    const el = document.getElementById(rooms[targetIdx].id + '_card');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 80);
+  showToast(`Next: ${rooms[targetIdx].name}`);
+}
+
 function renderRoom(room, idx) {
   const card = document.createElement('div');
   card.className = 'room-card'+(room.open?' open':'');
@@ -1384,15 +1494,22 @@ function renderRoom(room, idx) {
 
       <!-- Floor/Ceiling dimensions (shown when either is active) -->
       <div class="floor-dims" id="${room.id}_floordims" style="display:${room.surfaces.ceiling||room.surfaces.floor?'grid':'none'}">
+        <div style="grid-column:1/-1;font-size:11px;color:var(--muted);margin-bottom:-4px;line-height:1.4">📐 Ceiling / floor size (the room's footprint). Tap 📐 then pull the laser trigger, or type it in.</div>
         <label class="field">
           <span>Length (ft)</span>
-          <input type="number" id="${room.id}_floorLength" value="${room.floorLength}" min="0" step="0.01" inputmode="decimal"
-            oninput="updateField('${room.id}','floorLength',this.value)"/>
+          <div style="display:flex;gap:6px">
+            <input type="number" id="${room.id}_floorLength" value="${room.floorLength}" min="0" step="0.01" inputmode="decimal"
+              oninput="updateField('${room.id}','floorLength',this.value)" style="flex:1;min-width:0"/>
+            <button class="dim-shoot" id="${room.id}_floorLength_shoot" onclick="armDimShot('${room.id}','floorLength')" aria-label="Shoot length with laser" title="Shoot length with laser">📐</button>
+          </div>
         </label>
         <label class="field">
           <span>Width (ft)</span>
-          <input type="number" id="${room.id}_floorWidth" value="${room.floorWidth}" min="0" step="0.01" inputmode="decimal"
-            oninput="updateField('${room.id}','floorWidth',this.value)"/>
+          <div style="display:flex;gap:6px">
+            <input type="number" id="${room.id}_floorWidth" value="${room.floorWidth}" min="0" step="0.01" inputmode="decimal"
+              oninput="updateField('${room.id}','floorWidth',this.value)" style="flex:1;min-width:0"/>
+            <button class="dim-shoot" id="${room.id}_floorWidth_shoot" onclick="armDimShot('${room.id}','floorWidth')" aria-label="Shoot width with laser" title="Shoot width with laser">📐</button>
+          </div>
         </label>
       </div>
 
@@ -1417,6 +1534,11 @@ function renderRoom(room, idx) {
         <div><div class="sum-label">Materials</div><div class="sum-val" id="${room.id}_smat">—</div></div>
         <div><div class="sum-label">Labor</div><div class="sum-val" id="${room.id}_slab">—</div></div>
       </div>
+
+      <!-- Done & advance to next room -->
+      <button class="next-room-btn" onclick="nextRoom('${room.id}')" aria-label="Done with this room, go to next">
+        ✓ DONE — NEXT ROOM
+      </button>
 
       <!-- Per-room custom rate override -->
       <div style="margin-top:4px">
@@ -1483,6 +1605,7 @@ function removeWall(roomId, wallId) {
 function setReshootTarget(roomId, wallId) {
   // Clear previous
   document.querySelectorAll('.wall-reshoot.active').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.dim-shoot.active').forEach(b=>b.classList.remove('active'));
   if(reshootTarget && reshootTarget.roomId===roomId && reshootTarget.wallId===wallId) {
     // Toggle off
     reshootTarget = null;
@@ -1497,6 +1620,21 @@ function setReshootTarget(roomId, wallId) {
   // Set BT target to wall mode
   document.getElementById('target-field').value = 'wall';
   showToast(`Shoot to replace Wall ${wallIdx+1}`);
+}
+
+// Arm a ceiling/floor dimension field for the next laser shot.
+function armDimShot(roomId, field) {
+  reshootTarget = null;  // clear any wall reshoot
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active').forEach(b=>b.classList.remove('active'));
+  const idx = rooms.findIndex(r=>r.id===roomId);
+  if (idx < 0) return;
+  // Route the next shot to this room + field
+  document.getElementById('target-field').value = field;
+  document.getElementById('target-room').value  = idx;
+  // Highlight the active shoot button
+  document.getElementById(`${roomId}_${field}_shoot`)?.classList.add('active');
+  const label = field==='floorLength' ? 'Length' : 'Width';
+  showToast(`📐 Shoot for ${label} · ${rooms[idx].name}`);
 }
 
 function updateWall(roomId, wallId, val) {
@@ -1638,6 +1776,190 @@ function updateRoomRate(id, key, val) {
   recalcRoom(id);
 }
 
+// ── Auto-save & job snapshots ──
+function getJobSnapshot() {
+  return {
+    name:      currentJobName,
+    client:    document.getElementById('client-name')?.value || '',
+    address:   document.getElementById('job-address')?.value || '',
+    notes:     document.getElementById('notes')?.value || '',
+    rooms:     JSON.parse(JSON.stringify(rooms)),
+    roomCount: roomCount,
+    job:       { ...job },
+    updatedAt: Date.now()
+  };
+}
+function saveActiveJob() {
+  try {
+    const snap = getJobSnapshot();
+    localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify(snap));
+    updateSaveIndicator(snap.updatedAt);
+  } catch (e) {
+    console.warn('Auto-save failed:', e);
+  }
+}
+function markDirty() {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveActiveJob, 350);
+}
+function loadActiveJob() {
+  try {
+    const raw = localStorage.getItem(ACTIVE_JOB_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (!data || !Array.isArray(data.rooms)) return false;
+    applyJobData(data);
+    return true;
+  } catch (e) {
+    console.warn('Restore failed:', e);
+    return false;
+  }
+}
+function applyJobData(data) {
+  // Restore text fields
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+  setVal('client-name', data.client);
+  setVal('job-address', data.address);
+  setVal('notes', data.notes);
+  // Restore rooms array and counter
+  rooms.length = 0;
+  (data.rooms || []).forEach(r => rooms.push(r));
+  roomCount = data.roomCount || rooms.length;
+  // Restore job extras
+  if (data.job) Object.assign(job, data.job);
+  setVal('job-door-count', job.doorCount);
+  setVal('job-door-price', job.doorPrice);
+  setVal('job-win-count',  job.winCount);
+  setVal('job-win-price',  job.winPrice);
+  // Re-render rooms
+  const wrap = document.getElementById('rooms-container');
+  if (wrap) wrap.innerHTML = '';
+  rooms.forEach((r, i) => { renderRoom(r, i); renderWalls(r); });
+  refreshRoomSelect();
+  currentJobName = data.name || '';
+  syncJobBadge();
+  recalcAll();
+}
+function updateSaveIndicator(ts) {
+  const el = document.getElementById('save-indicator');
+  if (!el) return;
+  el.dataset.ts = ts;
+  el.classList.remove('saved-stale');
+  el.classList.add('saved-fresh');
+  el.textContent = '● Saved';
+  if (saveIndicatorTimer) clearTimeout(saveIndicatorTimer);
+  saveIndicatorTimer = setTimeout(() => {
+    el.classList.remove('saved-fresh');
+    el.classList.add('saved-stale');
+    const secs = Math.max(1, Math.round((Date.now() - ts) / 1000));
+    el.textContent = `Saved ${secs}s ago`;
+  }, 2200);
+}
+function syncJobBadge() {
+  const b = document.getElementById('current-job-badge');
+  if (!b) return;
+  b.textContent = currentJobName ? `📁 ${currentJobName}` : '📁 Jobs';
+}
+
+// Named snapshots
+function jobsLoad() { try { return JSON.parse(localStorage.getItem(SAVED_JOBS_KEY)) || []; } catch { return []; } }
+function jobsSave(list) { localStorage.setItem(SAVED_JOBS_KEY, JSON.stringify(list)); }
+function openJobsModal() {
+  renderJobsList();
+  document.getElementById('jobs-modal').style.display = 'block';
+  // Default the snapshot name to the current job name or a date stamp
+  const inp = document.getElementById('job-snapshot-name');
+  if (inp && !inp.value) {
+    inp.value = currentJobName ||
+      (document.getElementById('client-name').value
+        ? document.getElementById('client-name').value + ' — ' + new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})
+        : 'Job ' + new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'}));
+  }
+}
+function closeJobsModal() { document.getElementById('jobs-modal').style.display = 'none'; }
+function renderJobsList() {
+  const list = jobsLoad().sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0));
+  const el = document.getElementById('jobs-list');
+  if (!el) return;
+  if (list.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">No saved jobs yet</div>';
+    return;
+  }
+  el.innerHTML = list.map(j => {
+    const dateStr = new Date(j.updatedAt || Date.now()).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const roomCount = (j.rooms||[]).length;
+    return `
+      <div class="job-row" style="background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:2px">📁 ${j.name || 'Untitled'}</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${roomCount} room${roomCount===1?'':'s'} · ${dateStr}${j.client?' · '+j.client:''}</div>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:6px">
+          <button onclick="loadSnapshot('${j.id}')" style="height:38px;background:var(--blue);border:none;border-radius:6px;color:#fff;font-family:var(--font);font-weight:700;font-size:13px;cursor:pointer">Load</button>
+          <button onclick="deleteSnapshot('${j.id}')" aria-label="Delete" style="height:38px;width:44px;background:transparent;border:1px solid var(--red);border-radius:6px;color:var(--red);font-size:14px;cursor:pointer">✕</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+function saveSnapshot() {
+  const name = document.getElementById('job-snapshot-name').value.trim();
+  if (!name) return showToast('Enter a name for this job','warn');
+  const list = jobsLoad();
+  // If a snapshot with the same name exists, update it; otherwise add new
+  const existing = list.findIndex(j => j.name === name);
+  const snap = getJobSnapshot();
+  snap.name = name;
+  if (existing >= 0) {
+    snap.id = list[existing].id;
+    snap.createdAt = list[existing].createdAt;
+    list[existing] = snap;
+  } else {
+    snap.id = 'j' + Date.now();
+    snap.createdAt = Date.now();
+    list.unshift(snap);
+  }
+  jobsSave(list);
+  currentJobName = name;
+  saveActiveJob();
+  syncJobBadge();
+  renderJobsList();
+  showToast(`💾 "${name}" saved`);
+}
+function loadSnapshot(id) {
+  const j = jobsLoad().find(x => x.id === id);
+  if (!j) return;
+  applyJobData(j);
+  saveActiveJob();
+  closeJobsModal();
+  showToast(`📁 Loaded "${j.name}"`);
+}
+function deleteSnapshot(id) {
+  const j = jobsLoad().find(x => x.id === id);
+  if (!j) return;
+  if (!confirm(`Delete "${j.name}"? This cannot be undone.`)) return;
+  jobsSave(jobsLoad().filter(x => x.id !== id));
+  renderJobsList();
+}
+function startNewJob() {
+  if (!confirm('Start a new blank job? The current job will stay saved under its name (if you named it). Unnamed work will be replaced.')) return;
+  // Save current as a snapshot first IF it has a name
+  if (currentJobName) saveSnapshot();
+  // Clear active state
+  rooms.length = 0; roomCount = 0;
+  job.doorCount = ''; job.winCount = '';
+  document.getElementById('client-name').value = '';
+  document.getElementById('job-address').value = '';
+  document.getElementById('notes').value = '';
+  document.getElementById('job-door-count').value = '';
+  document.getElementById('job-win-count').value = '';
+  document.getElementById('rooms-container').innerHTML = '';
+  currentJobName = '';
+  syncJobBadge();
+  addRoom();
+  recalcAll();
+  saveActiveJob();
+  closeJobsModal();
+  showToast('🆕 New job started');
+}
+
 function recalcRoom(id) {
   const room=rooms.find(r=>r.id===id); if(!room) return;
   const c=calc(room), el=document.getElementById(`${id}_sum`);
@@ -1681,6 +2003,7 @@ function recalcAll() {
   document.getElementById('tot-lab').textContent=fmt(lab);
   document.getElementById('tot-grand').textContent=fmt(grand);
   if(bidOpen) renderBid();
+  markDirty();
 }
 
 // ══════════════════════════════════════════════

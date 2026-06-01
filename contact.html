@@ -57,9 +57,9 @@ body { background:#e8e4df; min-height:100vh; display:flex; flex-direction:column
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#3a9e5a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg></div>
       <div><div class="contact-label">Website</div><div class="contact-value">ingersollpaintingllc.com</div></div>
     </a>
-    <a class="contact-row" href="https://maps.apple.com/?q=496+Phinney+Rd+Hannibal+NY+13074" target="_blank">
+    <a class="contact-row" href="https://maps.apple.com/?q=Hannibal+New+York" target="_blank">
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#3a9e5a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
-      <div><div class="contact-label">Address</div><div class="contact-value">496 Phinney Rd, Hannibal, NY 13074</div></div>
+      <div><div class="contact-label">Address</div><div class="contact-value">Hannibal, New York</div></div>
     </a>
   </div>
   <a class="save-btn" href="#" onclick="saveContact(); return false;">
@@ -74,7 +74,7 @@ body { background:#e8e4df; min-height:100vh; display:flex; flex-direction:column
 <p class="hint">Tap any row to call, email, or get directions.<br>Hit &ldquo;Save to Contacts&rdquo; to add to your phone or computer.</p>
 <script>
 function saveContact() {
-  var vcf = ["BEGIN:VCARD","VERSION:3.0","FN:Ingersoll Painting LLC","ORG:Ingersoll Painting LLC","TEL;TYPE=CELL,VOICE:(315) 952-8259","EMAIL;TYPE=WORK:info@ingersollpaintingllc.com","URL:https://ingersollpaintingllc.com","ADR;TYPE=WORK:;;496 Phinney Road;Hannibal;NY;13074;USA","NOTE:Interior & Exterior Painting · Drywall · Decks · Epoxy · Remodeling. Est. 1978.","END:VCARD"].join("\r\n");
+  var vcf = ["BEGIN:VCARD","VERSION:3.0","FN:Ingersoll Painting LLC","ORG:Ingersoll Painting LLC","TEL;TYPE=CELL,VOICE:(315) 952-8259","EMAIL;TYPE=WORK:info@ingersollpaintingllc.com","URL:https://ingersollpaintingllc.com","ADR;TYPE=WORK:;;Hannibal;New York;;USA","NOTE:Interior & Exterior Painting · Drywall · Decks · Epoxy · Remodeling. Est. 1978.","END:VCARD"].join("\r\n");
   var blob = new Blob([vcf], { type:"text/vcard;charset=utf-8" });
   var url = URL.createObjectURL(blob);
   var a = document.createElement("a");

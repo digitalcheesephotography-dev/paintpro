@@ -1218,7 +1218,9 @@ function initFirebase() {
         bootApp();
         setupFirestoreSync();
       } else {
-        // Not signed in — show sign-in screen
+        // Not signed in — remove loading screen and show sign-in screen
+        const loader = document.getElementById('js-loading');
+        if (loader) loader.remove();
         const s = document.getElementById('auth-screen');
         s.style.display = 'flex';
       }

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>PaintPro Print Hub Setup</title>
+<style>
+  body { background:#0d1117; color:#e2e8f0; font-family:'Segoe UI',Arial,sans-serif;
+         display:flex; align-items:center; justify-content:center;
+         min-height:100vh; margin:0; padding:24px; box-sizing:border-box; }
+  .card { background:#161b22; border:1px solid #252c3a; border-radius:14px;
+          padding:32px 28px; max-width:480px; width:100%; }
+  h1 { font-size:22px; color:#2baae1; margin:0 0 6px; }
+  .sub { color:#6b7a8d; font-size:14px; margin-bottom:28px; }
+  .step { display:flex; gap:14px; margin-bottom:22px; align-items:flex-start; }
+  .num { background:#2baae1; color:#fff; border-radius:50%; width:28px; height:28px;
+         display:flex; align-items:center; justify-content:center;
+         font-weight:700; font-size:14px; flex-shrink:0; margin-top:1px; }
+  .step-body { font-size:15px; line-height:1.6; }
+  .step-body strong { color:#e2e8f0; }
+  code { background:#0d1117; border:1px solid #252c3a; border-radius:5px;
+         padding:2px 7px; font-size:13px; color:#2baae1; font-family:monospace; }
+  .dl-btn { display:block; width:100%; background:#2baae1; color:#fff; border:none;
+             border-radius:10px; padding:16px; font-size:18px; font-weight:700;
+             cursor:pointer; text-align:center; text-decoration:none;
+             margin-bottom:28px; box-sizing:border-box; }
+  .dl-btn:hover { background:#239ac8; }
+  .note { background:#0d1117; border:1px solid #252c3a; border-radius:8px;
+          padding:12px 14px; font-size:13px; color:#6b7a8d; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🖨️ PaintPro Print Hub</h1>
+  <div class="sub">Lets the app send bids straight to your home printer</div>
+
+  <a class="dl-btn" href="print_hub.py" download="print_hub.py">
+    ⬇ Download print_hub.py
+  </a>
+
+  <div class="step">
+    <div class="num">1</div>
+    <div class="step-body">
+      <strong>Download Python</strong> (free) from <strong>python.org</strong> if you don't have it.<br>
+      During install, check <em>"Add Python to PATH"</em>.
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">2</div>
+    <div class="step-body">
+      Open <strong>Command Prompt</strong> (search "cmd" in Start menu) and run:<br>
+      <code>pip install requests</code>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">3</div>
+    <div class="step-body">
+      In the same Command Prompt window, run:<br>
+      <code>python print_hub.py</code><br>
+      You'll see <em>Listening on ntfy.sh/…</em> — leave it running.
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">4</div>
+    <div class="step-body">
+      <strong>Auto-start on boot (optional):</strong> Press <code>Win+R</code>, type <code>shell:startup</code>,
+      press Enter. Create a shortcut to:<br>
+      <code>pythonw C:\path\to\print_hub.py</code>
+    </div>
+  </div>
+
+  <div class="note">
+    The file is already configured with your private topic — no editing needed.
+    Just download, install, and run.
+  </div>
+</div>
+</body>
+</html>

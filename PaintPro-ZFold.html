@@ -1008,6 +1008,37 @@ const PRODUCTS = [
 const MARKUP = 1.20;
 const LISA_EMAIL = ''; // Set to Lisa's email for auto-BCC on bid emails (e.g. 'lisa@ingersollpaintingllc.com')
 
+// ─── AUTO PRINT HUB ────────────────────────────────────────────────────────
+//
+// Tapping "Send to Home Printer" on a bid sends it to ntfy.sh — a free,
+// no-account relay service — using the private topic name below as a channel.
+// A small Python script (print_hub.py, in this repo) runs on the home PC,
+// watches the same topic, and auto-opens the bid in the browser with
+// window.print() triggered. Lisa or James just confirms the print dialog.
+//
+// SETUP (one time, at home):
+//   1. Choose a hard-to-guess topic name and set it here, e.g.:
+//        'ingersoll-print-james2026-abc'
+//      Then set the same name in the TOPIC variable at the top of print_hub.py
+//
+//   2. On the home PC, open Command Prompt and run:
+//        pip install requests
+//      (requires Python 3 from python.org — free)
+//
+//   3. Run the hub:
+//        python print_hub.py
+//      Minimize it and leave it running. It auto-reconnects if internet drops.
+//
+//   4. To auto-start on Windows boot:
+//        Press Win+R → type: shell:startup → press Enter
+//        Create a shortcut pointing to: pythonw C:\path\to\print_hub.py
+//        (pythonw runs silently, no console window)
+//
+// SECURITY: The topic name is the only password. Make it random and unique.
+// Anyone who knows the topic can send a print job to this PC.
+// ─────────────────────────────────────────────────────────────────────────────
+const PRINT_HUB_TOPIC = ''; // e.g. 'ingersoll-print-james2026-abc'
+
 // Labor rates ($/sf per coat; trim is $/linear ft). Editable + persisted as the
 // whole-job default. Individual rooms can override via room.rates.
 const RATES_KEY = 'ingersoll_rates_v1';
@@ -2197,6 +2228,10 @@ function renderBid() {
         style="width:100%;height:50px;margin-top:10px;background:#f59e0b;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer">
         📧 Email to Client
       </button>
+      <button onclick="printAtHome()"
+        style="width:100%;height:50px;margin-top:10px;background:#6b7a8d;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer">
+        🖨️ Send to Home Printer
+      </button>
     </div>`;
 }
 
@@ -2272,6 +2307,71 @@ function emailBid() {
   const bcc = LISA_EMAIL ? `&bcc=${encodeURIComponent(LISA_EMAIL)}` : '';
   window.open(`mailto:${toEmail}?subject=${subject}${bcc}&body=${body}`);
   if (!toEmail) showToast('No email on file — add one to this client first', 'warn');
+}
+
+async function printAtHome() {
+  if (!PRINT_HUB_TOPIC) {
+    showToast('Print hub not set up — see PRINT_HUB_TOPIC in the code', 'warn');
+    return;
+  }
+
+  const client = document.getElementById('client-name').value.trim() || 'Client';
+  const addr   = document.getElementById('job-address').value.trim() || '';
+  const date   = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const cs     = rooms.map(calc);
+  const extras = jobExtras();
+  const mat    = cs.reduce((a,c)=>a+c.mat,0);
+  const lab    = cs.reduce((a,c)=>a+c.lab,0) + extras.total;
+  const grand  = mat + lab;
+
+  const roomLines = rooms.map((r,i)=>{
+    const c = cs[i];
+    const surfs = Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>k).join(', ');
+    return `  ${r.name} (${surfs||'walls'}): ${c.totalSF.toFixed(0)} sf — ${fmt(c.total)}`;
+  }).join('\n');
+
+  const doorLine = extras.doorCount > 0
+    ? `  Doors (${extras.doorCount} @ ${fmt(extras.doorPrice)}): ${fmt(extras.doorTotal)}\n` : '';
+  const winLine  = extras.winCount  > 0
+    ? `  Windows (${extras.winCount} @ ${fmt(extras.winPrice)}): ${fmt(extras.winTotal)}\n` : '';
+
+  const bidText =
+    `INGERSOLL PAINTING LLC\n` +
+    `Estimate for: ${client}\n` +
+    (addr ? `Address:  ${addr}\n` : '') +
+    `Date:     ${date}\n\n` +
+    `PROJECT BREAKDOWN\n` +
+    `${roomLines}\n` +
+    (doorLine || winLine ? `\nDOORS & WINDOWS\n${doorLine}${winLine}` : '') +
+    `\n` +
+    `Materials: ${fmt(mat)}\n` +
+    `Labor:     ${fmt(lab)}\n` +
+    `─────────────────────\n` +
+    `TOTAL:     ${fmt(grand)}\n\n` +
+    `1-Year Workmanship Warranty\n` +
+    `(315) 952-8259  |  ingersollpaintingllc.com\n` +
+    `Family Owned Since 1978`;
+
+  showToast('📨 Sending to home printer…');
+
+  try {
+    const res = await fetch(`https://ntfy.sh/${encodeURIComponent(PRINT_HUB_TOPIC)}`, {
+      method: 'POST',
+      headers: {
+        'Title':    `Bid: ${client}`,
+        'Priority': 'default',
+        'Tags':     'printer',
+      },
+      body: bidText,
+    });
+    if (res.ok) {
+      showToast('✓ Print job sent — check the home printer');
+    } else {
+      showToast('Send failed — check your internet connection', 'warn');
+    }
+  } catch {
+    showToast('Send failed — no internet connection', 'warn');
+  }
 }
 
 // ══════════════════════════════════════════════

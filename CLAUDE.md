@@ -20,6 +20,7 @@ Reference document for AI assistants (Claude Code, future Claude chat sessions) 
 ```
 paintpro/
 ├── PaintPro-ZFold.html       # The entire app (~4,050 lines, ~360 KB)
+├── print_hub.py              # PC-side print hub script — run on home computer to receive auto-print jobs
 ├── manifest.json             # PWA manifest (name, icons, theme, start URL)
 ├── sw.js                     # Service worker — offline cache, network-first for HTML
 ├── icon-192.png              # PWA icon, full-bleed
@@ -176,7 +177,15 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 - `armDimShot(roomId, field)` arms the Length or Width field for a shoot
 - Every measurable field should have its own 📐 shoot button (not just the dropdown)
 
-### 7.6 Backup & Restore
+### 7.6 Auto-Print Hub
+- `const PRINT_HUB_TOPIC = ''` — set this to a hard-to-guess ntfy.sh topic name to enable
+- `printAtHome()` — sends the current bid as plain text to `ntfy.sh/{topic}` via HTTP POST
+- `print_hub.py` (in repo root) — Python script that runs on the home PC; streams from ntfy.sh and opens the bid in a local browser page with `window.print()` auto-triggered
+- Requires internet on both phone and home PC; the phone sends the job, the PC listens and prints
+- Setup: `pip install requests` on PC, set matching topic in both files, run `python print_hub.py`
+- Auto-start on Windows: shortcut to `pythonw print_hub.py` in `shell:startup` folder
+
+### 7.7 Backup & Restore
 - `buildBackup()` serializes all localStorage keys + IndexedDB photos into a JSON blob
 - `backupToDrive()` triggers a download of the backup JSON
 - `restoreFromBackup()` reads a backup JSON and restores all data

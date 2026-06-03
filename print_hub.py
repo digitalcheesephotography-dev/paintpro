@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+# =============================================================================
+# INGERSOLL PAINTING — AUTO PRINT HUB
+# File: print_hub.py
+# =============================================================================
+#
+# PURPOSE:
+#   This script runs on the home PC (or any always-on Windows computer).
+#   When James taps "Send to Home Printer" on a completed bid in the
+#   PaintPro app, the bid text is relayed here through ntfy.sh (a free,
+#   no-account notification service). This script receives it, formats it
+#   as a clean HTML page, opens it in the default browser, and triggers
+#   window.print() automatically. Lisa or James just confirms the dialog.
+#
+# HOW THE FLOW WORKS:
+#   Phone (PaintPro app)
+#     → POST bid text to ntfy.sh/{TOPIC}   (requires internet on phone)
+#     → ntfy.sh holds the message
+#     → This script is streaming ntfy.sh/{TOPIC}/json (requires internet on PC)
+#     → Receives the message, writes a temp HTML file
+#     → Opens http://localhost:9191/ in the browser
+#     → Browser renders formatted bid + auto-triggers print dialog
+#     → Lisa clicks Print (or Cancel)
+#
+# SETUP — DO THIS ONCE AT HOME:
+# ─────────────────────────────
+#   Step 1: Install Python 3 (free — download from python.org)
+#           Choose "Add Python to PATH" during install.
+#
+#   Step 2: Open Command Prompt (search "cmd" in Start menu) and run:
+#               pip install requests
+#
+#   Step 3: Edit the TOPIC line below to match what's in PaintPro.
+#           Open PaintPro-ZFold.html, search for PRINT_HUB_TOPIC,
+#           copy that same string here.
+#           Example: TOPIC = 'ingersoll-print-james2026-abc'
+#
+#   Step 4: Run this script once to test it:
+#               python print_hub.py
+#           You should see "[PrintHub] Listening on ntfy.sh/..."
+#           Then tap "Send to Home Printer" on the phone to test.
+#
+#   Step 5: Set it to auto-start when Windows boots:
+#           a. Press Windows+R, type:  shell:startup  and press Enter
+#           b. A folder opens. Right-click inside → New → Shortcut
+#           c. For the location, enter:
+#                  pythonw.exe C:\path\to\print_hub.py
+#              (pythonw runs silently, no black console window)
+#           d. Name it "PaintPro Print Hub" and click Finish
+#           Now it will run automatically every time Windows starts.
+#
+# REQUIREMENTS:
+#   - Python 3.7 or later (python.org)
+#   - pip install requests
+#   - Internet connection on the PC
+#   - Any web browser (Chrome, Edge, Firefox)
+#
+# SECURITY NOTE:
+#   The TOPIC name acts as a password. Anyone who knows it can send a
+#   print job to this PC. Use a random, hard-to-guess topic name and
+#   keep it private. Change it in both this file and PRINT_HUB_TOPIC
+#   in PaintPro-ZFold.html at the same time.
+#
+# TROUBLESHOOTING:
+#   - "ModuleNotFoundError: requests" → run: pip install requests
+#   - Nothing prints when I tap the button → make sure TOPIC here matches
+#     PRINT_HUB_TOPIC in the app exactly (case-sensitive)
+#   - Browser opens but shows "Waiting..." → the message may have expired;
+#     ntfy.sh holds messages for 12 hours. Try sending again from the app.
+#   - Script crashes immediately → check Python version: python --version
+#     Must be 3.7 or later.
+# =============================================================================
+
+import json
+import os
+import sys
+import tempfile
+import threading
+import time
+import webbrowser
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+try:
+    import requests
+except ImportError:
+    print("[PrintHub] ERROR: 'requests' package not found.")
+    print("[PrintHub] Fix: open Command Prompt and run:  pip install requests")
+    input("Press Enter to exit...")
+    sys.exit(1)
+
+# ─── CONFIGURATION ────────────────────────────────────────────────────────────
+# Must match the PRINT_HUB_TOPIC constant in PaintPro-ZFold.html exactly.
+TOPIC = ''  # e.g. 'ingersoll-print-james2026-abc'
+
+# Port for the local web server (no need to change this unless 9191 is in use)
+PORT = 9191
+# ──────────────────────────────────────────────────────────────────────────────
+
+if not TOPIC:
+    print("[PrintHub] ERROR: TOPIC is not set.")
+    print("[PrintHub] Open print_hub.py and set the TOPIC variable to match")
+    print("[PrintHub] the PRINT_HUB_TOPIC constant in PaintPro-ZFold.html.")
+    input("Press Enter to exit...")
+    sys.exit(1)
+
+# Shared state — holds the most recently received bid text
+latest_bid = {'text': ''}
+
+# ─── HTML TEMPLATE ────────────────────────────────────────────────────────────
+PAGE_CSS = """
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    max-width: 680px;
+    margin: 32px auto;
+    padding: 0 24px;
+    color: #111;
+    line-height: 1.6;
+    font-size: 13px;
+  }
+  .company  { font-size: 20px; font-weight: bold; text-transform: uppercase;
+               letter-spacing: 2px; border-bottom: 2px solid #111;
+               padding-bottom: 8px; margin-bottom: 12px; }
+  .meta     { margin-bottom: 16px; color: #333; }
+  .section  { font-size: 11px; text-transform: uppercase; letter-spacing: 2px;
+               color: #888; margin: 16px 0 6px; }
+  pre       { font-family: Georgia, serif; white-space: pre-wrap;
+               font-size: 13px; line-height: 1.7; }
+  .total    { font-size: 15px; font-weight: bold; margin-top: 12px;
+               padding-top: 8px; border-top: 1px solid #333; }
+  .footer   { margin-top: 24px; padding-top: 12px; border-top: 1px solid #ccc;
+               font-size: 11px; color: #888; text-align: center; }
+  @media print {
+    body { margin: 0; }
+    .no-print { display: none; }
+  }
+"""
+
+def build_page(text):
+    """Convert plain-text bid into a print-ready HTML page."""
+    safe = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Ingersoll Painting — Bid</title>
+  <style>{PAGE_CSS}</style>
+</head>
+<body onload="window.print()">
+  <p class="no-print" style="background:#2baae1;color:#fff;padding:8px 12px;border-radius:6px;margin-bottom:16px;font-family:sans-serif;font-size:13px">
+    Print dialog should open automatically. If not, press Ctrl+P.
+  </p>
+  <pre>{safe}</pre>
+  <div class="footer">Ingersoll Painting LLC &mdash; Family Owned Since 1978 &mdash; (315) 952-8259</div>
+</body>
+</html>"""
+
+WAITING_PAGE = """<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>PaintPro Print Hub</title>
+<style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;
+height:100vh;margin:0;background:#0d1117;color:#e2e8f0;text-align:center}</style>
+</head><body>
+<div>
+  <div style="font-size:32px;margin-bottom:12px">🖨️</div>
+  <div style="font-size:18px;font-weight:bold">PaintPro Print Hub is running</div>
+  <div style="margin-top:8px;color:#6b7a8d">Waiting for a print job from the PaintPro app...</div>
+</div>
+</body></html>"""
+
+
+# ─── LOCAL WEB SERVER ─────────────────────────────────────────────────────────
+class PrintHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if latest_bid['text']:
+            body = build_page(latest_bid['text'])
+        else:
+            body = WAITING_PAGE
+        encoded = body.encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', len(encoded))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+    def log_message(self, fmt, *args):
+        pass  # Suppress default request logging
+
+
+# ─── NTFY.SH LISTENER ─────────────────────────────────────────────────────────
+def run_listener():
+    """Stream messages from ntfy.sh and trigger the browser to print each one."""
+    url = f'https://ntfy.sh/{TOPIC}/json'
+    while True:
+        try:
+            print(f'[PrintHub] Listening on ntfy.sh/{TOPIC}...')
+            with requests.get(url, stream=True, timeout=None) as r:
+                for raw_line in r.iter_lines(decode_unicode=True):
+                    if not raw_line:
+                        continue
+                    try:
+                        evt = json.loads(raw_line)
+                    except json.JSONDecodeError:
+                        continue
+                    if evt.get('event') != 'message':
+                        continue  # ignore keepalive / open events
+                    msg = evt.get('message', '').strip()
+                    if not msg:
+                        continue
+                    latest_bid['text'] = msg
+                    client_name = msg.split('\n')[1].replace('Estimate for:', '').strip() \
+                                  if len(msg.split('\n')) > 1 else '...'
+                    print(f'[PrintHub] Print job received — {client_name}')
+                    webbrowser.open(f'http://localhost:{PORT}/')
+        except KeyboardInterrupt:
+            print('\n[PrintHub] Stopped.')
+            break
+        except Exception as exc:
+            print(f'[PrintHub] Connection lost ({exc}). Retrying in 5s...')
+            time.sleep(5)
+
+
+# ─── MAIN ─────────────────────────────────────────────────────────────────────
+if __name__ == '__main__':
+    server = HTTPServer(('127.0.0.1', PORT), PrintHandler)
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+    print(f'[PrintHub] Local server started at http://localhost:{PORT}/')
+    print(f'[PrintHub] Topic: ntfy.sh/{TOPIC}')
+    print(f'[PrintHub] Ready — waiting for print jobs from PaintPro app')
+    print(f'[PrintHub] Press Ctrl+C to stop\n')
+    run_listener()

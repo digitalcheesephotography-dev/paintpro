@@ -706,8 +706,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
       <input type="hidden" id="modal-gps-lat"/>
       <input type="hidden" id="modal-gps-lng"/>
       <div class="field modal-full" style="margin-bottom:10px">
-        <button type="button" id="modal-gps-btn" onclick="captureContactGPS()" style="height:40px;width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:14px;cursor:pointer">📍 Set GPS at This Location</button>
-        <div id="modal-gps-status" style="font-size:11px;color:var(--muted);text-align:center;margin-top:3px;min-height:14px"></div>
+        <button type="button" id="modal-gps-btn" onclick="captureContactGPS()" style="height:40px;width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:14px;cursor:pointer">📍 Fill Address from GPS</button>
       </div>
       <label class="field modal-full"><span>Email (optional)</span>
         <input type="email" id="modal-email" placeholder="dave@email.com" autocomplete="email"/></label>
@@ -2772,10 +2771,6 @@ function openContactModal(id) {
   const gpsLng = c?.gpsLng ?? '';
   document.getElementById('modal-gps-lat').value = gpsLat;
   document.getElementById('modal-gps-lng').value = gpsLng;
-  const gpsStat = document.getElementById('modal-gps-status');
-  if (gpsStat) gpsStat.textContent = (gpsLat !== '' && gpsLng !== '') ? `✓ ${parseFloat(gpsLat).toFixed(4)}, ${parseFloat(gpsLng).toFixed(4)}` : '';
-  const gpsBtn = document.getElementById('modal-gps-btn');
-  if (gpsBtn) gpsBtn.textContent = (gpsLat !== '' && gpsLng !== '') ? '📍 Update GPS Location' : '📍 Set GPS at This Location';
   document.getElementById('modal-delete-btn').style.display = c ? 'block' : 'none';
   document.getElementById('contact-modal').classList.add('show');
 }
@@ -2926,21 +2921,47 @@ function nearbyDismiss() {
 
 function captureContactGPS() {
   if (!navigator.geolocation) return showToast('GPS not available on this device', 'warn');
-  const btn  = document.getElementById('modal-gps-btn');
-  const stat = document.getElementById('modal-gps-status');
-  if (btn)  btn.textContent = '📍 Getting location…';
-  if (stat) stat.textContent = '';
+  const btn = document.getElementById('modal-gps-btn');
+  if (btn) btn.textContent = '📍 Getting location…';
   navigator.geolocation.getCurrentPosition(
-    pos => {
-      document.getElementById('modal-gps-lat').value = pos.coords.latitude;
-      document.getElementById('modal-gps-lng').value = pos.coords.longitude;
-      if (stat) stat.textContent = `✓ ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
-      if (btn)  btn.textContent = '📍 Update GPS Location';
-      showToast('📍 Location saved');
+    async pos => {
+      const { latitude: lat, longitude: lng } = pos.coords;
+      // Store coords invisibly — still needed for the nearby client banner
+      document.getElementById('modal-gps-lat').value = lat;
+      document.getElementById('modal-gps-lng').value = lng;
+      // Reverse geocode to a real mailing address via Nominatim (OpenStreetMap, free, no key)
+      if (btn) btn.textContent = '📍 Looking up address…';
+      try {
+        const res  = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
+          headers: { 'Accept-Language': 'en-US,en' }
+        });
+        const data = await res.json();
+        const a    = data.address || {};
+        const num  = a.house_number || '';
+        const road = a.road || a.pedestrian || a.footway || '';
+        const city = a.city || a.town || a.village || a.hamlet || '';
+        const state = a.state ? (a.state.length > 2 ? a.state : a.state) : '';
+        const zip  = a.postcode || '';
+        const addr = [
+          [num, road].filter(Boolean).join(' '),
+          [city, [state, zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+        ].filter(Boolean).join(', ');
+        if (addr) {
+          const addrEl = document.getElementById('modal-address');
+          if (addrEl && !addrEl.value) addrEl.value = addr; // only fill if blank
+          else if (addrEl) addrEl.value = addr;             // overwrite if button tapped intentionally
+          showToast('📍 Address filled');
+        } else {
+          showToast('📍 Location saved (no address found)', 'warn');
+        }
+      } catch {
+        showToast('📍 Location saved — address lookup failed', 'warn');
+      }
+      if (btn) btn.textContent = '📍 Fill Address from GPS';
     },
     () => {
-      if (btn) btn.textContent = '📍 Set GPS at This Location';
-      showToast('Could not get GPS — go outside and try again', 'warn');
+      if (btn) btn.textContent = '📍 Fill Address from GPS';
+      showToast('Could not get GPS — try going outside', 'warn');
     },
     { timeout: 10000, enableHighAccuracy: true }
   );

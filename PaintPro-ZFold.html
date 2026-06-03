@@ -318,7 +318,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 <!-- TAB BAR -->
 <div id="tab-bar">
   <button class="tab-btn active" id="tab-estimate" onclick="switchTab('estimate')" aria-label="Estimator tab">📐 ESTIMATE</button>
-  <button class="tab-btn" id="tab-contacts" onclick="switchTab('contacts')" aria-label="Clients tab">👥 CLIENTS</button>
+  <button class="tab-btn" id="tab-contacts" onclick="switchTab('contacts')" aria-label="Clients tab">👥 CLIENTS<span id="followup-badge" style="display:none;background:#c0392b;color:#fff;border-radius:10px;font-size:10px;padding:2px 6px;margin-left:5px;vertical-align:middle;line-height:1.4"></span></button>
   <button class="tab-btn" id="tab-apt" onclick="switchTab('apt')" aria-label="Apt Pricing tab">🏢 APT PRICING</button>
 </div>
 
@@ -671,6 +671,12 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
         <input type="tel" id="modal-phone" placeholder="(315) 555-0100" autocomplete="tel" inputmode="tel"/></label>
       <label class="field modal-full"><span>Address</span>
         <input type="text" id="modal-address" placeholder="45 Oak St, Camillus NY" autocomplete="street-address"/></label>
+      <input type="hidden" id="modal-gps-lat"/>
+      <input type="hidden" id="modal-gps-lng"/>
+      <div class="field modal-full" style="margin-bottom:10px">
+        <button type="button" id="modal-gps-btn" onclick="captureContactGPS()" style="height:40px;width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:14px;cursor:pointer">📍 Set GPS at This Location</button>
+        <div id="modal-gps-status" style="font-size:11px;color:var(--muted);text-align:center;margin-top:3px;min-height:14px"></div>
+      </div>
       <label class="field modal-full"><span>Email (optional)</span>
         <input type="email" id="modal-email" placeholder="dave@email.com" autocomplete="email"/></label>
       <label class="field modal-full"><span>Status</span>
@@ -751,6 +757,15 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 </div>
 
 <div id="toast"></div>
+
+<!-- NEARBY CLIENT BANNER -->
+<div id="nearby-banner" style="display:none;position:fixed;top:56px;left:0;right:0;z-index:300;background:var(--blue);color:#fff;padding:10px 14px;flex-direction:row;align-items:center;gap:10px;font-family:var(--font);font-size:15px">
+  <span id="nearby-text" style="flex:1"></span>
+  <div style="display:flex;gap:8px;flex-shrink:0">
+    <button onclick="nearbyOpen()" style="background:#fff;color:var(--blue);border:none;border-radius:6px;padding:6px 12px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">Open</button>
+    <button onclick="nearbyDismiss()" style="background:transparent;border:1px solid rgba(255,255,255,.5);border-radius:6px;padding:6px 10px;color:#fff;font-family:var(--font);font-size:13px;cursor:pointer">✕</button>
+  </div>
+</div>
 
 <!-- JOBS (saved snapshots) MODAL -->
 <div id="jobs-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:600;overflow-y:auto;padding:20px 16px calc(20px + var(--safe-b))">
@@ -991,6 +1006,7 @@ const PRODUCTS = [
   {name:"Custom Product",             price:65, cov:400},
 ];
 const MARKUP = 1.20;
+const LISA_EMAIL = ''; // Set to Lisa's email for auto-BCC on bid emails (e.g. 'lisa@ingersollpaintingllc.com')
 
 // Labor rates ($/sf per coat; trim is $/linear ft). Editable + persisted as the
 // whole-job default. Individual rooms can override via room.rates.
@@ -1074,6 +1090,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Initial save so the indicator shows from the start
   saveActiveJob();
+
+  // Follow-up badge and GPS suggestion
+  updateFollowupBadge();
+  checkNearbyClients();
 
   if (location.protocol === 'file:') {
     document.getElementById('https-warn').classList.add('show');
@@ -2173,6 +2193,10 @@ function renderBid() {
         style="width:100%;height:50px;margin-top:10px;background:#2e8b1e;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer">
         💾 Save Client to Contacts
       </button>
+      <button onclick="emailBid()"
+        style="width:100%;height:50px;margin-top:10px;background:#f59e0b;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer">
+        📧 Email to Client
+      </button>
     </div>`;
 }
 
@@ -2217,6 +2241,37 @@ Family Owned Since 1978`;
       showToast('Use Save as PDF to share', 'warn');
     });
   }
+}
+
+function emailBid() {
+  const client = document.getElementById('client-name').value.trim() || '';
+  const addr   = document.getElementById('job-address').value.trim() || '';
+  const date   = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const cs     = rooms.map(calc);
+  const grand  = cs.reduce((a,c)=>a+c.total,0);
+
+  const contacts = loadContacts();
+  const match    = client ? contacts.find(c=>c.name.toLowerCase()===client.toLowerCase()) : null;
+  const toEmail  = match?.email || '';
+
+  const roomLines = rooms.map((r,i)=>{
+    const c = cs[i];
+    const surfs = Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>k).join(', ');
+    return `${r.name} (${surfs||'walls'}): ${c.totalSF.toFixed(0)} sf - ${fmt(c.total)}`;
+  }).join('\n');
+
+  const subject = encodeURIComponent(`Ingersoll Painting LLC - Estimate for ${client||'Your Project'}`);
+  const body    = encodeURIComponent(
+    `Dear ${client||'Valued Customer'},\n\nThank you for the opportunity to provide this estimate. Please review the details below.\n\n` +
+    `---\nINGERSOLL PAINTING LLC\nEstimate for ${client}\n${addr}\nDate: ${date}\n\n` +
+    `PROJECT BREAKDOWN\n${roomLines}\n\nTOTAL ESTIMATE: ${fmt(grand)}\n\n---\n` +
+    `1-Year Workmanship Warranty\n(315) 952-8259 | ingersollpaintingllc.com\nFamily Owned Since 1978\n\n` +
+    `Thank you for choosing Ingersoll Painting LLC`
+  );
+
+  const bcc = LISA_EMAIL ? `&bcc=${encodeURIComponent(LISA_EMAIL)}` : '';
+  window.open(`mailto:${toEmail}?subject=${subject}${bcc}&body=${body}`);
+  if (!toEmail) showToast('No email on file — add one to this client first', 'warn');
 }
 
 // ══════════════════════════════════════════════
@@ -2278,6 +2333,7 @@ function renderContacts() {
   list.innerHTML = '';
   none.style.display = filtered.length===0 ? 'block' : 'none';
   filtered.forEach(c => list.appendChild(buildContactCard(c)));
+  updateFollowupBadge();
 }
 
 const STATUS_LABELS = {pending:'Pending',followup:'Follow Up',scheduled:'Scheduled',inprogress:'In Progress',completed:'Completed'};
@@ -2363,6 +2419,14 @@ function openContactModal(id) {
   document.getElementById('modal-status').value        = c?.status || 'pending';
   document.getElementById('modal-estimate').value      = c?.estimate || '';
   document.getElementById('modal-notes').value         = c?.notes || '';
+  const gpsLat = c?.gpsLat ?? '';
+  const gpsLng = c?.gpsLng ?? '';
+  document.getElementById('modal-gps-lat').value = gpsLat;
+  document.getElementById('modal-gps-lng').value = gpsLng;
+  const gpsStat = document.getElementById('modal-gps-status');
+  if (gpsStat) gpsStat.textContent = (gpsLat !== '' && gpsLng !== '') ? `✓ ${parseFloat(gpsLat).toFixed(4)}, ${parseFloat(gpsLng).toFixed(4)}` : '';
+  const gpsBtn = document.getElementById('modal-gps-btn');
+  if (gpsBtn) gpsBtn.textContent = (gpsLat !== '' && gpsLng !== '') ? '📍 Update GPS Location' : '📍 Set GPS at This Location';
   document.getElementById('modal-delete-btn').style.display = c ? 'block' : 'none';
   document.getElementById('contact-modal').classList.add('show');
 }
@@ -2390,6 +2454,8 @@ function saveContact() {
     estimate:     document.getElementById('modal-estimate').value.trim(),
     estimateDate: existing>=0 ? contacts[existing].estimateDate : new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),
     notes:        document.getElementById('modal-notes').value.trim(),
+    gpsLat:       (() => { const v = parseFloat(document.getElementById('modal-gps-lat').value); return isNaN(v) ? null : v; })(),
+    gpsLng:       (() => { const v = parseFloat(document.getElementById('modal-gps-lng').value); return isNaN(v) ? null : v; })(),
     updatedAt:    Date.now(),
   };
 
@@ -2431,6 +2497,7 @@ function saveClientFromBid() {
     existing.address      = address || existing.address;
     existing.updatedAt    = Date.now();
     saveContacts(contacts);
+    updateFollowupBadge();
     showToast(`${name} updated in contacts`);
   } else {
     // Pre-fill modal with current bid info
@@ -2456,6 +2523,99 @@ function showToast(msg, type='') {
   el.className='show'+(type?' '+type:'');
   clearTimeout(toastT);
   toastT=setTimeout(()=>el.className='',2600);
+}
+
+// ══════════════════════════════════════════════
+// GPS NEARBY CLIENT
+// ══════════════════════════════════════════════
+let nearbyClientId = null;
+
+function haversineMiles(lat1, lng1, lat2, lng2) {
+  const R = 3958.8;
+  const dLat = (lat2-lat1) * Math.PI/180;
+  const dLng = (lng2-lng1) * Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function checkNearbyClients() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(pos => {
+    const { latitude, longitude } = pos.coords;
+    const contacts = loadContacts();
+    const nearby = contacts
+      .filter(c => c.gpsLat && c.gpsLng && c.status !== 'completed')
+      .map(c => ({ c, dist: haversineMiles(latitude, longitude, c.gpsLat, c.gpsLng) }))
+      .filter(x => x.dist <= 0.5)
+      .sort((a,b) => a.dist - b.dist);
+    if (nearby.length > 0) {
+      const { c, dist } = nearby[0];
+      nearbyClientId = c.id;
+      const banner = document.getElementById('nearby-banner');
+      const text   = document.getElementById('nearby-text');
+      if (banner && text) {
+        text.textContent = `📍 ${c.name} is nearby (${dist<0.1?'<0.1':dist.toFixed(1)} mi)`;
+        banner.style.display = 'flex';
+      }
+    }
+  }, ()=>{}, { timeout: 8000, maximumAge: 120000 });
+}
+
+function nearbyOpen() {
+  nearbyDismiss();
+  switchTab('contacts');
+  setTimeout(()=>{
+    const el = document.getElementById('cc_'+nearbyClientId);
+    if (el) el.scrollIntoView({ behavior:'smooth', block:'center' });
+  }, 300);
+}
+
+function nearbyDismiss() {
+  const banner = document.getElementById('nearby-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+function captureContactGPS() {
+  if (!navigator.geolocation) return showToast('GPS not available on this device', 'warn');
+  const btn  = document.getElementById('modal-gps-btn');
+  const stat = document.getElementById('modal-gps-status');
+  if (btn)  btn.textContent = '📍 Getting location…';
+  if (stat) stat.textContent = '';
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      document.getElementById('modal-gps-lat').value = pos.coords.latitude;
+      document.getElementById('modal-gps-lng').value = pos.coords.longitude;
+      if (stat) stat.textContent = `✓ ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
+      if (btn)  btn.textContent = '📍 Update GPS Location';
+      showToast('📍 Location saved');
+    },
+    () => {
+      if (btn) btn.textContent = '📍 Set GPS at This Location';
+      showToast('Could not get GPS — go outside and try again', 'warn');
+    },
+    { timeout: 10000, enableHighAccuracy: true }
+  );
+}
+
+// ══════════════════════════════════════════════
+// FOLLOW-UP BADGE
+// ══════════════════════════════════════════════
+function updateFollowupBadge() {
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const contacts = loadContacts();
+  const overdue = contacts.filter(c => {
+    if (!c.estimateDate) return false;
+    if (c.status === 'completed' || c.status === 'inprogress' || c.status === 'scheduled') return false;
+    return new Date(c.estimateDate).getTime() < cutoff;
+  });
+  const badge = document.getElementById('followup-badge');
+  if (!badge) return;
+  if (overdue.length > 0) {
+    badge.textContent = overdue.length;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
 }
 
 // ── Sub-nav switching ─────────────────────────

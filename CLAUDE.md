@@ -10,7 +10,7 @@ Reference document for AI assistants (Claude Code, future Claude chat sessions) 
 
 - **Repository:** `github.com/digitalcheesephotography-dev/paintpro`
 - **Deploy:** Netlify auto-deploys ~60 seconds after a commit to `main`
-- **Live URL:** Netlify-assigned domain (referenced verbally as "the Netlify URL")
+- **Live URL:** `lovely-kitsune-6c5c82.netlify.app`
 - **Primary user:** James Bailey, sole operator. No team contributors.
 
 ---
@@ -19,7 +19,7 @@ Reference document for AI assistants (Claude Code, future Claude chat sessions) 
 
 ```
 paintpro/
-├── PaintPro-ZFold.html       # The entire app (~2,854 lines, ~300 KB)
+├── PaintPro-ZFold.html       # The entire app (~4,050 lines, ~360 KB)
 ├── manifest.json             # PWA manifest (name, icons, theme, start URL)
 ├── sw.js                     # Service worker — offline cache, network-first for HTML
 ├── icon-192.png              # PWA icon, full-bleed
@@ -41,7 +41,7 @@ paintpro/
 ### Single-file philosophy
 - **No build step.** No bundler, no transpiler, no npm dependencies at runtime.
 - **No framework.** Vanilla JS, vanilla CSS, vanilla HTML.
-- **No backend.** All data lives in `localStorage`.
+- **No backend.** All data lives in `localStorage` (plus IndexedDB for photos).
 - **No external API calls** (except Google Fonts and the BLE Web Bluetooth API). This is deliberate — the app must work in the truck with no signal.
 
 ### Why single-file?
@@ -54,7 +54,8 @@ paintpro/
 - **Google Fonts** — Bebas Neue + Barlow Condensed, loaded from CDN
 - **Web Bluetooth API** — for Leica DISTO D2 laser measurer integration
 - **Web Speech API** — for voice commands (Chrome only)
-- **localStorage** — for persistence
+- **localStorage** — for all job/client/project/notes/materials/apt data
+- **IndexedDB** — for photo storage (larger blobs, keyed by photo ID)
 - **Service Worker API** — for offline support and installability
 
 ---
@@ -113,250 +114,186 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 3. **APT PRICING** (`#tab-apt` → `#apt-section`) — property/unit pricing reference
 
 ### Estimator tab order (top to bottom)
-1. Client name + Job address inputs
-2. Room cards (each: name, walls, height, floor/ceiling dims, surface toggles, product, coats)
-3. `+ ADD ROOM / AREA` button
-4. **🚪 🪟 Doors & Windows card** (whole-job, not per-room)
-5. Notes textarea
-6. Materials/Labor/Total totals strip (auto-shows when there's data)
-7. `GENERATE BID SUMMARY` button (auto-shows when there's data)
-8. Bid output (`#bid-out`) — appears when generate is tapped
+1. **📁 Jobs button** (`#current-job-badge`) — opens the saved-jobs modal; label reflects currently-loaded snapshot name when set
+2. Client name + Job address inputs
+3. **💲 Labor Rates card** (collapsible, whole-job default $/sf — see section 7.1)
+4. Room cards (each: name, walls, height, floor/ceiling dims, surface toggles, product, coats, **✓ DONE — NEXT ROOM** button, optional per-room rate override)
+5. `+ ADD ROOM / AREA` button
+6. **🚪 🪟 Doors & Windows card** (whole-job, not per-room)
+7. Notes textarea
+8. **● Save indicator** (`#save-indicator`) — shows last-save time
+9. Materials/Labor/Total totals strip (auto-shows when there's data)
+10. `GENERATE BID SUMMARY` button (auto-shows when there's data)
+11. Bid output (`#bid-out`) — appears when generate is tapped
 
 ### Clients tab sub-nav (`switchSubnav()`)
 - `subnav-clients` → `#sub-clients` — contact list with status filters
 - `subnav-projects` → `#sub-projects` — project tracking with task checklists
-- `subnav-materials` → `#sub-materials` — 🛒 per-job materials lists with copy-to-clipboard
+- `subnav-materials` → `#sub-materials` — per-job materials lists with copy-to-clipboard
 - `subnav-notes` → `#sub-notes` — general notes
 
-### Sticky bottom BT bar (`#bt-bar`, fixed position)
-- Connect/Disconnect Leica DISTO D2 button
-- Target-field selector (which input the next BT measurement fills)
-- Target-room selector (which room the measurement applies to)
-- 🎤 Voice command mic
-- ⚙ Settings / debug panel (also contains the voice commands cheat sheet)
+---
 
-### Modals
-- `#supply-modal` — add/edit paint supply reference items
-- `#contact-modal` — add/edit clients
-- `#project-modal` — add/edit projects with task list
-- `#note-modal` — add/edit general notes
-- `#materials-modal` — add/edit per-job materials lists
+## 7. Key systems
+
+### 7.1 Labor rates
+- Global defaults stored in `ingersoll_rates_v1` (interior) and `ingersoll_ext_rates_v1` (exterior)
+- Default interior: walls $1.85/sf, ceiling $1.65/sf, floor $1.65/sf, trim $3.50/sf
+- Default exterior: walls $2.25/sf, ceiling $1.75/sf, floor $2.50/sf, trim $3.50/sf
+- Per-room overrides possible; `toggleRoomRates()` / `updateRoomRate()` manage them
+- `modeRates(mode)` returns the right rate object for interior vs exterior
+
+### 7.2 Auto-save & job snapshots
+- Active job auto-saves to `ingersoll_active_job_v1` on every change via `markDirty()` + debounced `saveActiveJob()`
+- Named snapshots saved to `ingersoll_jobs_v1` array via `saveSnapshot()`
+- `getJobSnapshot()` / `applyJobData()` must be updated together when adding new persistent fields
+- Save indicator (`#save-indicator`) shows last-save timestamp — always visible
+
+### 7.3 Interior vs Exterior mode
+- `estimatorMode`: `'interior'` | `'exterior'`
+- `switchMode(mode)` rebuilds all room cards for the new mode
+- Exterior rooms have siding/soffit/deck fields; interior rooms have walls/height/floor/ceiling
+- Voice commands and `applyMeasurement()` are mode-aware
+
+### 7.4 Photos
+- Stored in IndexedDB (not localStorage) — larger blob storage
+- `photoDBOpen()` → `photoPut()` / `photoGet()` / `photoDeleteDB()` / `photoGetAll()`
+- `compressImage()` resizes to max 1600px edge, 0.7 quality before storing
+- Photos attach to job scope (`'job'`) or per-room scope (room ID)
+- `renderJobPhotos()` / `renderRoomPhotos(roomId)` render the photo strips
+- `hydratePhotos()` re-attaches IndexedDB blobs to `<img>` tags after `applyJobData()`
+- `viewPhoto()` / `closeLightbox()` for full-screen preview
+- `toggleBidPhotos(on)` includes/excludes photos from bid output
+
+### 7.5 Bluetooth (Leica DISTO D2)
+- Requires HTTPS — works on Netlify, not `file://`
+- `connectBT()` / `disconnectBT()` / `handleBtButton()` manage connection lifecycle
+- `BLE_CANDIDATES` array holds candidate service/characteristic UUIDs (DISTO D2 not well-documented)
+- Falls back to subscribing to every notify characteristic
+- `onMeasurement(evt)` parses the raw BLE bytes into feet
+- `applyMeasurement(feet, disp)` routes the reading to the correct field
+- `setReshootTarget(roomId, wallId)` arms a specific wall for re-shoot
+- `armDimShot(roomId, field)` arms the Length or Width field for a shoot
+- Every measurable field should have its own 📐 shoot button (not just the dropdown)
+
+### 7.6 Backup & Restore
+- `buildBackup()` serializes all localStorage keys + IndexedDB photos into a JSON blob
+- `backupToDrive()` triggers a download of the backup JSON
+- `restoreFromBackup()` reads a backup JSON and restores all data
 
 ---
 
-## 7. Data model
+## 8. Voice system (updated May 31, 2026)
 
-### Global state (in-memory, resets on reload)
-```js
-let rooms       = [];     // array of room objects
-let roomCount   = 0;      // monotonically increasing id counter
-let btDevice    = null;   // BLE device handle
-let btConnected = false;
-let activeChar  = null;   // active BLE characteristic
-let bidOpen     = false;  // is the bid output currently visible?
-let job = { doorCount: '', doorPrice: '75', winCount: '', winPrice: '50' };
-```
+### Architecture
+- `voiceRecog` — SpeechRecognition instance (Chrome Web Speech API)
+- `voiceActive` — boolean; mic stays on between commands (`continuous = true`)
+- `voiceLastMeasurement` — `{roomId, field, wallId}` — enables "undo last" command
+- `maxAlternatives = 3` — Chrome returns top 3 guesses; best match wins
 
-### Room shape
-```js
-{
-  id: 'r1',              // 'r' + auto-incrementing counter
-  name: 'Living Room',
-  walls: [{id:'w1', ft:'12'}, {id:'w2', ft:'14'}, ...],  // any number of walls
-  height: '8',
-  floorLength: '12',
-  floorWidth: '14',
-  surfaces: { walls:true, ceiling:false, trim:false, floor:false },
-  product: 'BM Regal Select (Int)',   // string matching a PRODUCTS entry name
-  coats: '2',
-  open: true              // is the card expanded?
-}
-```
+### Mishear correction (`VOICE_CORRECTIONS`)
+Applied to every transcript before command parsing. Fixes consistent Chrome mishears:
+- "while / well / whale" → **wall**
+- "sealing / filling / healing" → **ceiling**
+- "with / witch / weight" → **width**
+- "lane" → **length**
+- "stores / tours / boards / fords" → **doors**
+- "windbows / winos" → **windows**
+- "and a half / a half / half" → **point five** (fractions)
+- "and a quarter / a quarter" → **point two five**
 
-### Persisted data (localStorage keys, all suffixed `_v1`)
-| Key                          | Shape                                          |
-|------------------------------|------------------------------------------------|
-| `ingersoll_contacts_v1`      | array of `{id, name, phone, email, address, status, notes, ...}` |
-| `ingersoll_projects_v1`      | array of `{id, name, client, status, date, value, notes, tasks: [{id, text, done}]}` |
-| `ingersoll_notes_v1`         | array of `{id, title, body, createdAt, updatedAt}` |
-| `ingersoll_materials_v1`     | array of `{id, title, items: [{id, name, qty, bought}], createdAt, updatedAt}` |
-| `ingersoll_supplies_v1`      | array of `{id, name, category, price, coverage, notes}` |
-| `ingersoll_apt_pricing_v1`   | `{locations: [{id, name, units: [{id, type, price, ...}]}], activeLocId}` |
+When a correction fires, the voice strip shows the corrected text with a ✦ marker.
 
-**Versioning convention:** suffix every key with `_v1`. If a shape changes incompatibly, bump to `_v2` and write a migration. Don't silently mutate existing keys.
+### Number parsing (`parseSpokenNumber`)
+- Handles digits, word numbers, hyphenated compounds ("thirty-two"), feet-inches shorthand ("twelve five" = 12'5"), decimal ("twelve point five"), fractions ("twelve and a half")
+- Hyphenated compound resolves to whole number BEFORE feet-inches shorthand check
+- `wordToNum()` handles multi-word compounds and "hundred" as multiplier
 
-**`rooms` and `job` are NOT persisted** — they live in memory only. This is intentional: each job is a fresh measurement session.
+### Measurement commands
+Flexible — keyword can come before OR after the number:
+- `wall 14` / `14 wall` / `add wall 14` / `set wall fourteen`
+- `height 9` / `ceiling height 9` / `room height nine`
+- `length 20` / `floor length twenty`
+- `width 16` / `floor width sixteen`
+- `ceiling 8` (maps to height)
+- Leading fillers stripped: add / set / put / do / record / enter / mark
 
-### Pricing constants (lines 20–31 of the JS)
-```js
-const PRODUCTS = [/* 8 paint products with name + price + coverage */];
-const LABOR    = { walls:1.85, ceiling:1.65, trim:3.50 };  // $/sf or $/lf per coat
-const MARKUP   = 1.20;                                      // 20% materials markup
-```
+Target always routes to whichever room card is currently open.
 
-Door / window pricing defaults: **$75/door, $50/window** — these match James's standard bids. Stored on the `job` object, editable per session.
+### Undo
+`undo` / `scratch that` / `oops` / `wrong` / `clear` / `clear that` — removes the last wall added or blanks the last field filled.
 
----
+### Room naming
+Interior: `name room kitchen` / `call this room master bedroom` / `room name living room`
+Exterior: `front side` / `left side` / `name it garage` / `call it back`
 
-## 8. Key calculations (in `calc(room)`)
+### Other commands
+- Doors: `six doors` / `doors six` / `add seventeen doors`
+- Windows: `eight windows` / `put twelve windows`
+- Navigation: `estimator` / `clients` / `projects` / `notes` / `materials` / `apt pricing`
+- Add new: `add room` / `add client` / `add project` / `add note` / `add material`
+- Exterior: `siding forty by nine` / `six shutters` / `railing thirty` / `power wash 250`
+- Exterior advance: `next side` / `next` / `done`
 
-For each room with toggleable surfaces:
-- **Walls SF** = perimeter × height (perimeter = sum of all wall lengths)
-- **Ceiling SF** = floorLength × floorWidth
-- **Floor SF** = floorLength × floorWidth
-- **Trim LF** = perimeter
-- **Gallons** = totalSF × coats ÷ product.coverage, rounded up
-- **Materials cost** = gallons × product.price × MARKUP
-- **Labor cost** = (wallSF × LABOR.walls + ceilingSF × LABOR.ceiling + ...) × coats
-- **Door/window extras** = job.doorCount × job.doorPrice + job.winCount × job.winPrice. **Rolls into LABOR total** (not materials), since the per-unit rate is labor-only — paint comes from the bulk gallon calc.
-
-`recalcAll()` runs after every input change and updates the totals strip + bid output if visible.
+### Voice functions
+`toggleVoice`, `startVoice`, `stopVoice`, `processVoiceCommand`, `applyVoiceCorrections`, `parseSpokenNumber`, `wordToNum`, `wordToNumSingle`
 
 ---
 
-## 9. Voice commands
-
-Implemented in `processVoiceCommand(text)`. Patterns are case-insensitive and support natural variations including leading filler verbs ("add", "put", "set", "make it", "do", "gimme", "change to").
-
-| Category       | Example phrases                                                     |
-|----------------|---------------------------------------------------------------------|
-| Measurements   | "wall fourteen", "wall twelve five" (12'5"), "height nine", "length twenty", "width sixteen" |
-| Doors/Windows  | "six doors", "doors six", "add seventeen doors", "put twelve windows" |
-| Switch tabs    | "estimator", "clients", "projects", "materials", "notes", "apt pricing" |
-| Add new        | "add room", "add client", "add project", "add note", "add materials" |
-| Actions        | "generate bid", "connect bluetooth"                                  |
-
-Spoken numbers ("seventeen", "twenty-five") are handled by `wordToNum()` and `parseSpokenNumber()`. The full cheat sheet is shown to the user in the ⚙ debug panel (first card).
-
-**When adding new voice patterns:** put them BEFORE the measurement section in `processVoiceCommand()` so specific commands win. Always include both word-order variants ("six doors" AND "doors six") plus filler-verb tolerance.
+## 9. Pricing defaults
+- Door = **$75 each**
+- Window = **$50 each**
+- Paint markup = **1.20× (20%)** — `const MARKUP = 1.20`
+- Do not change defaults; James edits per job when needed
 
 ---
 
-## 10. PWA infrastructure
+## 10. localStorage keys
+| Key | Contents |
+|-----|----------|
+| `ingersoll_active_job_v1` | Current active job snapshot |
+| `ingersoll_jobs_v1` | Array of named saved snapshots |
+| `ingersoll_rates_v1` | Interior labor rates object |
+| `ingersoll_ext_rates_v1` | Exterior labor rates object |
+| `ingersoll_contacts_v1` | Contacts/clients array |
+| `ingersoll_projects_v1` | Projects array |
+| `ingersoll_notes_v1` | Notes array |
+| `ingersoll_materials_v1` | Materials lists array |
+| `ingersoll_apt_pricing_v1` | Apt pricing locations/units |
+| `ingersoll_supplies_v1` | Supplies (apt sub-section) |
 
-### `manifest.json`
-- `start_url: ./PaintPro-ZFold.html`
-- `display: standalone` (full-screen, no browser chrome)
-- `theme_color: #2baae1`
-- `background_color: #0d1117`
-- 4 icon entries: two regular (`any`), two maskable
-
-### `sw.js` (service worker)
-- **Cache name:** `paintpro-v1` — **bump this version number** if the service worker logic itself changes (forces re-install on existing devices)
-- **Strategy:** network-first for HTML (so updates show immediately when online), cache-first for static assets (icons, manifest)
-- **Offline fallback:** if the user is offline, falls back to cached `PaintPro-ZFold.html`
-- **App shell:** pre-cached on install
-
-### Install prompt
-Custom banner shown via `beforeinstallprompt` event handler at the bottom of the HTML. Dismissal is stored as `pwa_install_dismissed=1` in localStorage so it doesn't nag.
+IndexedDB: `paintpro-photos` database, object store `photos`, keyed by photo ID string.
 
 ---
 
-## 11. Development workflow
-
-### James's normal workflow (production)
-1. Open chat with Claude on phone
-2. Describe a feature or bug
-3. Claude provides updated `PaintPro-ZFold.html`
-4. James downloads it, opens GitHub on phone (or laptop), navigates to `digitalcheesephotography-dev/paintpro/edit/main/PaintPro-ZFold.html`
-5. Ctrl+A → Delete → paste new content → Commit
-6. Netlify auto-deploys in ~60 seconds
-7. Hard-refresh on phone
-
-**PWA infrastructure files (manifest, sw, icons) are uploaded once via the repo's main page → Add file → Upload files.** They rarely change.
-
-### Local testing (when Claude makes changes)
-The HTML uses Web Bluetooth, Web Speech, and Service Workers — these require **HTTP/HTTPS**, not `file://`. To test locally:
-
-```bash
-cd /path/to/repo
-python3 -m http.server 8765
-# Then navigate to http://localhost:8765/PaintPro-ZFold.html
-```
-
-For automated tests, Playwright is the standard:
-```bash
-# Available at /home/claude/.npm-global/lib/node_modules/playwright
-# Use mobile viewport: { width: 380, height: 800 }
-# Headless Chrome
-```
-
-### Verifying changes before delivering
-Run all three before saying "done":
-1. **Syntax check** — extract the JS block, run `node --check`
-2. **Headless render** — load via Playwright, confirm zero JS errors and key UI elements visible
-3. **Feature-specific test** — simulate the exact user interaction (click, fill, voice command) and verify expected output
-
-### Editing the HTML
-- `str_replace` is the preferred tool — small, targeted edits keep diffs reviewable
-- For large new features (new sub-section, new modal), edits typically come in 3–5 chunks: HTML markup, JS state, JS functions, voice commands, CSS additions if needed
-- **Always view the current file state before str_replace** — earlier views go stale after edits
-
----
-
-## 12. Communication preferences (the user)
-
-James:
-- **Uses voice-to-text.** Messages are brief, sometimes fragmented, with occasional speech recognition errors (e.g. "stores" for "doors", "weather" for "whether")
-- **Prefers ready-to-use outputs** with minimal back-and-forth. When asking clarifying questions, use `ask_user_input_v0` with tappable options — typing on mobile is friction
-- **When errors accumulate, prefers a full restart** of a feature over incremental fixes
-- **Values directness and competence.** Skip preamble, lead with the answer
-- **Treats Claude as a working collaborator**, not a chatbot — references shared history naturally ("we were working on…", "remember when…")
-- **Operates on a tight schedule.** Don't over-engineer. Don't ask 5 questions when 1 will do. Don't ask any question if the answer is obviously inferable
-
-### What James tends to want
-- Concrete file deliverables (HTML, DOCX, PDF) over advice
-- Bids and marketing materials matching his strict format rules (section 5)
-- Real-world prices, dates, names — not placeholders
-- Things that work first time on his phone, not theoretical solutions
-
-### When in doubt
-Build the most reasonable interpretation, deliver it, and offer to adjust. Don't block on questions James doesn't care about.
-
----
-
-## 13. Known patterns & lessons learned
-
-### CSS pitfalls
-- **Watch out for orphaned `@media` blocks.** A missing `@media print {` opener once caused a complete black-screen bug where all the print-only "hide everything except bid" rules applied to the screen view. If editing CSS structure, verify brace balance and that every print-style rule is properly wrapped.
-
-### Voice recognition
-- Web Speech sometimes mishears domain-specific words ("doors" → "stores", "stairs"). Fuzzy matching can be added if a specific word consistently fails for James in the field.
-- Voice patterns should always strip leading filler verbs before matching ("add six doors" works the same as "six doors").
-
-### Service worker cache
-- Bumping `CACHE = 'paintpro-v1'` to `v2` forces a re-install for all existing PWA users. Use this when service worker logic changes, NOT for routine HTML edits (those are network-first).
-
-### Bluetooth
-- Requires HTTPS — won't work on `file://`. Netlify provides HTTPS automatically.
-- The DISTO D2's BLE characteristics aren't well-documented; the app uses a candidate list (`BLE_CANDIDATES`) and falls back to subscribing to every notify characteristic.
-
-### Mobile viewport quirks
-- The Z Fold 5's narrow-screen mode is ~380px wide. Test against this width in Playwright.
-- The on-screen keyboard pushes the BT bar up — that's handled by `--safe-b` and the sticky positioning.
-
-### Default pricing
-- Door = $75 each (Cedarwood-style standard)
-- Window = $50 each
-- These are James's typical rates. Don't change defaults; he edits per job when needed.
-
----
-
-## 14. Function map (quick reference)
-
-Grouped by domain. All functions live in the single `<script>` block.
+## 11. Function map (quick reference)
 
 ### Initialization & UI
-`addRoom`, `removeRoom`, `setOpen`, `toggleOpen`, `renderRoom`, `renderWalls`, `addWall`, `removeWall`, `updateWall`, `updatePerimeterDisplay`, `refreshRoomSelect`, `switchTab`, `switchSubnav`, `toggleSurf`, `updateField`, `updateJobField`, `fmt`, `showToast`
+`addRoom`, `nextRoom`, `removeRoom`, `setOpen`, `toggleOpen`, `renderRoom`, `renderAllRooms`, `renderWalls`, `addWall`, `removeWall`, `updateWall`, `updatePerimeterDisplay`, `refreshRoomSelect`, `switchTab`, `switchSubnav`, `toggleSurf`, `updateField`, `updateJobField`, `fmt`, `showToast`
+
+### Auto-save & job snapshots
+`getJobSnapshot`, `saveActiveJob`, `markDirty`, `loadActiveJob`, `applyJobData`, `updateSaveIndicator`, `syncJobBadge`, `jobsLoad`, `jobsSave`, `openJobsModal`, `closeJobsModal`, `renderJobsList`, `saveSnapshot`, `loadSnapshot`, `deleteSnapshot`, `startNewJob`
+
+### Interior/Exterior mode
+`switchMode`, `renderAllRooms`, `modeRates` (+ `SURF_LABELS`, `RATE_LABELS`, `extRates`, `loadExtRates`, `saveExtRates`)
+
+### Photos
+`photoDBOpen`, `photoPut`, `photoGet`, `photoDeleteDB`, `photoGetAll`, `compressImage`, `addPhotos`, `deletePhoto`, `renderJobPhotos`, `renderRoomPhotos`, `viewPhoto`, `closeLightbox`, `toggleBidPhotos`, `hydratePhotos`
+
+### Backup & restore
+`buildBackup`, `backupToDrive`, `restoreFromBackup`
 
 ### Calculation & bid generation
 `calc`, `recalcAll`, `recalcRoom`, `jobExtras`, `renderBid`, `toggleBid`, `shareBid`, `saveClientFromBid`
 
+### Labor rates
+`loadRates`, `saveRates`, `syncRatesUI`, `toggleRatesCard`, `updateGlobalRate`, `toggleRoomRates`, `updateRoomRate`
+
 ### Bluetooth
-`connectBT`, `disconnectBT`, `handleBtButton`, `setBtnState`, `setStatus`, `charProps`, `onMeasurement`, `onBTDrop`, `applyMeasurement`, `setReshootTarget`, `openDebug`, `closeDebug`, `dbgLog`, `clearLog`, `updateDebugStatus`, `sendManual`
+`connectBT`, `disconnectBT`, `handleBtButton`, `setBtnState`, `setStatus`, `charProps`, `onMeasurement`, `onBTDrop`, `applyMeasurement`, `setReshootTarget`, `armDimShot`, `openDebug`, `closeDebug`, `dbgLog`, `clearLog`, `updateDebugStatus`, `sendManual`, `showServices`
 
 ### Voice
-`toggleVoice`, `startVoice`, `stopVoice`, `processVoiceCommand`, `parseSpokenNumber`, `wordToNum`
+`toggleVoice`, `startVoice`, `stopVoice`, `processVoiceCommand`, `applyVoiceCorrections`, `parseSpokenNumber`, `wordToNum`, `wordToNumSingle`
 
 ### Contacts (Clients sub-tab)
 `loadContacts`, `saveContacts`, `renderContacts`, `openContactModal`, `closeContactModal`, `saveContact`, `deleteContact`, `buildContactCard`, `buildQuickTexts`, `toggleQuickTexts`, `setStatusFilter`, `showServices`
@@ -378,13 +315,75 @@ Grouped by domain. All functions live in the single `<script>` block.
 
 ---
 
+## 12. Editing workflow
+
+- **Deployment method:** Navigate to `PaintPro-ZFold.html` in GitHub web editor → Ctrl+A → paste entire file → commit to `main` → Netlify auto-deploys in ~60 seconds
+- The file is ~360 KB with an embedded base64 logo — too large for Google Drive MCP upload; use GitHub web editor
+- `str_replace` is the preferred tool for Claude Code — small, targeted edits keep diffs reviewable
+- For large new features, edits typically come in 3-5 chunks: HTML markup, JS state, JS functions, voice commands, CSS additions if needed
+- **Always view the current file state before str_replace** — earlier views go stale after edits
+
+---
+
+## 13. Communication preferences (the user)
+
+James:
+- **Uses voice-to-text.** Messages are brief, sometimes fragmented, with occasional speech recognition errors (e.g. "stores" for "doors", "weather" for "whether")
+- **Prefers ready-to-use outputs** with minimal back-and-forth. When asking clarifying questions, use `ask_user_input_v0` with tappable options — typing on mobile is friction
+- **When errors accumulate, prefers a full restart** of a feature over incremental fixes
+- **Values directness and competence.** Skip preamble, lead with the answer
+- **Treats Claude as a working collaborator**, not a chatbot — references shared history naturally ("we were working on…", "remember when…")
+- **Operates on a tight schedule.** Don't over-engineer. Don't ask 5 questions when 1 will do. Don't ask any question if the answer is obviously inferable
+
+### What James tends to want
+- Concrete file deliverables (HTML, DOCX, PDF) over advice
+- Bids and marketing materials matching his strict format rules (section 5)
+- Real-world prices, dates, names — not placeholders
+- Things that work first time on his phone, not theoretical solutions
+
+### When in doubt
+Build the most reasonable interpretation, deliver it, and offer to adjust. Don't block on questions James doesn't care about.
+
+---
+
+## 14. Known patterns & lessons learned
+
+### CSS pitfalls
+- **Watch out for orphaned `@media` blocks.** A missing `@media print {` opener once caused a complete black-screen bug where all the print-only "hide everything except bid" rules applied to the screen view. If editing CSS structure, verify brace balance and that every print-style rule is properly wrapped.
+
+### Voice recognition
+- Web Speech sometimes mishears domain-specific words. The `VOICE_CORRECTIONS` table handles the most common ones. If a new word consistently fails, add it there first.
+- Voice patterns should always strip leading filler verbs before matching.
+- **Number parser must handle hyphenated compounds.** Chrome returns "thirty-two" with a hyphen. `wordToNum`/`parseSpokenNumber` normalize hyphens and resolve compounds. A hyphenated form resolves to the whole number (32) while a *spaced* "thirty two" is treated as the feet-inches shorthand (30'2"). Don't break this disambiguation.
+- Voice is continuous (`recognition.continuous = true`, restarts on `onend`) — mic stays on between commands.
+- `maxAlternatives = 3` — the best alternative (one whose corrected form contains a known keyword) is selected, not just the top guess.
+- `voiceLastMeasurement` tracks the last measurement for undo; reset to `null` after undo or when voice stops.
+
+### Service worker cache
+- Bumping `CACHE = 'paintpro-v1'` to `v2` forces a re-install for all existing PWA users. Use this when service worker logic changes, NOT for routine HTML edits (those are network-first).
+
+### Bluetooth
+- Requires HTTPS — won't work on `file://`. Netlify provides HTTPS automatically.
+- The DISTO D2's BLE characteristics aren't well-documented; the app uses a candidate list (`BLE_CANDIDATES`) and falls back to subscribing to every notify characteristic.
+- **Measurement discoverability matters.** Every measurable field should have its own 📐 shoot button rather than relying on the dropdown.
+
+### Data persistence
+- The active job auto-saves to `ingersoll_active_job_v1` on every change. **Anything the user enters in the field must survive a phone reboot, accidental tab close, or low-battery shutdown.**
+- When adding any new persistent field, extend `getJobSnapshot()` and `applyJobData()` together.
+- A visible save indicator is part of the contract — silently saving without confirmation isn't enough.
+- Photos go to IndexedDB, not localStorage. Always call `hydratePhotos()` after `applyJobData()`.
+
+### Mobile viewport quirks
+- The Z Fold 5's narrow-screen mode is ~380px wide.
+- The on-screen keyboard pushes the BT bar up — handled by `--safe-b` and sticky positioning.
+
+---
+
 ## 15. Open questions / known TODOs
 
-Things discussed but not yet implemented (as of last update):
-
-- **Doors & Windows card placement.** Currently sits between "+ Add Room" and the Notes field. James was asked whether to move it (top of estimator / new tab / inside each room card) but hasn't decided yet.
-- **Logo-based icons deployed.** The PWA icons were regenerated from the actual Ingersoll Painting logo and are in the repo. Earlier "IP monogram" placeholder icons should be considered obsolete.
-- **Lowe's price lookup is intentionally NOT in the app.** Workflow is: build materials list in app → tap 📋 copy → paste into Claude chat → get prices back. Don't add live price lookup to the HTML.
+- **Doors & Windows card placement.** Currently sits between "+ Add Room" and the Notes field. James hasn't decided whether to move it (top of estimator / inside each room card / new tab).
+- **Logo-based icons deployed.** PWA icons were regenerated from the actual Ingersoll Painting logo. Earlier "IP monogram" placeholder icons are obsolete.
+- **Lowe's price lookup is intentionally NOT in the app.** Workflow: build materials list in app → tap 📋 copy → paste into Claude chat → get prices back. Don't add live price lookup to the HTML.
 
 ---
 
@@ -398,4 +397,4 @@ Things discussed but not yet implemented (as of last update):
 
 ---
 
-*Last updated: May 22, 2026. If you make substantial changes to the app structure, update this file in the same commit.*
+*Last updated: May 31, 2026 (voice reliability improvements: mishear correction table, undo command, interior room naming, suffix measurement patterns, maxAlternatives=3, fraction parsing). If you make substantial changes to the app structure, update this file in the same commit.*

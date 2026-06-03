@@ -287,8 +287,40 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .modal-delete{height:44px;width:100%;margin-top:8px;background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer}
 .status-select{height:var(--tap);font-size:15px}
 </style>
+<!-- Firebase SDK (compat build) — comment these 3 lines and clear FIREBASE_CONFIG.apiKey to disable sync -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
+
+<!-- ─── SIGN-IN SCREEN ────────────────────────────────────────────────────────
+     Only shown when Firebase is configured and the device isn't signed in yet.
+     Firebase persists auth in IndexedDB so sign-in is remembered — users only
+     see this once per browser/device. Set FIREBASE_CONFIG.apiKey to '' to skip.
+─────────────────────────────────────────────────────────────────────────────-->
+<div id="auth-screen" style="display:none;position:fixed;inset:0;z-index:9000;background:#0d1117;flex-direction:column;align-items:center;justify-content:center;padding:24px;font-family:'Barlow Condensed',sans-serif">
+  <div style="width:100%;max-width:360px">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:42px;color:#2baae1;text-align:center;letter-spacing:3px;margin-bottom:2px">PAINTPRO</div>
+    <div style="font-size:13px;color:#6b7a8d;text-align:center;margin-bottom:28px;letter-spacing:2px;text-transform:uppercase">Ingersoll Painting LLC</div>
+    <div style="background:#161b22;border:1px solid #252c3a;border-radius:12px;padding:24px">
+      <div style="font-size:17px;font-weight:600;color:#e2e8f0;margin-bottom:14px">Sign In</div>
+      <input id="auth-email" type="email" autocomplete="email" placeholder="Email address"
+             style="width:100%;background:#0d1117;border:1px solid #252c3a;border-radius:8px;padding:13px 14px;color:#e2e8f0;font-family:'Barlow Condensed',sans-serif;font-size:16px;margin-bottom:10px;outline:none;-webkit-appearance:none"
+             onkeydown="if(event.key==='Enter')document.getElementById('auth-password').focus()"/>
+      <input id="auth-password" type="password" autocomplete="current-password" placeholder="Password"
+             style="width:100%;background:#0d1117;border:1px solid #252c3a;border-radius:8px;padding:13px 14px;color:#e2e8f0;font-family:'Barlow Condensed',sans-serif;font-size:16px;margin-bottom:14px;outline:none;-webkit-appearance:none"
+             onkeydown="if(event.key==='Enter')signIn()"/>
+      <div id="auth-error" style="display:none;color:#e57373;font-size:14px;margin-bottom:12px;padding:8px 10px;background:rgba(192,57,43,.15);border-radius:6px;line-height:1.4"></div>
+      <button onclick="signIn()" id="auth-btn"
+              style="width:100%;background:#2baae1;color:#fff;border:none;border-radius:8px;height:52px;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;cursor:pointer">
+        SIGN IN
+      </button>
+    </div>
+    <div style="font-size:12px;color:#6b7a8d;text-align:center;margin-top:14px">Remembered on this device — won't ask again</div>
+  </div>
+</div>
+
 <div id="js-loading" style="position:fixed;inset:0;background:#0d1117;display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:14px">
   <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:#2baae1;letter-spacing:3px">INGERSOLL PAINTING</div>
   <div style="font-size:13px;color:#6b7a8d;letter-spacing:2px">Loading PaintPro…</div>
@@ -881,7 +913,10 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 <div id="debug-panel">
   <div class="dbg-header">
     <div class="dbg-title">Manual Entry &amp; Debug</div>
-    <button class="dbg-close" onclick="closeDebug()" aria-label="Close debug panel">✕ Close</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="signout-btn" onclick="signOut()" style="display:none;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:var(--font);font-size:13px;padding:6px 10px;cursor:pointer" aria-label="Sign out">Sign Out</button>
+      <button class="dbg-close" onclick="closeDebug()" aria-label="Close debug panel">✕ Close</button>
+    </div>
   </div>
 
   <!-- Voice Commands Cheat Sheet -->
@@ -1039,6 +1074,40 @@ const LISA_EMAIL = ''; // Set to Lisa's email for auto-BCC on bid emails (e.g. '
 // ─────────────────────────────────────────────────────────────────────────────
 const PRINT_HUB_TOPIC = ''; // e.g. 'ingersoll-print-james2026-abc'
 
+// ─── FIREBASE CONFIG ──────────────────────────────────────────────────────────
+//
+// Enables cross-device sync (phone + Lisa's PC) and the password sign-in screen.
+// Leave apiKey empty ('') for local-only mode — app works exactly as before.
+//
+// ONE-TIME SETUP:
+//   1. Go to https://console.firebase.google.com
+//   2. Create a project → Add a Web app → copy the config values below
+//   3. Authentication → Sign-in method → enable Email/Password
+//   4. Authentication → Users → Add user (business email + a strong password)
+//   5. Firestore Database → Create database (Production mode)
+//   6. Firestore → Rules → paste these rules and Publish:
+//
+//        rules_version = '2';
+//        service cloud.firestore {
+//          match /databases/{database}/documents {
+//            match /paintpro/{document} {
+//              allow read, write: if request.auth != null;
+//            }
+//          }
+//        }
+//
+//   7. Save changes here and push to GitHub. Sign in on each device once;
+//      Firebase remembers it via IndexedDB so it won't ask again.
+// ──────────────────────────────────────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey:            '',  // AIza... (Firebase Console → Project Settings → Your apps)
+  authDomain:        '',  // your-project.firebaseapp.com
+  projectId:         '',  // your-project
+  storageBucket:     '',  // your-project.appspot.com
+  messagingSenderId: '',  // 12-digit number
+  appId:             '',  // 1:...:web:...
+};
+
 // Labor rates ($/sf per coat; trim is $/linear ft). Editable + persisted as the
 // whole-job default. Individual rooms can override via room.rates.
 const RATES_KEY = 'ingersoll_rates_v1';
@@ -1093,9 +1162,166 @@ function jobExtras() {
 }
 
 // ══════════════════════════════════════════════
+// FIREBASE AUTH + CROSS-DEVICE SYNC
+// ══════════════════════════════════════════════
+
+// Keys mirrored to Firestore. active_job is intentionally excluded — it's
+// per-session scratch state that would conflict between devices.
+const SYNC_KEYS = [
+  'ingersoll_contacts_v1',
+  'ingersoll_projects_v1',
+  'ingersoll_notes_v1',
+  'ingersoll_materials_v1',
+  'ingersoll_supplies_v1',
+  'ingersoll_apt_pricing_v1',
+  'ingersoll_rates_v1',
+];
+
+let _db = null;        // Firestore instance (null = local-only mode)
+let _syncSkip = false; // prevents Storage intercept from re-writing Firestore on incoming changes
+
+// Intercept localStorage writes and mirror them to Firestore transparently.
+// All existing save functions call localStorage.setItem — no changes needed anywhere else.
+(function() {
+  const _orig = Storage.prototype.setItem;
+  Storage.prototype.setItem = function(key, value) {
+    _orig.call(this, key, value);
+    if (_db && !_syncSkip && SYNC_KEYS.includes(key)) {
+      _db.collection('paintpro').doc(key)
+        .set({ value: String(value), updatedAt: Date.now() })
+        .catch(() => {}); // silently queued when offline; Firestore persistence replays on reconnect
+    }
+  };
+})();
+
+function initFirebase() {
+  if (!FIREBASE_CONFIG.apiKey) {
+    // No Firebase configured — run local-only (same as before Firebase was added)
+    bootApp();
+    return;
+  }
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    const auth = firebase.auth();
+    // LOCAL persistence = IndexedDB — user stays signed in across page reloads / PWA restarts
+    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        // Signed in — initialize Firestore, boot, start sync
+        document.getElementById('auth-screen').style.display = 'none';
+        _db = firebase.firestore();
+        // Offline persistence: data cached locally, syncs automatically when back online
+        _db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+        // Reveal sign-out button in debug panel
+        const soBtn = document.getElementById('signout-btn');
+        if (soBtn) soBtn.style.display = 'inline-block';
+        bootApp();
+        setupFirestoreSync();
+      } else {
+        // Not signed in — show sign-in screen
+        const s = document.getElementById('auth-screen');
+        s.style.display = 'flex';
+      }
+    });
+  } catch(e) {
+    console.warn('[Firebase] init error, falling back to local mode:', e);
+    bootApp();
+  }
+}
+
+async function signIn() {
+  const email  = (document.getElementById('auth-email').value  || '').trim();
+  const pass   =  document.getElementById('auth-password').value || '';
+  const errEl  =  document.getElementById('auth-error');
+  const btn    =  document.getElementById('auth-btn');
+
+  errEl.style.display = 'none';
+  if (!email || !pass) {
+    errEl.textContent = 'Enter your email and password.';
+    errEl.style.display = 'block';
+    return;
+  }
+  btn.textContent = 'SIGNING IN...';
+  btn.disabled = true;
+
+  try {
+    await firebase.auth().signInWithEmailAndPassword(email, pass);
+    // onAuthStateChanged fires next and calls bootApp()
+  } catch(e) {
+    btn.textContent = 'SIGN IN';
+    btn.disabled = false;
+    const msgs = {
+      'auth/user-not-found':         'No account found with that email.',
+      'auth/wrong-password':         'Incorrect password.',
+      'auth/invalid-email':          'Invalid email address.',
+      'auth/too-many-requests':      'Too many attempts. Try again in a few minutes.',
+      'auth/network-request-failed': 'No internet connection. Check your signal.',
+      'auth/invalid-credential':     'Incorrect email or password.',
+    };
+    errEl.textContent = msgs[e.code] || ('Sign in failed: ' + (e.message || e.code));
+    errEl.style.display = 'block';
+  }
+}
+
+function signOut() {
+  if (!FIREBASE_CONFIG.apiKey) return;
+  try { firebase.auth().signOut().then(() => location.reload()); }
+  catch(e) { location.reload(); }
+}
+
+function setupFirestoreSync() {
+  if (!_db) return;
+
+  SYNC_KEYS.forEach(key => {
+    // First load: pull Firestore data if local is empty; push local up if Firestore is empty
+    _db.collection('paintpro').doc(key).get().then(snap => {
+      const fsVal = (snap.exists && snap.data()?.value) ? snap.data().value : null;
+      const local = localStorage.getItem(key);
+      if (fsVal && (!local || local === '[]' || local === 'null')) {
+        _syncSkip = true;
+        localStorage.setItem(key, fsVal);
+        _syncSkip = false;
+        reloadFromSync(key);
+      } else if (local && !fsVal) {
+        _db.collection('paintpro').doc(key)
+          .set({ value: local, updatedAt: Date.now() })
+          .catch(() => {});
+      }
+    }).catch(() => {});
+
+    // Real-time listener: apply changes that arrived from another device
+    _db.collection('paintpro').doc(key).onSnapshot(snap => {
+      if (!snap.exists || !snap.data()?.value) return;
+      if (snap.metadata.hasPendingWrites) return; // our own write echoed back — skip
+      const incoming = snap.data().value;
+      if (incoming === localStorage.getItem(key)) return;
+      _syncSkip = true;
+      localStorage.setItem(key, incoming);
+      _syncSkip = false;
+      reloadFromSync(key);
+    });
+  });
+}
+
+function reloadFromSync(key) {
+  try {
+    switch(key) {
+      case 'ingersoll_contacts_v1':    loadContacts();   renderContacts();  updateFollowupBadge(); break;
+      case 'ingersoll_projects_v1':    projLoad();       renderProjects();  break;
+      case 'ingersoll_notes_v1':       notesLoad();      renderNotes();     break;
+      case 'ingersoll_materials_v1':   materialsLoad();  renderMaterials(); break;
+      case 'ingersoll_supplies_v1':    supplyLoad();     renderSupplies();  break;
+      case 'ingersoll_apt_pricing_v1': aptLoad();        aptRender();       break;
+      case 'ingersoll_rates_v1':       rates = loadRates(); syncRatesUI(); break;
+    }
+  } catch(e) { console.warn('[Sync] reloadFromSync', key, e); }
+}
+
+// ══════════════════════════════════════════════
 // BOOT
 // ══════════════════════════════════════════════
-window.addEventListener('DOMContentLoaded', () => {
+
+function bootApp() {
   // Clear loading screen
   const loader = document.getElementById('js-loading');
   if (loader) loader.remove();
@@ -1140,7 +1366,9 @@ window.addEventListener('DOMContentLoaded', () => {
     return;
   }
   dbgLog('Web Bluetooth ready. Tap "Connect DISTO" to scan.');
-});
+}
+
+window.addEventListener('DOMContentLoaded', () => { initFirebase(); });
 
 // ══════════════════════════════════════════════
 // BLUETOOTH

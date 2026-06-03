@@ -90,7 +90,7 @@ except ImportError:
 
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 # Must match the PRINT_HUB_TOPIC constant in PaintPro-ZFold.html exactly.
-TOPIC = ''  # e.g. 'ingersoll-print-james2026-abc'
+TOPIC = 'ingersoll-print-7h112nufd393'
 
 # Port for the local web server (no need to change this unless 9191 is in use)
 PORT = 9191

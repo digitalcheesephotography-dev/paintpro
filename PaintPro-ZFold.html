@@ -1205,7 +1205,13 @@ function initFirebase() {
     const auth = firebase.auth();
     // LOCAL persistence = IndexedDB — user stays signed in across page reloads / PWA restarts
     auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+    // Safety net: if Firebase auth never responds (e.g. no signal on first load), boot anyway after 6s
+    let _booted = false;
+    const _authTimeout = setTimeout(() => {
+      if (!_booted) { _booted = true; bootApp(); }
+    }, 6000);
     auth.onAuthStateChanged(user => {
+      clearTimeout(_authTimeout);
       if (user) {
         // Signed in — initialize Firestore, boot, start sync
         document.getElementById('auth-screen').style.display = 'none';
@@ -1215,8 +1221,7 @@ function initFirebase() {
         // Reveal sign-out button in debug panel
         const soBtn = document.getElementById('signout-btn');
         if (soBtn) soBtn.style.display = 'inline-block';
-        bootApp();
-        setupFirestoreSync();
+        if (!_booted) { _booted = true; bootApp(); setupFirestoreSync(); }
       } else {
         // Not signed in — remove loading screen and show sign-in screen
         const loader = document.getElementById('js-loading');
@@ -1572,8 +1577,22 @@ function onMeasurement(evt) {
   applyMeasurement(feet, disp);
 }
 
+// ── Speak measurement aloud ("12 foot 6") ────────
+function speakMeasurement(feet) {
+  if (!window.speechSynthesis) return;
+  const ft  = Math.floor(feet);
+  const ins = Math.round((feet - ft) * 12);
+  const text = ins === 0 ? `${ft} foot` : `${ft} foot ${ins}`;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.rate = 1.05;
+  utt.volume = 1.0;
+  window.speechSynthesis.speak(utt);
+}
+
 // ── Apply to selected field ───────────────────────
 function applyMeasurement(feet, disp) {
+  speakMeasurement(feet);
   document.getElementById('last-reading').textContent = disp;
   const field   = document.getElementById('target-field').value;
   const roomIdx = parseInt(document.getElementById('target-room').value);

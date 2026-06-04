@@ -3019,7 +3019,7 @@ async function analyzeRoomPhoto(roomId, input) {
         'anthropic-dangerous-allow-browser': 'true',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 512,
         messages: [{
           role: 'user',
@@ -3074,7 +3074,7 @@ Use typical residential proportions if unsure. Omit a field only if you truly ca
     showToast(`📷 AI filled: ${filled.join(', ')} — review and adjust`);
   } catch(e) {
     console.error('[AI Photo]', e);
-    showToast('AI analysis failed — check API key in ⚙ Settings', 'warn');
+    showToast('AI failed: ' + (e.message || 'unknown error'), 'warn');
   }
 }
 

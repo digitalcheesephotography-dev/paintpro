@@ -1008,6 +1008,20 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div class="dbg-card-title">Raw BLE Data Log</div>
     <div id="dbg-log">Waiting…</div>
   </div>
+
+  <!-- AI Settings -->
+  <div class="dbg-card">
+    <div class="dbg-card-title">🤖 AI Photo Estimator</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5">
+      Enter your Anthropic API key to enable "📷 AI Estimate from Photo" on each room card.
+      Get a free key at <strong style="color:var(--blue)">console.anthropic.com</strong>.
+      Saved to this device only.
+    </p>
+    <input type="password" id="anthropic-key-input" placeholder="sk-ant-api03-..."
+           style="width:100%;background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:11px 12px;color:var(--text);font-family:var(--font);font-size:14px;margin-bottom:8px"
+           oninput="localStorage.setItem('ingersoll_anthropic_key_v1',this.value)"/>
+    <div style="font-size:11px;color:var(--muted)">Key is stored locally on this device and never sent anywhere except Anthropic's API.</div>
+  </div>
 </div>
 
 <script>
@@ -1343,6 +1357,9 @@ function bootApp() {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', markDirty);
   });
+  // ZIP-code rate suggestion when address is entered
+  const addrEl = document.getElementById('job-address');
+  if (addrEl) addrEl.addEventListener('blur', () => suggestRatesForAddress(addrEl.value));
 
   // Safety net: flush a synchronous save whenever the app is hidden or about to unload
   document.addEventListener('visibilitychange', () => {
@@ -1689,7 +1706,12 @@ function updateDebugStatus() {
 // ══════════════════════════════════════════════
 // DEBUG PANEL
 // ══════════════════════════════════════════════
-function openDebug()  { document.getElementById('debug-panel').classList.add('show'); updateDebugStatus(); }
+function openDebug()  {
+  document.getElementById('debug-panel').classList.add('show');
+  updateDebugStatus();
+  const keyEl = document.getElementById('anthropic-key-input');
+  if (keyEl) keyEl.value = localStorage.getItem('ingersoll_anthropic_key_v1') || '';
+}
 function closeDebug() { document.getElementById('debug-panel').classList.remove('show'); }
 function clearLog()   { document.getElementById('dbg-log').textContent = ''; }
 function dbgLog(msg)  {
@@ -1833,6 +1855,15 @@ function renderRoom(room, idx) {
         <div><div class="sum-label">Materials</div><div class="sum-val" id="${room.id}_smat">—</div></div>
         <div><div class="sum-label">Labor</div><div class="sum-val" id="${room.id}_slab">—</div></div>
       </div>
+
+      <!-- AI photo analysis -->
+      <input type="file" id="${room.id}_photoinput" accept="image/*" capture="environment" style="display:none"
+             onchange="analyzeRoomPhoto('${room.id}',this)"/>
+      <button onclick="document.getElementById('${room.id}_photoinput').click()"
+              style="width:100%;height:44px;background:var(--card);border:1px dashed var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:14px;cursor:pointer;margin-bottom:8px"
+              aria-label="AI estimate from photo">
+        📷 AI Estimate from Photo
+      </button>
 
       <!-- Done & advance to next room -->
       <button class="next-room-btn" onclick="nextRoom('${room.id}')" aria-label="Done with this room, go to next">
@@ -2721,6 +2752,10 @@ function buildQuickTexts(c) {
 
   const templates = [
     {
+      label: '📞 Sorry I missed your call',
+      body:  `Hi ${name}, this is James Bailey with Ingersoll Painting LLC. I'm sorry I missed your call! I was on a job site and couldn't pick up. Please feel free to text me back or call at (315) 952-8259 and I'll get right back to you. I'd love to help with your project!${sig}`
+    },
+    {
       label: '📋 Following up on your estimate',
       body:  `Hi ${name}, this is James Bailey with Ingersoll Painting LLC. I wanted to follow up on the estimate I provided for your project. We take great pride in delivering quality work and would love the opportunity to work with you. Please don't hesitate to reach out with any questions — I'm happy to go over the details at your convenience. Looking forward to hearing from you!${sig}`
     },
@@ -2871,6 +2906,144 @@ function showToast(msg, type='') {
 
 // ══════════════════════════════════════════════
 // GPS NEARBY CLIENT
+// ══════════════════════════════════════════════
+// AI PHOTO-TO-ESTIMATE
+// ══════════════════════════════════════════════
+
+async function analyzeRoomPhoto(roomId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const apiKey = localStorage.getItem('ingersoll_anthropic_key_v1') || '';
+  if (!apiKey) {
+    showToast('Set your Anthropic API key in ⚙ Settings first', 'warn');
+    input.value = '';
+    return;
+  }
+  showToast('📷 Analyzing room…');
+  // Compress image to base64
+  const base64 = await new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      const max = 1024;
+      let w = img.width, h = img.height;
+      if (w > max || h > max) { if (w > h) { h = Math.round(h * max / w); w = max; } else { w = Math.round(w * max / h); h = max; } }
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      res(c.toDataURL('image/jpeg', 0.8).split(',')[1]);
+    };
+    img.src = URL.createObjectURL(file);
+  });
+  input.value = '';
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-allow-browser': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 512,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+            { type: 'text', text: `You are a painting estimator. Analyze this room photo and estimate dimensions in feet.
+Respond with ONLY valid JSON — no explanation, no markdown:
+{"walls":[w1,w2,w3,w4],"height":h,"floorLength":l,"floorWidth":w,"doors":d,"windows":win}
+- walls: array of wall widths you can see (best estimates in feet, include all 4 even if some are guessed from symmetry)
+- height: ceiling height in feet
+- floorLength: longer floor dimension in feet
+- floorWidth: shorter floor dimension in feet
+- doors: number of doors visible
+- windows: number of windows visible
+Use typical residential proportions if unsure. Omit a field only if you truly cannot estimate it.` }
+          ]
+        }]
+      })
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message);
+    const text = data.content?.[0]?.text || '';
+    const json = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || '{}');
+    const room = rooms.find(r => r.id === roomId);
+    if (!room) return;
+    let filled = [];
+    if (json.walls?.length) {
+      room.walls = json.walls.map(ft => ({ id: 'w'+Date.now()+Math.random(), ft: ft.toFixed(2) }));
+      renderWalls(room);
+      filled.push(`${json.walls.length} walls`);
+    }
+    if (json.height) {
+      room.height = json.height.toFixed(2);
+      const el = document.getElementById(`${roomId}_height`);
+      if (el) el.value = room.height;
+      filled.push(`height ${json.height}'`);
+    }
+    if (json.floorLength) {
+      room.floorLength = json.floorLength.toFixed(2);
+      const el = document.getElementById(`${roomId}_floorLength`);
+      if (el) el.value = room.floorLength;
+      filled.push(`length ${json.floorLength}'`);
+    }
+    if (json.floorWidth) {
+      room.floorWidth = json.floorWidth.toFixed(2);
+      const el = document.getElementById(`${roomId}_floorWidth`);
+      if (el) el.value = room.floorWidth;
+      filled.push(`width ${json.floorWidth}'`);
+    }
+    recalcRoom(roomId);
+    markDirty();
+    showToast(`📷 AI filled: ${filled.join(', ')} — review and adjust`);
+  } catch(e) {
+    console.error('[AI Photo]', e);
+    showToast('AI analysis failed — check API key in ⚙ Settings', 'warn');
+  }
+}
+
+// ══════════════════════════════════════════════
+// ZIP CODE RATE SUGGESTIONS
+// ══════════════════════════════════════════════
+
+// Maps first 3 digits of ZIP to a regional labor rate multiplier vs national avg
+const ZIP_REGIONS = {
+  '006':'PR','007':'PR','008':'PR','009':'PR',
+  '010':'MA','011':'MA','012':'MA','013':'MA','014':'MA','015':'MA','016':'MA','017':'MA','018':'MA','019':'MA','020':'MA','021':'MA','022':'MA','023':'MA','024':'MA','025':'MA','026':'MA','027':'MA',
+  '028':'RI','029':'RI',
+  '030':'NH','031':'NH','032':'NH','033':'NH','034':'NH','035':'NH','036':'NH','037':'NH','038':'NH',
+  '039':'ME','040':'ME','041':'ME','042':'ME','043':'ME','044':'ME','045':'ME','046':'ME','047':'ME','048':'ME','049':'ME',
+  '050':'VT','051':'VT','052':'VT','053':'VT','054':'VT','056':'VT','057':'VT','058':'VT','059':'VT',
+  '060':'CT','061':'CT','062':'CT','063':'CT','064':'CT','065':'CT','066':'CT','067':'CT','068':'CT','069':'CT',
+  '070':'NJ','071':'NJ','072':'NJ','073':'NJ','074':'NJ','075':'NJ','076':'NJ','077':'NJ','078':'NJ','079':'NJ','080':'NJ','081':'NJ','082':'NJ','083':'NJ','084':'NJ','085':'NJ','086':'NJ','087':'NJ','088':'NJ','089':'NJ',
+  '100':'NY','101':'NY','102':'NY','103':'NY','104':'NY','105':'NY','106':'NY','107':'NY','108':'NY','109':'NY','110':'NY','111':'NY','112':'NY','113':'NY','114':'NY','115':'NY','116':'NY','117':'NY','118':'NY','119':'NY','120':'NY','121':'NY','122':'NY','123':'NY','124':'NY','125':'NY','126':'NY','127':'NY','128':'NY','129':'NY','130':'NY','131':'NY','132':'NY','133':'NY','134':'NY','135':'NY','136':'NY','137':'NY','138':'NY','139':'NY','140':'NY','141':'NY','142':'NY','143':'NY','144':'NY','145':'NY','146':'NY','147':'NY','148':'NY','149':'NY',
+  '150':'PA','151':'PA','152':'PA','153':'PA','154':'PA','155':'PA','156':'PA','157':'PA','158':'PA','159':'PA','160':'PA','161':'PA','162':'PA','163':'PA','164':'PA','165':'PA','166':'PA','167':'PA','168':'PA','169':'PA','170':'PA','171':'PA','172':'PA','173':'PA','174':'PA','175':'PA','176':'PA','177':'PA','178':'PA','179':'PA','180':'PA','181':'PA','182':'PA','183':'PA','184':'PA','185':'PA','186':'PA','187':'PA','188':'PA','189':'PA','190':'PA','191':'PA','192':'PA','193':'PA','194':'PA','195':'PA','196':'PA',
+};
+// Regional multipliers (relative to James's default rates as baseline)
+const REGION_RATES = {
+  MA:{walls:2.10,ceiling:1.85,trim:3.90}, RI:{walls:2.05,ceiling:1.80,trim:3.80},
+  NH:{walls:1.95,ceiling:1.75,trim:3.70}, ME:{walls:1.80,ceiling:1.60,trim:3.40},
+  VT:{walls:1.85,ceiling:1.65,trim:3.50}, CT:{walls:2.15,ceiling:1.90,trim:4.00},
+  NJ:{walls:2.20,ceiling:1.95,trim:4.10}, NY:{walls:2.05,ceiling:1.80,trim:3.80},
+  PA:{walls:1.90,ceiling:1.70,trim:3.60},
+};
+
+function suggestRatesForAddress(address) {
+  const zipMatch = address.match(/\b(\d{5})\b/);
+  if (!zipMatch) return;
+  const zip = zipMatch[1];
+  const prefix = zip.substring(0, 3);
+  const state = ZIP_REGIONS[prefix];
+  if (!state || !REGION_RATES[state]) return;
+  const regional = REGION_RATES[state];
+  const wallsDiff = regional.walls - rates.walls;
+  if (Math.abs(wallsDiff) < 0.10) return; // within 10¢ — no suggestion needed
+  const direction = wallsDiff > 0 ? 'above' : 'below';
+  const pct = Math.abs(Math.round(wallsDiff / regional.walls * 100));
+  showToast(`📍 ${state} regional avg: walls $${regional.walls.toFixed(2)}/sf — your rate is ${pct}% ${direction}. Tap Labor Rates to adjust.`);
+}
+
 // ══════════════════════════════════════════════
 let nearbyClientId = null;
 

@@ -4,7 +4,7 @@
 // Bump CACHE version only when the service worker logic itself changes — not for
 // routine HTML edits (those are handled by network-first already).
 
-const CACHE = 'paintpro-v1';
+const CACHE = 'paintpro-v2';
 
 const APP_SHELL = [
   './PaintPro-ZFold.html',

@@ -3074,7 +3074,7 @@ Use typical residential proportions if unsure. Omit a field only if you truly ca
     showToast(`📷 AI filled: ${filled.join(', ')} — review and adjust`);
   } catch(e) {
     console.error('[AI Photo]', e);
-    showToast('AI failed: ' + (e.message || 'unknown error'), 'warn');
+    alert('AI Photo Error:\n' + (e.message || 'unknown error') + '\n\nIf this says "Failed to fetch" — network issue.\nIf it says "invalid_api_key" — re-save your key in ⚙️ Settings.');
   }
 }
 

@@ -802,9 +802,12 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     </div>
     <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Anthropic API Key</label>
     <input type="password" id="settings-anthropic-key" placeholder="sk-ant-api03-..."
-           style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:13px 14px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:10px"
-           oninput="localStorage.setItem('ingersoll_anthropic_key_v1',this.value);const s=document.getElementById('settings-key-status');if(s){s.textContent=this.value?'✓ Key saved':'';s.style.color='var(--green)'}"/>
-    <div id="settings-key-status" style="font-size:13px;color:var(--muted)"></div>
+           style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:13px 14px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:10px"/>
+    <button onclick="saveAnthropicKey()"
+            style="width:100%;height:50px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;margin-bottom:8px">
+      Save Key
+    </button>
+    <div id="settings-key-status" style="font-size:13px;color:var(--muted);text-align:center"></div>
   </div>
 
   <!-- Firebase / Account -->
@@ -1336,6 +1339,19 @@ function signOut() {
   if (!FIREBASE_CONFIG.apiKey) return;
   try { firebase.auth().signOut().then(() => location.reload()); }
   catch(e) { location.reload(); }
+}
+
+function saveAnthropicKey() {
+  const el  = document.getElementById('settings-anthropic-key');
+  const st  = document.getElementById('settings-key-status');
+  const key = (el ? el.value : '').trim();
+  if (!key) {
+    if (st) { st.textContent = 'Please paste your key first.'; st.style.color = 'var(--red)'; }
+    return;
+  }
+  localStorage.setItem('ingersoll_anthropic_key_v1', key);
+  if (st) { st.textContent = '✓ Key saved — AI photo estimator is ready'; st.style.color = 'var(--green)'; }
+  showToast('✓ API key saved');
 }
 
 function setupFirestoreSync() {

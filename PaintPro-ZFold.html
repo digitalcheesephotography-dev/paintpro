@@ -1369,10 +1369,20 @@ async function testAnthropicKey() {
   }
   if (st) { st.textContent = 'Testing…'; st.style.color = 'var(--muted)'; }
   try {
-    const resp = await fetch('https://lovely-kitsune-6c5c82.netlify.app/.netlify/functions/ai-analyze', {
+    // Small text-only test call to verify the key — no image needed
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ base64: 'test', apiKey: key }),
+      headers: {
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-allow-browser': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 5,
+        messages: [{ role: 'user', content: 'Hi' }],
+      }),
     });
     const data = await resp.json();
     if (data.error) {
@@ -1382,7 +1392,7 @@ async function testAnthropicKey() {
       if (st) { st.textContent = '✓ Key works — AI photo estimator is ready'; st.style.color = 'var(--green)'; }
     }
   } catch(e) {
-    if (st) { st.textContent = '✗ Network error: ' + e.message; st.style.color = 'var(--red)'; }
+    if (st) { st.textContent = '✗ Network error — check your connection'; st.style.color = 'var(--red)'; }
   }
 }
 
@@ -3042,12 +3052,46 @@ async function analyzeRoomPhoto(roomId, input) {
   });
   input.value = '';
   try {
-    const resp = await fetch('https://lovely-kitsune-6c5c82.netlify.app/.netlify/functions/ai-analyze', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ base64, apiKey }),
-    });
-    const data = await resp.json();
+    // Try proxy first; fall back to direct Anthropic call if proxy is down
+    let resp, data;
+    try {
+      resp = await fetch('https://lovely-kitsune-6c5c82.netlify.app/.netlify/functions/ai-analyze', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ base64, apiKey }),
+        signal: AbortSignal.timeout(8000),
+      });
+      data = await resp.json();
+    } catch(_proxyErr) {
+      // Proxy unreachable — call Anthropic directly
+      resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+          'anthropic-dangerous-allow-browser': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 512,
+          messages: [{ role: 'user', content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+            { type: 'text', text: `You are a painting estimator. Analyze this room photo and estimate dimensions in feet.
+Respond with ONLY valid JSON — no explanation, no markdown:
+{"walls":[w1,w2,w3,w4],"height":h,"floorLength":l,"floorWidth":w,"doors":d,"windows":win}
+- walls: array of 4 wall widths in feet
+- height: ceiling height in feet
+- floorLength: longer floor dimension in feet
+- floorWidth: shorter floor dimension in feet
+- doors: number of doors visible
+- windows: number of windows visible
+Use typical residential proportions if unsure.` }
+          ]}]
+        }),
+      });
+      data = await resp.json();
+    }
     if (data.error) throw new Error(data.error.message);
     const text = data.content?.[0]?.text || '';
     const json = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || '{}');

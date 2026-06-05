@@ -287,6 +287,17 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .modal-delete{height:44px;width:100%;margin-top:8px;background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer}
 .status-select{height:var(--tap);font-size:15px}
 
+/* ── Account Vault ── */
+.acct-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;transition:border-color .2s}
+.acct-service{font-size:16px;font-weight:700;margin-bottom:2px}
+.acct-user{font-size:13px;color:var(--muted)}
+.acct-pw{font-size:13px;font-family:'Courier New',monospace;letter-spacing:1px;margin-top:2px;word-break:break-all;color:var(--text)}
+.acct-url{font-size:11px;color:var(--blue);margin-top:3px;text-decoration:none;display:inline-block}
+.acct-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.acct-btn{height:36px;padding:0 14px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s}
+.acct-btn:hover{border-color:var(--blue);color:var(--blue)}
+.acct-btn.copy-done{border-color:var(--green);color:var(--green)}
+
 /* ── INT / EXT Mode toggle ── */
 .mode-toggle{display:grid;grid-template-columns:1fr 1fr;border-radius:10px;overflow:hidden;border:1.5px solid var(--border);margin-bottom:12px}
 .mode-btn{height:44px;background:transparent;border:none;color:var(--muted);font-family:var(--head);font-size:15px;letter-spacing:2px;cursor:pointer;transition:all .2s;line-height:1}
@@ -819,6 +830,35 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   </div>
 </div>
 
+<!-- ACCOUNT VAULT MODAL -->
+<div id="account-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:600;overflow-y:auto;padding:20px 16px calc(20px + var(--safe-b))">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:20px;max-width:520px;margin:0 auto">
+    <div style="font-family:var(--head);font-size:22px;color:var(--blue);letter-spacing:2px;margin-bottom:16px" id="account-modal-title">ADD ACCOUNT</div>
+    <input type="hidden" id="account-modal-id"/>
+    <label class="field" style="display:block;margin-bottom:10px"><span>Service / App Name</span>
+      <input type="text" id="acct-service" placeholder="e.g. Cloudflare, Anthropic, Firebase"/></label>
+    <label class="field" style="display:block;margin-bottom:10px"><span>Website URL</span>
+      <input type="url" id="acct-url-input" placeholder="https://dash.cloudflare.com"/></label>
+    <label class="field" style="display:block;margin-bottom:10px"><span>Username / Email</span>
+      <input type="text" id="acct-username" autocomplete="off" placeholder="you@example.com"/></label>
+    <label class="field" style="display:block;margin-bottom:4px"><span>Password</span>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center">
+        <input type="password" id="acct-password" autocomplete="new-password" placeholder="Enter password"/>
+        <button type="button" onclick="toggleAcctPwReveal()" id="acct-pw-eye"
+                style="height:44px;width:44px;background:var(--dark);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:18px;cursor:pointer;line-height:1">👁</button>
+      </div>
+    </label>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Stored only on this device in localStorage — never sent anywhere.</div>
+    <label class="field" style="display:block;margin-bottom:16px"><span>Notes</span>
+      <textarea id="acct-notes" rows="3" placeholder="e.g. Team plan, billing card on file, 2FA on Gmail..."></textarea></label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button onclick="saveAccount()" style="height:50px;background:var(--green);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Save</button>
+      <button onclick="closeAccountModal()" style="height:50px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">Cancel</button>
+    </div>
+    <button id="account-delete-btn" style="display:none;width:100%;height:44px;margin-top:8px;background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer" onclick="deleteAccount()">Delete Account</button>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <!-- SETTINGS SECTION -->
@@ -893,6 +933,20 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
       <div>Built for James Bailey · Hannibal, NY</div>
       <div style="margin-top:8px;color:var(--border)">v2026.06</div>
     </div>
+  </div>
+
+  <!-- Account Vault -->
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div style="font-family:var(--head);font-size:20px;color:var(--blue)">🔑 Account Vault</div>
+      <button onclick="openAccountModal(null)"
+              style="height:38px;padding:0 16px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer">
+        + Add
+      </button>
+    </div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">Usernames and passwords for all your app accounts. Tap 📋 to copy a password instantly.</div>
+    <div id="accounts-list"></div>
+    <div id="no-accounts" style="text-align:center;padding:20px;color:var(--muted);font-size:13px">No accounts saved yet — tap + Add</div>
   </div>
 
   <!-- Backup & Restore -->
@@ -3058,6 +3112,7 @@ function switchTab(tab) {
     if (pel) pel.value = pu;
     const pst = document.getElementById('settings-proxy-status');
     if (pst) { pst.textContent = pu ? '✓ Proxy URL saved' : ''; pst.style.color = 'var(--green)'; }
+    renderAccounts();
   }
 }
 
@@ -3449,6 +3504,7 @@ const BACKUP_KEYS = [
   'ingersoll_ext_rates_v1',
   'ingersoll_anthropic_key_v1',
   'ingersoll_proxy_url_v1',
+  'ingersoll_accounts_v1',
 ];
 
 function buildBackup() {
@@ -3495,6 +3551,146 @@ function restoreFromBackup(input) {
     }
   };
   reader.readAsText(file);
+}
+
+// ══════════════════════════════════════════════
+// ACCOUNT VAULT
+// ══════════════════════════════════════════════
+
+const ACCOUNTS_KEY = 'ingersoll_accounts_v1';
+
+function accountsLoad() {
+  try { return JSON.parse(localStorage.getItem(ACCOUNTS_KEY)) || []; } catch { return []; }
+}
+function accountsSave(arr) { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(arr)); }
+
+function renderAccounts() {
+  const accounts = accountsLoad();
+  const list = document.getElementById('accounts-list');
+  const empty = document.getElementById('no-accounts');
+  if (!list) return;
+  if (!accounts.length) {
+    list.innerHTML = '';
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  list.innerHTML = accounts.map(a => {
+    const maskedPw = a.password ? '••••••••' : '<span style="color:var(--border)">—</span>';
+    const urlEl = a.url ? `<a class="acct-url" href="${a.url}" target="_blank" rel="noopener">${a.url.replace(/^https?:\/\//,'')}</a>` : '';
+    const notesEl = a.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5">${a.notes}</div>` : '';
+    return `<div class="acct-card">
+      <div class="acct-service">${a.service || 'Unnamed'}</div>
+      ${a.username ? `<div class="acct-user">${a.username}</div>` : ''}
+      <div class="acct-pw" id="acct-pw-display-${a.id}">${maskedPw}</div>
+      ${urlEl}
+      ${notesEl}
+      <div class="acct-actions">
+        ${a.password ? `<button class="acct-btn" onclick="copyAcctPassword('${a.id}', this)">📋 Copy PW</button>
+        <button class="acct-btn" onclick="revealAcctPassword('${a.id}', this)">👁 Reveal</button>` : ''}
+        <button class="acct-btn" onclick="openAccountModal('${a.id}')">✏️ Edit</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openAccountModal(id) {
+  const modal = document.getElementById('account-modal');
+  const titleEl = document.getElementById('account-modal-title');
+  const delBtn = document.getElementById('account-delete-btn');
+  document.getElementById('account-modal-id').value = id || '';
+  document.getElementById('acct-service').value = '';
+  document.getElementById('acct-url-input').value = '';
+  document.getElementById('acct-username').value = '';
+  document.getElementById('acct-password').value = '';
+  document.getElementById('acct-notes').value = '';
+  document.getElementById('acct-password').type = 'password';
+  document.getElementById('acct-pw-eye').textContent = '👁';
+  if (id) {
+    const acct = accountsLoad().find(a => a.id === id);
+    if (acct) {
+      titleEl.textContent = 'EDIT ACCOUNT';
+      document.getElementById('acct-service').value = acct.service || '';
+      document.getElementById('acct-url-input').value = acct.url || '';
+      document.getElementById('acct-username').value = acct.username || '';
+      document.getElementById('acct-password').value = acct.password || '';
+      document.getElementById('acct-notes').value = acct.notes || '';
+      delBtn.style.display = '';
+    }
+  } else {
+    titleEl.textContent = 'ADD ACCOUNT';
+    delBtn.style.display = 'none';
+  }
+  modal.style.display = '';
+  setTimeout(() => document.getElementById('acct-service').focus(), 100);
+}
+
+function closeAccountModal() {
+  document.getElementById('account-modal').style.display = 'none';
+}
+
+function saveAccount() {
+  const id = document.getElementById('account-modal-id').value;
+  const service = document.getElementById('acct-service').value.trim();
+  if (!service) { showToast('Enter a service name'); return; }
+  const acct = {
+    id: id || ('acct_' + Date.now()),
+    service,
+    url: document.getElementById('acct-url-input').value.trim(),
+    username: document.getElementById('acct-username').value.trim(),
+    password: document.getElementById('acct-password').value,
+    notes: document.getElementById('acct-notes').value.trim(),
+    updatedAt: new Date().toISOString(),
+  };
+  let accounts = accountsLoad();
+  const idx = accounts.findIndex(a => a.id === acct.id);
+  if (idx >= 0) accounts[idx] = acct; else accounts.push(acct);
+  accountsSave(accounts);
+  closeAccountModal();
+  renderAccounts();
+  showToast(idx >= 0 ? '✅ Account updated' : '✅ Account saved');
+}
+
+function deleteAccount() {
+  const id = document.getElementById('account-modal-id').value;
+  if (!id) return;
+  if (!confirm('Delete this account?')) return;
+  const accounts = accountsLoad().filter(a => a.id !== id);
+  accountsSave(accounts);
+  closeAccountModal();
+  renderAccounts();
+  showToast('🗑 Account deleted');
+}
+
+function copyAcctPassword(id, btn) {
+  const acct = accountsLoad().find(a => a.id === id);
+  if (!acct || !acct.password) return;
+  navigator.clipboard.writeText(acct.password).then(() => {
+    btn.textContent = '✓ Copied!';
+    btn.classList.add('copy-done');
+    setTimeout(() => { btn.textContent = '📋 Copy PW'; btn.classList.remove('copy-done'); }, 2000);
+  }).catch(() => showToast('Copy failed — tap to try again'));
+}
+
+function revealAcctPassword(id, btn) {
+  const el = document.getElementById(`acct-pw-display-${id}`);
+  if (!el) return;
+  const acct = accountsLoad().find(a => a.id === id);
+  if (!acct) return;
+  if (btn.textContent.includes('Reveal')) {
+    el.textContent = acct.password || '—';
+    btn.textContent = '🙈 Hide';
+  } else {
+    el.textContent = '••••••••';
+    btn.textContent = '👁 Reveal';
+  }
+}
+
+function toggleAcctPwReveal() {
+  const inp = document.getElementById('acct-password');
+  const btn = document.getElementById('acct-pw-eye');
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
+  else { inp.type = 'password'; btn.textContent = '👁'; }
 }
 
 // ══════════════════════════════════════════════

@@ -15,6 +15,13 @@ export default {
       return new Response(null, { headers: CORS });
     }
 
+    if (request.method === 'GET') {
+      return new Response('PaintPro AI Proxy is running ✓', {
+        status: 200,
+        headers: { ...CORS, 'Content-Type': 'text/plain' },
+      });
+    }
+
     if (request.method !== 'POST') {
       return new Response('Method not allowed', { status: 405, headers: CORS });
     }

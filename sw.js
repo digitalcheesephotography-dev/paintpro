@@ -4,7 +4,7 @@
 // Bump CACHE version only when the service worker logic itself changes — not for
 // routine HTML edits (those are handled by network-first already).
 
-const CACHE = 'paintpro-v2';
+const CACHE = 'paintpro-v3';
 
 const APP_SHELL = [
   './PaintPro-ZFold.html',
@@ -39,6 +39,10 @@ self.addEventListener('activate', evt => {
 self.addEventListener('fetch', evt => {
   const { request } = evt;
   const url = new URL(request.url);
+
+  // Let external API calls (Anthropic, ntfy, Firebase, etc.) go straight to the
+  // browser's network stack — service worker interception breaks their CORS headers.
+  if (url.origin !== self.location.origin) return;
 
   // Network-first for the main HTML file — ensures updates are picked up
   if (url.pathname.endsWith('PaintPro-ZFold.html') || url.pathname.endsWith('/')) {

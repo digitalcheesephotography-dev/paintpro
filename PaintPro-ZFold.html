@@ -286,6 +286,12 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .modal-cancel{height:50px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer}
 .modal-delete{height:44px;width:100%;margin-top:8px;background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer}
 .status-select{height:var(--tap);font-size:15px}
+
+/* ── INT / EXT Mode toggle ── */
+.mode-toggle{display:grid;grid-template-columns:1fr 1fr;border-radius:10px;overflow:hidden;border:1.5px solid var(--border);margin-bottom:12px}
+.mode-btn{height:44px;background:transparent;border:none;color:var(--muted);font-family:var(--head);font-size:15px;letter-spacing:2px;cursor:pointer;transition:all .2s;line-height:1}
+.mode-btn.active{background:var(--blue);color:#fff}
+.mode-btn.active-ext{background:#2e6b25;color:#fff}
 </style>
 <!-- Firebase SDK (compat build) — comment these 3 lines and clear FIREBASE_CONFIG.apiKey to disable sync -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -361,6 +367,12 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <button id="current-job-badge" onclick="openJobsModal()" aria-label="Open jobs"
       style="width:100%;height:42px;background:var(--panel);border:1.5px solid var(--border);border-radius:8px;color:var(--blue);font-family:var(--head);font-size:14px;font-weight:700;letter-spacing:1.5px;cursor:pointer;margin-bottom:12px">📁 Jobs</button>
 
+    <!-- INT / EXT mode toggle -->
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="mode-btn-int" onclick="switchMode('interior')" aria-label="Interior painting mode">🏠 INTERIOR</button>
+      <button class="mode-btn" id="mode-btn-ext" onclick="switchMode('exterior')" aria-label="Exterior painting mode">🏡 EXTERIOR</button>
+    </div>
+
     <div class="job-card">
       <div class="row">
         <label class="field"><span>Client Name</span>
@@ -382,11 +394,11 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
       <div id="rates-body" style="display:none;padding:0 14px 14px">
         <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.4">Set your default $/sf here (trim is $/linear ft). These apply to every room unless you turn on custom rates inside a room.</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <label class="field"><span>Walls $/sf</span>
+          <label class="field"><span id="rate-label-walls">Walls $/sf</span>
             <input type="number" id="rate-walls" min="0" step="any" inputmode="decimal" oninput="updateGlobalRate('walls',this.value)"/></label>
-          <label class="field"><span>Ceiling $/sf</span>
+          <label class="field"><span id="rate-label-ceiling">Ceiling $/sf</span>
             <input type="number" id="rate-ceiling" min="0" step="any" inputmode="decimal" oninput="updateGlobalRate('ceiling',this.value)"/></label>
-          <label class="field"><span>Floor $/sf</span>
+          <label class="field"><span id="rate-label-floor">Floor $/sf</span>
             <input type="number" id="rate-floor" min="0" step="any" inputmode="decimal" oninput="updateGlobalRate('floor',this.value)"/></label>
           <label class="field"><span>Trim $/lf</span>
             <input type="number" id="rate-trim" min="0" step="any" inputmode="decimal" oninput="updateGlobalRate('trim',this.value)"/></label>
@@ -427,6 +439,25 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
           oninput="updateJobField('winPrice',this.value)"
           style="height:40px;font-size:14px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 10px;outline:none;text-align:center"/>
         <span id="job-win-total" style="font-size:14px;font-weight:700;color:var(--green);min-width:60px;text-align:right">$0</span>
+      </div>
+    </div>
+
+    <!-- EXTERIOR EXTRAS: Shutters + Power Wash — only shown in exterior mode -->
+    <div id="ext-extras-card" style="display:none;background:var(--card);border:1.5px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:14px">
+      <div style="font-family:var(--head);font-size:14px;color:var(--text);letter-spacing:1.5px;margin-bottom:10px">🪟 SHUTTERS &amp; POWER WASH</div>
+      <div style="display:grid;grid-template-columns:90px 1fr auto 1fr auto;gap:6px;align-items:center;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">Shutters</div>
+        <input type="number" id="job-shutter-count" min="0" inputmode="numeric" placeholder="0" aria-label="Shutter count" oninput="updateJobField('shutterCount',this.value)" style="height:40px;font-size:14px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 10px;outline:none;text-align:center"/>
+        <span style="font-size:13px;color:var(--muted)">× $</span>
+        <input type="number" id="job-shutter-price" value="25" min="0" step="any" inputmode="decimal" aria-label="Price per shutter" oninput="updateJobField('shutterPrice',this.value)" style="height:40px;font-size:14px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 10px;outline:none;text-align:center"/>
+        <span id="job-shutter-total" style="font-size:14px;font-weight:700;color:var(--green);min-width:60px;text-align:right">$0</span>
+      </div>
+      <div style="display:grid;grid-template-columns:90px 1fr auto 1fr auto;gap:6px;align-items:center">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">Power Wash</div>
+        <input type="number" id="job-wash-sf" min="0" inputmode="numeric" placeholder="sq ft" aria-label="Power wash square footage" oninput="updateJobField('washSF',this.value)" style="height:40px;font-size:14px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 10px;outline:none;text-align:center"/>
+        <span style="font-size:13px;color:var(--muted)">× $</span>
+        <input type="number" id="job-wash-rate" value="0.20" min="0" step="any" inputmode="decimal" aria-label="Power wash rate per sq ft" oninput="updateJobField('washRate',this.value)" style="height:40px;font-size:14px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 10px;outline:none;text-align:center"/>
+        <span id="job-wash-total" style="font-size:14px;font-weight:700;color:var(--green);min-width:60px;text-align:right">$0</span>
       </div>
     </div>
 
@@ -974,9 +1005,11 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div class="bt-selects">
       <select id="target-field" aria-label="Bluetooth fill target">
         <option value="wall">→ Next Wall</option>
-        <option value="height">→ Ceiling Height</option>
+        <option value="height">→ Wall/Ceiling Height</option>
         <option value="floorLength">→ Ceiling/Floor Length</option>
         <option value="floorWidth">→ Ceiling/Floor Width</option>
+        <option value="soffit">→ Soffit Area (sf)</option>
+        <option value="deck">→ Deck Area (sf)</option>
       </select>
       <select id="target-room" aria-label="Target room"></select>
     </div>
@@ -1133,6 +1166,21 @@ const PRODUCTS = [
 const MARKUP = 1.20;
 const LISA_EMAIL = 'lbailey@digitalcheese.us';
 
+// Exterior labor rates ($/sf per coat; trim $/linear ft)
+const EXT_RATES_KEY = 'ingersoll_ext_rates_v1';
+const DEFAULT_EXT_RATES = { walls:2.25, ceiling:1.75, floor:2.50, trim:3.50 };
+function loadExtRates() {
+  try {
+    const s = JSON.parse(localStorage.getItem(EXT_RATES_KEY));
+    if (s) return { walls:+s.walls||DEFAULT_EXT_RATES.walls, ceiling:+s.ceiling||DEFAULT_EXT_RATES.ceiling,
+                    floor:+s.floor||DEFAULT_EXT_RATES.floor, trim:+s.trim||DEFAULT_EXT_RATES.trim };
+  } catch {}
+  return { ...DEFAULT_EXT_RATES };
+}
+let extRates = loadExtRates();
+function saveExtRates() { localStorage.setItem(EXT_RATES_KEY, JSON.stringify(extRates)); }
+function modeRates(mode) { return mode === 'exterior' ? extRates : rates; }
+
 // ─── AUTO PRINT HUB ────────────────────────────────────────────────────────
 //
 // Tapping "Send to Home Printer" on a bid sends it to ntfy.sh — a free,
@@ -1224,6 +1272,7 @@ const BLE_CANDIDATES = [
 // STATE
 // ══════════════════════════════════════════════
 let rooms = [], roomCount = 0;
+let estimatorMode = 'interior'; // 'interior' | 'exterior'
 let btDevice = null, btConnected = false, activeChar = null;
 let bidOpen = false;
 
@@ -1234,8 +1283,9 @@ let currentJobName = '';   // name of the currently-loaded snapshot, or '' if un
 let saveTimer = null;
 let saveIndicatorTimer = null;
 
-// Whole-job extras (doors and windows priced per unit)
-let job = { doorCount:'', doorPrice:'75', winCount:'', winPrice:'50' };
+// Whole-job extras (doors and windows priced per unit; shutters + power wash for exterior)
+let job = { doorCount:'', doorPrice:'75', winCount:'', winPrice:'50',
+            shutterCount:'', shutterPrice:'25', washSF:'', washRate:'0.20' };
 
 function updateJobField(key, val) {
   job[key] = val;
@@ -1243,12 +1293,21 @@ function updateJobField(key, val) {
 }
 
 function jobExtras() {
-  const dc = parseInt(job.doorCount) || 0;
-  const dp = parseFloat(job.doorPrice) || 0;
-  const wc = parseInt(job.winCount)  || 0;
-  const wp = parseFloat(job.winPrice)  || 0;
+  const dc  = parseInt(job.doorCount)    || 0;
+  const dp  = parseFloat(job.doorPrice)  || 0;
+  const wc  = parseInt(job.winCount)     || 0;
+  const wp  = parseFloat(job.winPrice)   || 0;
+  const sc  = parseInt(job.shutterCount) || 0;
+  const sp  = parseFloat(job.shutterPrice) || 0;
+  const wsf = parseFloat(job.washSF)     || 0;
+  const wr  = parseFloat(job.washRate)   || 0;
+  const shutterTotal = sc * sp;
+  const washTotal    = wsf * wr;
   return { doorCount:dc, doorPrice:dp, winCount:wc, winPrice:wp,
-           doorTotal:dc*dp, winTotal:wc*wp, total:dc*dp + wc*wp };
+           doorTotal:dc*dp, winTotal:wc*wp,
+           shutterCount:sc, shutterTotal,
+           washSF:wsf, washTotal,
+           total: dc*dp + wc*wp + shutterTotal + washTotal };
 }
 
 // ══════════════════════════════════════════════
@@ -1263,6 +1322,7 @@ const SYNC_KEYS = [
   'ingersoll_notes_v1',
   'ingersoll_materials_v1',
   'ingersoll_supplies_v1',
+  'ingersoll_ext_rates_v1',
   'ingersoll_apt_pricing_v1',
   'ingersoll_rates_v1',
 ];
@@ -1469,7 +1529,8 @@ function reloadFromSync(key) {
       case 'ingersoll_materials_v1':   materialsLoad();  renderMaterials(); break;
       case 'ingersoll_supplies_v1':    supplyLoad();     renderSupplies();  break;
       case 'ingersoll_apt_pricing_v1': aptLoad();        aptRender();       break;
-      case 'ingersoll_rates_v1':       rates = loadRates(); syncRatesUI(); break;
+      case 'ingersoll_rates_v1':       rates = loadRates();    syncRatesUI(); break;
+      case 'ingersoll_ext_rates_v1':   extRates = loadExtRates(); syncRatesUI(); break;
     }
   } catch(e) { console.warn('[Sync] reloadFromSync', key, e); }
 }
@@ -1776,7 +1837,7 @@ function applyMeasurement(feet, disp) {
     // Normal — add new wall
     addWall(room.id, feet.toFixed(2));
     showToast(`${disp} → Wall ${room.walls.length} · ${room.name}`);
-  } else if (field === 'height' || field === 'floorLength' || field === 'floorWidth') {
+  } else if (['height','floorLength','floorWidth','soffit','deck'].includes(field)) {
     const el = document.getElementById(`${room.id}_${field}`);
     if (!el) return;
     el.value = feet.toFixed(2);
@@ -1785,17 +1846,14 @@ function applyMeasurement(feet, disp) {
     el.classList.add('bt-flash');
     setTimeout(() => el.classList.remove('bt-flash'), 900);
     updateField(room.id, field, feet.toFixed(2));
-    const label = field==='height' ? 'Height' : field==='floorLength' ? 'Floor/Ceil Length' : 'Floor/Ceil Width';
-    showToast(`${disp} → ${label} · ${room.name}`);
-    // Clear the shoot-button highlight for the field we just filled
+    const labels = {height:'Height', floorLength:'Floor/Ceil Length', floorWidth:'Floor/Ceil Width', soffit:'Soffit', deck:'Deck'};
+    showToast(`${disp} → ${labels[field]||field} · ${room.name}`);
     document.querySelectorAll('.dim-shoot.active').forEach(b=>b.classList.remove('active'));
-    // After Length, auto-advance to Width so the ceiling is a smooth two-shot flow
     if (field === 'floorLength') {
       document.getElementById('target-field').value = 'floorWidth';
       document.getElementById(`${room.id}_floorWidth_shoot`)?.classList.add('active');
       showToast('📐 Now shoot for Width');
     } else if (field === 'floorWidth') {
-      // Done with the ceiling/floor — go back to walls for the next shot
       document.getElementById('target-field').value = 'wall';
     }
   }
@@ -1875,10 +1933,17 @@ function sendManual() {
 // ROOMS
 // ══════════════════════════════════════════════
 function addRoom() {
-  const id   = 'r'+(++roomCount);
-  const name = 'Room '+roomCount;
-  const room = {id, name, walls:[], height:'8', floorLength:'', floorWidth:'',
-    surfaces:{walls:true, ceiling:false, trim:false, floor:false}, product:PRODUCTS[0].name, coats:'2', rates:null, open:true};
+  const id    = 'r'+(++roomCount);
+  const isExt = estimatorMode === 'exterior';
+  const name  = isExt ? 'Side '+roomCount : 'Room '+roomCount;
+  const extProduct = PRODUCTS.find(p => p.name.includes('Ext'))?.name || PRODUCTS[0].name;
+  const room  = isExt
+    ? { id, name, walls:[], height:'9', soffit:'', deck:'',
+        surfaces:{walls:true, ceiling:false, trim:false, floor:false},
+        product: extProduct, coats:'2', rates:null, open:true, mode:'exterior' }
+    : { id, name, walls:[], height:'8', floorLength:'', floorWidth:'',
+        surfaces:{walls:true, ceiling:false, trim:false, floor:false},
+        product: PRODUCTS[0].name, coats:'2', rates:null, open:true };
   rooms.push(room);
   renderRoom(room, rooms.length-1);
   refreshRoomSelect();
@@ -1918,7 +1983,55 @@ function renderRoom(room, idx) {
   const card = document.createElement('div');
   card.className = 'room-card'+(room.open?' open':'');
   card.id = room.id+'_card';
+  const isExt = room.mode === 'exterior';
   const opts = PRODUCTS.map(p=>`<option value="${p.name}"${p.name===room.product?' selected':''}>${p.name} — $${p.price}/gal</option>`).join('');
+  const defRates = isExt ? extRates : rates;
+  const roomRates = room.rates || defRates;
+
+  // Surface labels
+  const s1 = isExt ? 'Siding'  : 'Walls';
+  const s2 = isExt ? 'Soffit'  : 'Ceiling';
+  const s3 = isExt ? 'Deck'    : 'Floor';
+  const s4 = 'Trim';
+
+  // Dimension section: interior = floor L×W; exterior = soffit sqft + deck sqft
+  const dimSection = isExt ? `
+      <!-- Exterior: Soffit and Deck area inputs (shown when surface is toggled on) -->
+      <div id="${room.id}_soffit_row" style="display:${room.surfaces.ceiling?'':'none'};margin-bottom:12px">
+        <label class="field">
+          <span>Soffit Area (sq ft total)</span>
+          <input type="number" id="${room.id}_soffit" value="${room.soffit||''}" min="0" step="0.1" inputmode="decimal"
+            oninput="updateField('${room.id}','soffit',this.value)"/>
+        </label>
+      </div>
+      <div id="${room.id}_deck_row" style="display:${room.surfaces.floor?'':'none'};margin-bottom:12px">
+        <label class="field">
+          <span>Deck / Porch Area (sq ft total)</span>
+          <input type="number" id="${room.id}_deck" value="${room.deck||''}" min="0" step="0.1" inputmode="decimal"
+            oninput="updateField('${room.id}','deck',this.value)"/>
+        </label>
+      </div>` : `
+      <!-- Interior: floor / ceiling footprint -->
+      <div class="floor-dims" id="${room.id}_floordims" style="display:${room.surfaces.ceiling||room.surfaces.floor?'grid':'none'}">
+        <div style="grid-column:1/-1;font-size:11px;color:var(--muted);margin-bottom:-4px;line-height:1.4">📐 Ceiling / floor size (the room's footprint). Tap 📐 then pull the laser trigger, or type it in.</div>
+        <label class="field">
+          <span>Length (ft)</span>
+          <div style="display:flex;gap:6px">
+            <input type="number" id="${room.id}_floorLength" value="${room.floorLength||''}" min="0" step="0.01" inputmode="decimal"
+              oninput="updateField('${room.id}','floorLength',this.value)" style="flex:1;min-width:0"/>
+            <button class="dim-shoot" id="${room.id}_floorLength_shoot" onclick="armDimShot('${room.id}','floorLength')" aria-label="Shoot length" title="Shoot length with laser">📐</button>
+          </div>
+        </label>
+        <label class="field">
+          <span>Width (ft)</span>
+          <div style="display:flex;gap:6px">
+            <input type="number" id="${room.id}_floorWidth" value="${room.floorWidth||''}" min="0" step="0.01" inputmode="decimal"
+              oninput="updateField('${room.id}','floorWidth',this.value)" style="flex:1;min-width:0"/>
+            <button class="dim-shoot" id="${room.id}_floorWidth_shoot" onclick="armDimShot('${room.id}','floorWidth')" aria-label="Shoot width" title="Shoot width with laser">📐</button>
+          </div>
+        </label>
+      </div>`;
+
   card.innerHTML = `
     <div class="room-head" onclick="toggleOpen('${room.id}')">
       <div class="room-head-left">
@@ -1931,51 +2044,32 @@ function renderRoom(room, idx) {
     </div>
     <div class="room-body">
 
-      <!-- Individual walls -->
+      <!-- Individual walls / side widths -->
       <div class="walls-header">
-        <span class="walls-label">Walls (shoot each one)</span>
+        <span class="walls-label">${isExt ? 'Side widths — shoot each wall' : 'Walls (shoot each one)'}</span>
         <span class="walls-perimeter" id="${room.id}_perim"></span>
       </div>
       <div class="walls-list" id="${room.id}_walls"></div>
-      <button class="add-wall-btn" onclick="addWall('${room.id}')" aria-label="Add wall to ${room.name}">+ Add Wall</button>
+      <button class="add-wall-btn" onclick="addWall('${room.id}')" aria-label="Add wall measurement">+ Add Wall</button>
 
-      <!-- Ceiling height -->
+      <!-- Height -->
       <div class="height-row">
         <label class="field">
-          <span>Ceiling Height (ft)</span>
+          <span>${isExt ? 'Wall Height (ft)' : 'Ceiling Height (ft)'}</span>
           <input type="number" id="${room.id}_height" value="${room.height}" min="0" step="0.01" inputmode="decimal"
             oninput="updateField('${room.id}','height',this.value)"/>
         </label>
       </div>
 
-      <!-- Surfaces -->
+      <!-- Surface toggles -->
       <div class="surface-row">
-        <button class="surf-btn${room.surfaces.walls?' on':''}" id="${room.id}_sw" onclick="toggleSurf('${room.id}','walls')" aria-label="Toggle walls">Walls</button>
-        <button class="surf-btn${room.surfaces.ceiling?' on':''}" id="${room.id}_sc" onclick="toggleSurf('${room.id}','ceiling')" aria-label="Toggle ceiling">Ceiling</button>
-        <button class="surf-btn${room.surfaces.floor?' on':''}" id="${room.id}_sf" onclick="toggleSurf('${room.id}','floor')" aria-label="Toggle floor">Floor</button>
-        <button class="surf-btn${room.surfaces.trim?' on':''}" id="${room.id}_st" onclick="toggleSurf('${room.id}','trim')" aria-label="Toggle trim">Trim</button>
+        <button class="surf-btn${room.surfaces.walls?' on':''}" id="${room.id}_sw" onclick="toggleSurf('${room.id}','walls')" aria-label="Toggle ${s1}">${s1}</button>
+        <button class="surf-btn${room.surfaces.ceiling?' on':''}" id="${room.id}_sc" onclick="toggleSurf('${room.id}','ceiling')" aria-label="Toggle ${s2}">${s2}</button>
+        <button class="surf-btn${room.surfaces.floor?' on':''}" id="${room.id}_sf" onclick="toggleSurf('${room.id}','floor')" aria-label="Toggle ${s3}">${s3}</button>
+        <button class="surf-btn${room.surfaces.trim?' on':''}" id="${room.id}_st" onclick="toggleSurf('${room.id}','trim')" aria-label="Toggle trim">${s4}</button>
       </div>
 
-      <!-- Floor/Ceiling dimensions (shown when either is active) -->
-      <div class="floor-dims" id="${room.id}_floordims" style="display:${room.surfaces.ceiling||room.surfaces.floor?'grid':'none'}">
-        <div style="grid-column:1/-1;font-size:11px;color:var(--muted);margin-bottom:-4px;line-height:1.4">📐 Ceiling / floor size (the room's footprint). Tap 📐 then pull the laser trigger, or type it in.</div>
-        <label class="field">
-          <span>Length (ft)</span>
-          <div style="display:flex;gap:6px">
-            <input type="number" id="${room.id}_floorLength" value="${room.floorLength}" min="0" step="0.01" inputmode="decimal"
-              oninput="updateField('${room.id}','floorLength',this.value)" style="flex:1;min-width:0"/>
-            <button class="dim-shoot" id="${room.id}_floorLength_shoot" onclick="armDimShot('${room.id}','floorLength')" aria-label="Shoot length with laser" title="Shoot length with laser">📐</button>
-          </div>
-        </label>
-        <label class="field">
-          <span>Width (ft)</span>
-          <div style="display:flex;gap:6px">
-            <input type="number" id="${room.id}_floorWidth" value="${room.floorWidth}" min="0" step="0.01" inputmode="decimal"
-              oninput="updateField('${room.id}','floorWidth',this.value)" style="flex:1;min-width:0"/>
-            <button class="dim-shoot" id="${room.id}_floorWidth_shoot" onclick="armDimShot('${room.id}','floorWidth')" aria-label="Shoot width with laser" title="Shoot width with laser">📐</button>
-          </div>
-        </label>
-      </div>
+      ${dimSection}
 
       <!-- Product + coats -->
       <div class="prod-row">
@@ -1993,7 +2087,7 @@ function renderRoom(room, idx) {
 
       <!-- Mini summary -->
       <div class="mini-sum" id="${room.id}_sum" style="display:none">
-        <div><div class="sum-label">Wall SF</div><div class="sum-val" id="${room.id}_ssf">—</div></div>
+        <div><div class="sum-label">${isExt ? 'Siding SF' : 'Wall SF'}</div><div class="sum-val" id="${room.id}_ssf">—</div></div>
         <div><div class="sum-label">Gallons</div><div class="sum-val" id="${room.id}_sgal">—</div></div>
         <div><div class="sum-label">Materials</div><div class="sum-val" id="${room.id}_smat">—</div></div>
         <div><div class="sum-label">Labor</div><div class="sum-val" id="${room.id}_slab">—</div></div>
@@ -2008,9 +2102,9 @@ function renderRoom(room, idx) {
         📷 AI Estimate from Photo
       </button>
 
-      <!-- Done & advance to next room -->
-      <button class="next-room-btn" onclick="nextRoom('${room.id}')" aria-label="Done with this room, go to next">
-        ✓ DONE — NEXT ROOM
+      <!-- Done & advance -->
+      <button class="next-room-btn" onclick="nextRoom('${room.id}')" aria-label="${isExt ? 'Done with this side, go to next' : 'Done with this room, go to next'}">
+        ${isExt ? '✓ DONE — NEXT SIDE' : '✓ DONE — NEXT ROOM'}
       </button>
 
       <!-- Per-room custom rate override -->
@@ -2019,21 +2113,21 @@ function renderRoom(room, idx) {
           <input type="checkbox" id="${room.id}_ratetoggle" ${room.rates?'checked':''}
             onchange="toggleRoomRates('${room.id}',this.checked)"
             style="width:20px;height:20px;accent-color:var(--blue);cursor:pointer"/>
-          <span style="font-size:13px;color:var(--muted)">Custom $/sf rates for this room</span>
+          <span style="font-size:13px;color:var(--muted)">Custom $/sf rates for this ${isExt ? 'side' : 'room'}</span>
         </label>
         <div id="${room.id}_rategrid" style="display:${room.rates?'grid':'none'};grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
-          <label class="field"><span>Walls $/sf</span>
-            <input type="number" id="${room.id}_rate_walls" value="${(room.rates||rates).walls}" min="0" step="any" inputmode="decimal" oninput="updateRoomRate('${room.id}','walls',this.value)"/></label>
-          <label class="field"><span>Ceiling $/sf</span>
-            <input type="number" id="${room.id}_rate_ceiling" value="${(room.rates||rates).ceiling}" min="0" step="any" inputmode="decimal" oninput="updateRoomRate('${room.id}','ceiling',this.value)"/></label>
-          <label class="field"><span>Floor $/sf</span>
-            <input type="number" id="${room.id}_rate_floor" value="${(room.rates||rates).floor}" min="0" step="any" inputmode="decimal" oninput="updateRoomRate('${room.id}','floor',this.value)"/></label>
+          <label class="field"><span>${isExt ? 'Siding $/sf' : 'Walls $/sf'}</span>
+            <input type="number" id="${room.id}_rate_walls" value="${roomRates.walls}" min="0" step="any" inputmode="decimal" oninput="updateRoomRate('${room.id}','walls',this.value)"/></label>
+          <label class="field"><span>${isExt ? 'Soffit $/sf' : 'Ceiling $/sf'}</span>
+            <input type="number" id="${room.id}_rate_ceiling" value="${roomRates.ceiling}" min="0" step="any" inputmode="decimal" oninput="updateRoomRate('${room.id}','ceiling',this.value)"/></label>
+          <label class="field"><span>${isExt ? 'Deck $/sf' : 'Floor $/sf'}</span>
+            <input type="number" id="${room.id}_rate_floor" value="${roomRates.floor}" min="0" step="any" inputmode="decimal" oninput="updateRoomRate('${room.id}','floor',this.value)"/></label>
           <label class="field"><span>Trim $/lf</span>
-            <input type="number" id="${room.id}_rate_trim" value="${(room.rates||rates).trim}" min="0" step="any" inputmode="decimal" oninput="updateRoomRate('${room.id}','trim',this.value)"/></label>
+            <input type="number" id="${room.id}_rate_trim" value="${roomRates.trim}" min="0" step="any" inputmode="decimal" oninput="updateRoomRate('${room.id}','trim',this.value)"/></label>
         </div>
       </div>
 
-      <button class="room-remove" onclick="removeRoom('${room.id}')" aria-label="Remove ${room.name}">✕ Remove This Room</button>
+      <button class="room-remove" onclick="removeRoom('${room.id}')" aria-label="Remove ${room.name}">✕ Remove This ${isExt ? 'Side' : 'Room'}</button>
     </div>`;
   document.getElementById('rooms-container').appendChild(card);
   renderWalls(room);
@@ -2106,8 +2200,8 @@ function armDimShot(roomId, field) {
   document.getElementById('target-room').value  = idx;
   // Highlight the active shoot button
   document.getElementById(`${roomId}_${field}_shoot`)?.classList.add('active');
-  const label = field==='floorLength' ? 'Length' : 'Width';
-  showToast(`📐 Shoot for ${label} · ${rooms[idx].name}`);
+  const dimLabels = {floorLength:'Length', floorWidth:'Width', soffit:'Soffit area', deck:'Deck area'};
+  showToast(`📐 Shoot for ${dimLabels[field]||field} · ${rooms[idx].name}`);
 }
 
 function updateWall(roomId, wallId, val) {
@@ -2155,9 +2249,20 @@ function toggleSurf(id, surf) {
   r.surfaces[surf]=!r.surfaces[surf];
   const btnId = surf==='floor' ? `${id}_sf` : `${id}_s${surf[0]}`;
   document.getElementById(btnId)?.classList.toggle('on', r.surfaces[surf]);
-  // Show/hide floor/ceiling dimension inputs
-  const dims = document.getElementById(`${id}_floordims`);
-  if(dims) dims.style.display = (r.surfaces.ceiling||r.surfaces.floor) ? 'grid' : 'none';
+  if (r.mode === 'exterior') {
+    // Show/hide soffit and deck rows independently
+    if (surf === 'ceiling') {
+      const el = document.getElementById(`${id}_soffit_row`);
+      if (el) el.style.display = r.surfaces.ceiling ? '' : 'none';
+    } else if (surf === 'floor') {
+      const el = document.getElementById(`${id}_deck_row`);
+      if (el) el.style.display = r.surfaces.floor ? '' : 'none';
+    }
+  } else {
+    // Interior: show/hide floor/ceiling dimension inputs
+    const dims = document.getElementById(`${id}_floordims`);
+    if(dims) dims.style.display = (r.surfaces.ceiling||r.surfaces.floor) ? 'grid' : 'none';
+  }
   recalcRoom(id);
 }
 function refreshRoomSelect() {
@@ -2167,7 +2272,36 @@ function refreshRoomSelect() {
 // ══════════════════════════════════════════════
 // CALCULATIONS
 // ══════════════════════════════════════════════
+function calcExt(room) {
+  const perimeter = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0), 0);
+  const h        = parseFloat(room.height) || 0;
+  const soffitSF = parseFloat(room.soffit) || 0;
+  const deckSF   = parseFloat(room.deck)   || 0;
+  const c        = parseInt(room.coats)    || 1;
+  const sidingSF = perimeter * h;
+  const trimLF   = perimeter;
+
+  const p     = PRODUCTS.find(x=>x.name===room.product) || PRODUCTS[4] || PRODUCTS[0];
+  const gSid  = room.surfaces.walls   ? Math.ceil(sidingSF*c/p.cov)  : 0;
+  const gSof  = room.surfaces.ceiling ? Math.ceil(soffitSF*c/p.cov)  : 0;
+  const gDck  = room.surfaces.floor   ? Math.ceil(deckSF*c/p.cov)    : 0;
+  const gTrim = room.surfaces.trim    ? Math.ceil(trimLF*c/p.cov)    : 0;
+  const gal   = gSid + gSof + gDck + gTrim;
+
+  const r   = room.rates || extRates;
+  const mat = gal * p.price * MARKUP;
+  const lab = (room.surfaces.walls   ? sidingSF*r.walls*c   : 0)
+            + (room.surfaces.ceiling ? soffitSF*r.ceiling*c : 0)
+            + (room.surfaces.floor   ? deckSF*r.floor*c     : 0)
+            + (room.surfaces.trim    ? trimLF*r.trim*c      : 0);
+
+  const totalSF = (room.surfaces.walls?sidingSF:0)+(room.surfaces.ceiling?soffitSF:0)+(room.surfaces.floor?deckSF:0);
+  const valid   = (perimeter>0&&h>0) || soffitSF>0 || deckSF>0;
+  return {wallSF:sidingSF, floorSF:soffitSF+deckSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, valid};
+}
+
 function calc(room) {
+  if (room.mode === 'exterior') return calcExt(room);
   const perimeter = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0), 0);
   const h  = parseFloat(room.height)      || 0;
   const fL = parseFloat(room.floorLength) || 0;
@@ -2185,7 +2319,7 @@ function calc(room) {
   const gTrim  = room.surfaces.trim    ? Math.ceil(trimLF*c/p.cov)  : 0;
   const gal    = gWall + gCeil + gFloor + gTrim;
 
-  const r   = room.rates || rates;   // per-room override, else whole-job default
+  const r   = room.rates || rates;
   const mat = gal * p.price * MARKUP;
   const lab = (room.surfaces.walls   ? wallSF*r.walls*c    : 0)
             + (room.surfaces.ceiling ? floorSF*r.ceiling*c : 0)
@@ -2199,13 +2333,44 @@ function calc(room) {
 
 // ── Labor rate controls ──
 function syncRatesUI() {
-  const w=document.getElementById('rate-walls'); if(!w) return;
-  w.value = rates.walls;
-  document.getElementById('rate-ceiling').value = rates.ceiling;
-  document.getElementById('rate-floor').value   = rates.floor;
-  document.getElementById('rate-trim').value    = rates.trim;
+  const isExt = estimatorMode === 'exterior';
+  const r = isExt ? extRates : rates;
+  const w = document.getElementById('rate-walls'); if (!w) return;
+  w.value = r.walls;
+  document.getElementById('rate-ceiling').value = r.ceiling;
+  document.getElementById('rate-floor').value   = r.floor;
+  document.getElementById('rate-trim').value    = r.trim;
+  // Update surface labels to match current mode
+  const lw = document.getElementById('rate-label-walls');
+  const lc = document.getElementById('rate-label-ceiling');
+  const lf = document.getElementById('rate-label-floor');
+  if (lw) lw.textContent = isExt ? 'Siding $/sf' : 'Walls $/sf';
+  if (lc) lc.textContent = isExt ? 'Soffit $/sf' : 'Ceiling $/sf';
+  if (lf) lf.textContent = isExt ? 'Deck $/sf'   : 'Floor $/sf';
   const sum = document.getElementById('rates-summary');
-  if (sum) sum.textContent = `W $${rates.walls} · C $${rates.ceiling} · F $${rates.floor} · T $${rates.trim}`;
+  if (sum) sum.textContent = isExt
+    ? `Sid $${r.walls} · Sof $${r.ceiling} · Dck $${r.floor} · T $${r.trim}`
+    : `W $${r.walls} · C $${r.ceiling} · F $${r.floor} · T $${r.trim}`;
+}
+
+function switchMode(mode) {
+  if (estimatorMode === mode) return;
+  const label = mode === 'exterior' ? 'Exterior' : 'Interior';
+  const hasData = rooms.some(r => r.walls.length > 0 ||
+    (r.mode === 'exterior' ? r.soffit || r.deck : r.floorLength || r.floorWidth));
+  if (hasData && !confirm(`Switch to ${label} mode? Current room data will be cleared.`)) return;
+  estimatorMode = mode;
+  document.getElementById('mode-btn-int').classList.toggle('active', mode === 'interior');
+  document.getElementById('mode-btn-ext').classList.toggle('active', mode === 'exterior');
+  const extCard = document.getElementById('ext-extras-card');
+  if (extCard) extCard.style.display = mode === 'exterior' ? 'block' : 'none';
+  const addBtn = document.getElementById('add-room-btn');
+  if (addBtn) addBtn.textContent = mode === 'exterior' ? '+ ADD SIDE' : '+ ADD ROOM / AREA';
+  rooms.length = 0; roomCount = 0;
+  document.getElementById('rooms-container').innerHTML = '';
+  syncRatesUI();
+  addRoom();
+  recalcAll();
 }
 function toggleRatesCard() {
   const body = document.getElementById('rates-body');
@@ -2215,14 +2380,15 @@ function toggleRatesCard() {
   chev.style.transform = open ? 'rotate(180deg)' : '';
 }
 function updateGlobalRate(key, val) {
-  rates[key] = parseFloat(val) || 0;
-  saveRates();
-  // Push the new default into any room that is NOT using a custom override
+  const v = parseFloat(val) || 0;
+  if (estimatorMode === 'exterior') { extRates[key] = v; saveExtRates(); }
+  else                              { rates[key] = v;    saveRates(); }
   rooms.forEach(r => {
     if (!r.rates) {
+      const rr = r.mode === 'exterior' ? extRates : rates;
       ['walls','ceiling','floor','trim'].forEach(k => {
         const el = document.getElementById(`${r.id}_rate_${k}`);
-        if (el) el.value = rates[k];
+        if (el) el.value = rr[k];
       });
     }
   });
@@ -2231,7 +2397,8 @@ function updateGlobalRate(key, val) {
 }
 function toggleRoomRates(id, on) {
   const r = rooms.find(x=>x.id===id); if(!r) return;
-  r.rates = on ? { ...rates } : null;   // copy current defaults when enabling
+  const defaultRates = r.mode === 'exterior' ? extRates : rates;
+  r.rates = on ? { ...defaultRates } : null;
   const grid = document.getElementById(id+'_rategrid');
   if (grid) grid.style.display = on ? 'grid' : 'none';
   if (on) {
@@ -2252,14 +2419,15 @@ function updateRoomRate(id, key, val) {
 // ── Auto-save & job snapshots ──
 function getJobSnapshot() {
   return {
-    name:      currentJobName,
-    client:    document.getElementById('client-name')?.value || '',
-    address:   document.getElementById('job-address')?.value || '',
-    notes:     document.getElementById('notes')?.value || '',
-    rooms:     JSON.parse(JSON.stringify(rooms)),
-    roomCount: roomCount,
-    job:       { ...job },
-    updatedAt: Date.now()
+    name:          currentJobName,
+    client:        document.getElementById('client-name')?.value || '',
+    address:       document.getElementById('job-address')?.value || '',
+    notes:         document.getElementById('notes')?.value || '',
+    rooms:         JSON.parse(JSON.stringify(rooms)),
+    roomCount:     roomCount,
+    job:           { ...job },
+    estimatorMode: estimatorMode,
+    updatedAt:     Date.now()
   };
 }
 function saveActiveJob() {
@@ -2289,21 +2457,35 @@ function loadActiveJob() {
   }
 }
 function applyJobData(data) {
-  // Restore text fields
   const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
   setVal('client-name', data.client);
   setVal('job-address', data.address);
   setVal('notes', data.notes);
+  // Restore estimator mode
+  const newMode = data.estimatorMode || 'interior';
+  if (newMode !== estimatorMode) {
+    estimatorMode = newMode;
+    document.getElementById('mode-btn-int')?.classList.toggle('active', estimatorMode === 'interior');
+    document.getElementById('mode-btn-ext')?.classList.toggle('active', estimatorMode === 'exterior');
+    const extCard = document.getElementById('ext-extras-card');
+    if (extCard) extCard.style.display = estimatorMode === 'exterior' ? 'block' : 'none';
+    const addBtn = document.getElementById('add-room-btn');
+    if (addBtn) addBtn.textContent = estimatorMode === 'exterior' ? '+ ADD SIDE' : '+ ADD ROOM / AREA';
+  }
   // Restore rooms array and counter
   rooms.length = 0;
   (data.rooms || []).forEach(r => rooms.push(r));
   roomCount = data.roomCount || rooms.length;
   // Restore job extras
   if (data.job) Object.assign(job, data.job);
-  setVal('job-door-count', job.doorCount);
-  setVal('job-door-price', job.doorPrice);
-  setVal('job-win-count',  job.winCount);
-  setVal('job-win-price',  job.winPrice);
+  setVal('job-door-count',    job.doorCount);
+  setVal('job-door-price',    job.doorPrice);
+  setVal('job-win-count',     job.winCount);
+  setVal('job-win-price',     job.winPrice);
+  setVal('job-shutter-count', job.shutterCount);
+  setVal('job-shutter-price', job.shutterPrice || '25');
+  setVal('job-wash-sf',       job.washSF);
+  setVal('job-wash-rate',     job.washRate || '0.20');
   // Re-render rooms
   const wrap = document.getElementById('rooms-container');
   if (wrap) wrap.innerHTML = '';
@@ -2311,6 +2493,7 @@ function applyJobData(data) {
   refreshRoomSelect();
   currentJobName = data.name || '';
   syncJobBadge();
+  syncRatesUI();
   recalcAll();
 }
 function updateSaveIndicator(ts) {
@@ -2418,11 +2601,14 @@ function startNewJob() {
   // Clear active state
   rooms.length = 0; roomCount = 0;
   job.doorCount = ''; job.winCount = '';
+  job.shutterCount = ''; job.washSF = '';
   document.getElementById('client-name').value = '';
   document.getElementById('job-address').value = '';
   document.getElementById('notes').value = '';
   document.getElementById('job-door-count').value = '';
   document.getElementById('job-win-count').value = '';
+  document.getElementById('job-shutter-count').value = '';
+  document.getElementById('job-wash-sf').value = '';
   document.getElementById('rooms-container').innerHTML = '';
   currentJobName = '';
   syncJobBadge();
@@ -2461,15 +2647,18 @@ function recalcRoom(id) {
 function recalcAll() {
   const cs=rooms.map(calc);
   const ex = jobExtras();
-  const any = cs.some(c=>c.valid) || ex.doorCount>0 || ex.winCount>0;
+  const any = cs.some(c=>c.valid) || ex.doorCount>0 || ex.winCount>0 || ex.shutterCount>0 || ex.washSF>0;
   const mat=cs.reduce((a,c)=>a+c.mat,0);
-  const lab=cs.reduce((a,c)=>a+c.lab,0) + ex.total; // doors/windows roll into labor
+  const lab=cs.reduce((a,c)=>a+c.lab,0) + ex.total;
   const grand=mat+lab;
-  // Update the per-row totals in the doors/windows card
   const dwTotEl = document.getElementById('job-door-total');
   const wnTotEl = document.getElementById('job-win-total');
+  const shTotEl = document.getElementById('job-shutter-total');
+  const wsTotEl = document.getElementById('job-wash-total');
   if (dwTotEl) dwTotEl.textContent = fmt(ex.doorTotal);
   if (wnTotEl) wnTotEl.textContent = fmt(ex.winTotal);
+  if (shTotEl) shTotEl.textContent = fmt(ex.shutterTotal);
+  if (wsTotEl) wsTotEl.textContent = fmt(ex.washTotal);
   document.getElementById('totals-strip').classList.toggle('visible',any);
   document.getElementById('gen-btn').classList.toggle('visible',any);
   document.getElementById('tot-mat').textContent=fmt(mat);
@@ -2500,10 +2689,16 @@ function renderBid() {
   const lab    = cs.reduce((a,c)=>a+c.lab,0) + ex.total;
   const grand  = mat+lab;
 
+  const isExtJob = estimatorMode === 'exterior';
+  const surfLabel = (key, mode) => {
+    if (mode === 'exterior') return key==='walls'?'Siding':key==='ceiling'?'Soffit':key==='floor'?'Deck':'Trim';
+    return key[0].toUpperCase()+key.slice(1);
+  };
+
   // Room rows — one per room with surface breakdown
   const roomRows = rooms.map((r,i) => {
     const c     = cs[i];
-    const surfs = Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>k[0].toUpperCase()+k.slice(1)).join(', ');
+    const surfs = Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>surfLabel(k,r.mode)).join(', ');
     const short = r.product.replace(/ \(Int\)| \(Ext\)| \(Cabinets\/Trim\)/g,'');
     const sf    = c.totalSF > 0 ? c.totalSF.toFixed(0)+' sf' : '—';
     return `
@@ -2535,6 +2730,24 @@ function renderBid() {
         <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.winPrice)} ea</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.winTotal)}</td>
+      </tr>` : '')
+    + (ex.shutterCount > 0 ? `
+      <tr style="border-bottom:1px solid #e5e7eb">
+        <td style="padding:8px 6px;font-weight:700;font-size:13px">Shutters</td>
+        <td style="padding:8px 6px;font-size:12px;color:#555">${ex.shutterCount} units</td>
+        <td style="padding:8px 6px;font-size:12px">—</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.shutterTotal / ex.shutterCount)} ea</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.shutterTotal)}</td>
+      </tr>` : '')
+    + (ex.washSF > 0 ? `
+      <tr style="border-bottom:1px solid #e5e7eb">
+        <td style="padding:8px 6px;font-weight:700;font-size:13px">Power Wash</td>
+        <td style="padding:8px 6px;font-size:12px;color:#555">${ex.washSF.toFixed(0)} sq ft</td>
+        <td style="padding:8px 6px;font-size:12px">—</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right">$${ex.washTotal/ex.washSF>0?(ex.washTotal/ex.washSF).toFixed(2):0}/sf</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.washTotal)}</td>
       </tr>` : '');
 
   document.getElementById('bid-out').innerHTML = `
@@ -3118,7 +3331,18 @@ async function analyzeRoomPhoto(roomId, input) {
           max_tokens: 512,
           messages: [{ role: 'user', content: [
             { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
-            { type: 'text', text: `You are a painting estimator. Analyze this room photo and estimate dimensions in feet.
+            { type: 'text', text: room.mode === 'exterior'
+              ? `You are a painting estimator. Analyze this exterior house photo and estimate dimensions in feet.
+Respond with ONLY valid JSON — no explanation, no markdown:
+{"walls":[w1,w2,w3,w4],"height":h,"soffit":sf,"deck":dk,"doors":d,"windows":win}
+- walls: array of wall widths visible on this side (in feet)
+- height: wall height in feet (one story ~9-10 ft, two story ~18-20 ft)
+- soffit: total soffit/overhang area in square feet (0 if not visible)
+- deck: total deck or porch area in square feet (0 if not visible)
+- doors: number of exterior doors visible
+- windows: number of windows visible
+Use typical residential proportions if unsure.`
+              : `You are a painting estimator. Analyze this room photo and estimate dimensions in feet.
 Respond with ONLY valid JSON — no explanation, no markdown:
 {"walls":[w1,w2,w3,w4],"height":h,"floorLength":l,"floorWidth":w,"doors":d,"windows":win}
 - walls: array of 4 wall widths in feet
@@ -3150,17 +3374,32 @@ Use typical residential proportions if unsure.` }
       if (el) el.value = room.height;
       filled.push(`height ${json.height}'`);
     }
-    if (json.floorLength) {
-      room.floorLength = json.floorLength.toFixed(2);
-      const el = document.getElementById(`${roomId}_floorLength`);
-      if (el) el.value = room.floorLength;
-      filled.push(`length ${json.floorLength}'`);
-    }
-    if (json.floorWidth) {
-      room.floorWidth = json.floorWidth.toFixed(2);
-      const el = document.getElementById(`${roomId}_floorWidth`);
-      if (el) el.value = room.floorWidth;
-      filled.push(`width ${json.floorWidth}'`);
+    if (room.mode === 'exterior') {
+      if (json.soffit) {
+        room.soffit = json.soffit.toFixed(1);
+        const el = document.getElementById(`${roomId}_soffit`);
+        if (el) el.value = room.soffit;
+        filled.push(`soffit ${json.soffit} sf`);
+      }
+      if (json.deck) {
+        room.deck = json.deck.toFixed(1);
+        const el = document.getElementById(`${roomId}_deck`);
+        if (el) el.value = room.deck;
+        filled.push(`deck ${json.deck} sf`);
+      }
+    } else {
+      if (json.floorLength) {
+        room.floorLength = json.floorLength.toFixed(2);
+        const el = document.getElementById(`${roomId}_floorLength`);
+        if (el) el.value = room.floorLength;
+        filled.push(`length ${json.floorLength}'`);
+      }
+      if (json.floorWidth) {
+        room.floorWidth = json.floorWidth.toFixed(2);
+        const el = document.getElementById(`${roomId}_floorWidth`);
+        if (el) el.value = room.floorWidth;
+        filled.push(`width ${json.floorWidth}'`);
+      }
     }
     recalcRoom(roomId);
     markDirty();
@@ -3861,7 +4100,9 @@ function processVoiceCommand(transcript) {
   if (/\bnote/i.test(t)&&!/add|new/i.test(t))              { switchTab('contacts');switchSubnav('notes');    return showToast('📝 Notes'); }
   if (/\bmaterial|shopping|supply list|supplies list/i.test(t)&&!/add|new/i.test(t)) { switchTab('contacts');switchSubnav('materials'); return showToast('🛒 Materials'); }
   if (/pricing|apartment|apt/i.test(t))                    { switchTab('apt');                               return showToast('🏢 Apt Pricing'); }
-  if (/add room|new room/i.test(t))                        { switchTab('estimate');addRoom();                return showToast('Room added'); }
+  if (/add room|new room|add side|new side/i.test(t))       { switchTab('estimate');addRoom();                return showToast(estimatorMode==='exterior'?'Side added':'Room added'); }
+  if (/exterior mode|switch.*exterior|outside mode/i.test(t)) { switchTab('estimate');switchMode('exterior');  return; }
+  if (/interior mode|switch.*interior|inside mode/i.test(t))  { switchTab('estimate');switchMode('interior');  return; }
   if (/generate|bid|proposal/i.test(t))                    { switchTab('estimate');if(!bidOpen)toggleBid(); return showToast('Proposal generated'); }
   if (/connect|bluetooth/i.test(t))                        { connectBT();                                    return; }
   if (/add client|add contact|new client/i.test(t))        { switchTab('contacts');switchSubnav('clients');openContactModal(null); return; }
@@ -3899,11 +4140,42 @@ function processVoiceCommand(transcript) {
     }
   }
 
+  // Exterior shutters voice ("six shutters", "shutters twelve")
+  let shutText = t;
+  const shutFiller = t.match(/^(?:add|put(?:\s+in)?|set|make(?:\s+it)?)\s+(.+)$/i);
+  if (shutFiller && /\bshutters?\b/i.test(shutFiller[1])) shutText = shutFiller[1].trim();
+  const shutMatch = shutText.match(/^shutters?\s+(.+)$/i) || shutText.match(/^(.+?)\s+shutters?$/i);
+  if (shutMatch) {
+    const n = parseSpokenNumber(shutMatch[1].trim());
+    if (n !== null && n >= 0 && n < 500) {
+      const count = Math.round(n);
+      switchTab('estimate');
+      document.getElementById('job-shutter-count').value = count;
+      updateJobField('shutterCount', String(count));
+      return showToast(`🪟 ${count} shutter${count===1?'':'s'}`);
+    }
+  }
+
+  // Power wash voice ("power wash 1200", "wash 800 square feet")
+  const washMatch = t.match(/(?:power\s*wash|wash)\s+(\d[\d,]*(?:\.\d+)?)/i);
+  if (washMatch) {
+    const n = parseSpokenNumber(washMatch[1]);
+    if (n !== null && n > 0) {
+      switchTab('estimate');
+      document.getElementById('job-wash-sf').value = Math.round(n);
+      updateJobField('washSF', String(Math.round(n)));
+      return showToast(`🚿 Power wash ${Math.round(n)} sf`);
+    }
+  }
+
   // Measurements
   let target=null, numStr=t;
   if      (/^wall\s+/i.test(t))    { target='wall';        numStr=t.replace(/^wall\s+/i,''); }
   else if (/^height\s+/i.test(t))  { target='height';      numStr=t.replace(/^height\s+/i,''); }
   else if (/^ceiling\s+/i.test(t)) { target='height';      numStr=t.replace(/^ceiling\s+/i,''); }
+  else if (/^soffit\s+/i.test(t))  { target='soffit';      numStr=t.replace(/^soffit\s+/i,''); }
+  else if (/^deck\s+/i.test(t))    { target='deck';        numStr=t.replace(/^deck\s+/i,''); }
+  else if (/^siding\s+/i.test(t))  { target='wall';        numStr=t.replace(/^siding\s+/i,''); }
   else if (/^length\s+/i.test(t))  { target='floorLength'; numStr=t.replace(/^length\s+/i,''); }
   else if (/^width\s+/i.test(t))   { target='floorWidth';  numStr=t.replace(/^width\s+/i,''); }
   else if (/^floor\s+/i.test(t))   { target='floorLength'; numStr=t.replace(/^floor\s+/i,''); }

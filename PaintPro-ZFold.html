@@ -1535,6 +1535,11 @@ window.addEventListener('DOMContentLoaded', () => { initFirebase(); });
 // ══════════════════════════════════════════════
 
 function handleBtButton() {
+  // Prime speech synthesis on this user tap so BLE callbacks can speak freely
+  if (window.speechSynthesis) {
+    const primer = new SpeechSynthesisUtterance('');
+    window.speechSynthesis.speak(primer);
+  }
   btConnected ? disconnectBT() : connectBT();
 }
 
@@ -1738,8 +1743,9 @@ function speakMeasurement(feet) {
   const text = ins === 0 ? `${ft} foot` : `${ft} foot ${ins}`;
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
-  utt.rate = 1.05;
+  utt.rate = 0.9;
   utt.volume = 1.0;
+  utt.pitch = 1.0;
   window.speechSynthesis.speak(utt);
 }
 

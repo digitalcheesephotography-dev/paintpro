@@ -232,6 +232,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   header,#bt-bar,#add-room-btn,#rooms-container,.job-card,#notes-wrap,#totals-strip,#gen-btn,#toast,#https-warn,#tab-bar,#contacts-section{display:none!important}
   body{padding-bottom:0}
   #bid-out{display:block!important;border-radius:0;padding:0}
+  .no-print{display:none!important}
 }
 
 /* ── TAB BAR ── */
@@ -1241,6 +1242,9 @@ const PRODUCTS = [
 ];
 const MARKUP = 1.20;
 const LISA_EMAIL = 'lbailey@digitalcheese.us';
+const _esc = s => (s == null ? '' : String(s))
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
 // Exterior labor rates ($/sf per coat; trim $/linear ft)
 const EXT_RATES_KEY = 'ingersoll_ext_rates_v1';
@@ -1355,6 +1359,7 @@ let rooms = [], roomCount = 0;
 let estimatorMode = 'interior'; // 'interior' | 'exterior'
 let btDevice = null, btConnected = false, activeChar = null;
 let bidOpen = false;
+let bidScopeText = ''; // AI-generated project description paragraph
 
 // Auto-save / restore — see saveActiveJob, loadActiveJob, markDirty
 const ACTIVE_JOB_KEY = 'ingersoll_active_job_v1';
@@ -1551,7 +1556,7 @@ async function testAnthropicKey() {
       const resp = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', 'anthropic-dangerous-allow-browser': 'true' },
-        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 5, messages: [{ role: 'user', content: 'Hi' }] }),
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 5, messages: [{ role: 'user', content: 'Hi' }] }),
       });
       data = await resp.json();
     }
@@ -2173,6 +2178,12 @@ function renderRoom(room, idx) {
         <div><div class="sum-label">Labor</div><div class="sum-val" id="${room.id}_slab">—</div></div>
       </div>
 
+      <!-- Surface condition note (set by AI photo analysis) -->
+      <div id="${room.id}_surface_note_wrap" style="display:${room.surfaceNotes?'':'none'};background:#1a1200;border:1px solid var(--amber);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:12px;color:#f59e0b;line-height:1.5">
+        ⚠️ <strong>Surface Note:</strong> <span id="${room.id}_surface_note">${_esc(room.surfaceNotes||'')}</span>
+        <button onclick="clearSurfaceNote('${room.id}')" style="float:right;background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0;line-height:1" aria-label="Dismiss surface note">✕</button>
+      </div>
+
       <!-- AI photo analysis -->
       <input type="file" id="${room.id}_photoinput" accept="image/*" capture="environment" style="display:none"
              onchange="analyzeRoomPhoto('${room.id}',this)"/>
@@ -2323,6 +2334,13 @@ function updateField(id,field,val) {
   r[field]=val;
   if(field==='name') refreshRoomSelect();
   recalcRoom(id);
+}
+function clearSurfaceNote(id) {
+  const r = rooms.find(x=>x.id===id); if (!r) return;
+  r.surfaceNotes = '';
+  const wrap = document.getElementById(`${id}_surface_note_wrap`);
+  if (wrap) wrap.style.display = 'none';
+  markDirty();
 }
 function toggleSurf(id, surf) {
   const r=rooms.find(r=>r.id===id); if(!r) return;
@@ -2508,6 +2526,7 @@ function getJobSnapshot() {
     roomCount:     roomCount,
     job:           { ...job },
     estimatorMode: estimatorMode,
+    bidScopeText:  bidScopeText,
     updatedAt:     Date.now()
   };
 }
@@ -2569,6 +2588,7 @@ function applyJobData(data) {
   if (wrap) wrap.innerHTML = '';
   rooms.forEach((r, i) => { renderRoom(r, i); renderWalls(r); });
   refreshRoomSelect();
+  bidScopeText = data.bidScopeText || '';
   currentJobName = data.name || '';
   syncJobBadge();
   syncRatesUI();
@@ -2678,6 +2698,7 @@ function startNewJob() {
   if (currentJobName) saveSnapshot();
   // Clear active state
   rooms.length = 0; roomCount = 0;
+  bidScopeText = '';
   job.doorCount = ''; job.winCount = '';
   job.shutterCount = ''; job.shutterPrice = '25';
   job.washSF = ''; job.washRate = '0.20';
@@ -2859,6 +2880,11 @@ function renderBid() {
         </div>
       </div>
 
+      ${bidScopeText ? `
+      <div style="font-size:12px;color:#333;line-height:1.8;margin-bottom:16px;padding:12px 14px;background:#f4f7fb;border-left:3px solid #2baae1;border-radius:0 6px 6px 0">
+        ${_esc(bidScopeText)}
+      </div>` : ''}
+
       <div style="font-size:16px;font-weight:700;margin-bottom:10px;border-bottom:1px solid #ddd;padding-bottom:6px">
         Project Services
       </div>
@@ -2948,7 +2974,93 @@ function renderBid() {
         style="width:100%;height:50px;margin-top:10px;background:#6b7a8d;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer">
         🖨️ Send to Home Printer
       </button>
+      <button id="ai-scope-btn-bid" onclick="writeBidScope()" class="no-print"
+        style="width:100%;height:50px;margin-top:10px;background:#0d1e33;border:1.5px solid #2baae1;color:#2baae1;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer">
+        🤖 ${bidScopeText ? 'Rewrite Project Description' : 'AI Write Project Description'}
+      </button>
     </div>`;
+}
+
+async function writeBidScope() {
+  const apiKey   = localStorage.getItem('ingersoll_anthropic_key_v1') || '';
+  const proxyUrl = localStorage.getItem('ingersoll_proxy_url_v1') || '';
+  if (!apiKey && !proxyUrl) { showToast('Add API key in ⚙️ Settings first'); return; }
+
+  const btn = document.getElementById('ai-scope-btn-bid');
+  const origText = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = '⏳ Writing...'; btn.disabled = true; }
+
+  try {
+    const client  = document.getElementById('client-name').value || 'the client';
+    const address = document.getElementById('job-address').value || '';
+    const notes   = document.getElementById('notes').value || '';
+    const isExt   = estimatorMode === 'exterior';
+    const cs      = rooms.map(calc);
+    const ex      = jobExtras();
+
+    const roomLines = rooms.map((r, i) => {
+      const c = cs[i];
+      const surfs = Object.entries(r.surfaces).filter(([,v])=>v).map(([k]) =>
+        isExt ? (k==='walls'?'siding':k==='ceiling'?'soffit':k==='floor'?'deck':k) : k
+      );
+      const sf = c.totalSF > 0 ? ` (${c.totalSF.toFixed(0)} sf)` : '';
+      const prepNote = r.surfaceNotes ? ` — note: ${r.surfaceNotes}` : '';
+      return `  ${r.name}: ${surfs.join(', ')}${sf}, ${r.product}, ${r.coats} coat${r.coats==='1'?'':'s'}${prepNote}`;
+    }).join('\n');
+
+    const extras = [
+      ex.doorCount    > 0 ? `${ex.doorCount} doors`           : '',
+      ex.winCount     > 0 ? `${ex.winCount} windows`          : '',
+      ex.shutterCount > 0 ? `${ex.shutterCount} shutters`     : '',
+      ex.washSF       > 0 ? `power wash (${ex.washSF} sf)`   : '',
+    ].filter(Boolean).join(', ');
+
+    const prompt = `You write professional project scope paragraphs for Ingersoll Painting LLC (James Bailey, Hannibal NY, established 1978).
+
+Job: ${isExt ? 'Exterior' : 'Interior'} painting
+Client: ${client}${address ? `, ${address}` : ''}
+Rooms/Areas:
+${roomLines}${extras ? `\nExtras: ${extras}` : ''}${notes ? `\nJob Notes: ${notes}` : ''}
+
+Write a concise 2-3 sentence project description for the bid proposal. Rules:
+- No em dashes (use commas or hyphens instead)
+- Do not list any prices, hours, or rates
+- Mention the specific areas and surfaces being painted
+- If surface prep notes are listed, briefly reference any prep work needed
+- Convey Ingersoll Painting's professionalism and care
+- Plain text only, no markdown, no bullet points`;
+
+    const body = JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 300,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    let data;
+    if (proxyUrl) {
+      const resp = await fetch(proxyUrl, { method:'POST', headers:{'content-type':'application/json'}, body });
+      data = await resp.json();
+    } else {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key':apiKey, 'anthropic-version':'2023-06-01',
+                   'content-type':'application/json', 'anthropic-dangerous-allow-browser':'true' },
+        body,
+      });
+      data = await resp.json();
+    }
+
+    if (data.error) throw new Error(data.error.message);
+    const text = (data.content?.[0]?.text || '').trim();
+    if (!text) throw new Error('Empty response from AI');
+    bidScopeText = text;
+    markDirty();
+    renderBid();
+    showToast('✍️ Project description added to bid');
+  } catch (err) {
+    showToast('AI error: ' + err.message);
+    if (btn) { btn.textContent = origText; btn.disabled = false; }
+  }
 }
 
 function shareBid() {
@@ -3409,31 +3521,33 @@ async function analyzeRoomPhoto(roomId, input) {
           'anthropic-dangerous-allow-browser': 'true',
         },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 512,
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1024,
           messages: [{ role: 'user', content: [
             { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
             { type: 'text', text: room.mode === 'exterior'
               ? `You are a painting estimator. Analyze this exterior house photo and estimate dimensions in feet.
 Respond with ONLY valid JSON — no explanation, no markdown:
-{"walls":[w1,w2,w3,w4],"height":h,"soffit":sf,"deck":dk,"doors":d,"windows":win}
-- walls: array of wall widths visible on this side (in feet)
-- height: wall height in feet (one story ~9-10 ft, two story ~18-20 ft)
-- soffit: total soffit/overhang area in square feet (0 if not visible)
-- deck: total deck or porch area in square feet (0 if not visible)
+{"walls":[w1,w2,w3,w4],"height":h,"soffit":sf,"deck":dk,"doors":d,"windows":win,"surfaceNotes":""}
+Scale anchors: a standard exterior door is 6.8 ft tall and 3 ft wide; a window is typically 4 ft tall and 3 ft wide; one story is ~9-10 ft, two story ~18-20 ft; typical vinyl siding lap is 4 inches wide.
+- walls: array of each wall width visible on this side in feet
+- height: wall height in feet
+- soffit: total soffit/eave overhang area in square feet (0 if not visible or negligible)
+- deck: total deck or porch floor area in square feet (0 if none)
 - doors: number of exterior doors visible
 - windows: number of windows visible
-Use typical residential proportions if unsure.`
-              : `You are a painting estimator. Analyze this room photo and estimate dimensions in feet.
+- surfaceNotes: brief note on any surface issues visible (peeling, rot, chalking, moisture damage, caulking gaps) — empty string if surfaces look fine`
+              : `You are a painting estimator. Analyze this interior room photo and estimate dimensions in feet.
 Respond with ONLY valid JSON — no explanation, no markdown:
-{"walls":[w1,w2,w3,w4],"height":h,"floorLength":l,"floorWidth":w,"doors":d,"windows":win}
-- walls: array of 4 wall widths in feet
+{"walls":[w1,w2,w3,w4],"height":h,"floorLength":l,"floorWidth":w,"doors":d,"windows":win,"surfaceNotes":""}
+Scale anchors: a standard interior door is 6.8 ft tall and 2.8 ft wide; a light switch plate is 4.5 inches tall; a standard outlet is 1.3 inches wide; counter height is 3 ft; standard ceiling height is 8-9 ft.
+- walls: estimate each of the 4 wall widths in feet using the scale anchors above
 - height: ceiling height in feet
 - floorLength: longer floor dimension in feet
 - floorWidth: shorter floor dimension in feet
 - doors: number of doors visible
 - windows: number of windows visible
-Use typical residential proportions if unsure.` }
+- surfaceNotes: brief note on any surface issues visible (peeling paint, water stains, cracks, holes, texture damage) — empty string if surfaces look fine` }
           ]}]
         }),
       });
@@ -3483,9 +3597,15 @@ Use typical residential proportions if unsure.` }
         filled.push(`width ${json.floorWidth}'`);
       }
     }
+    if (json.surfaceNotes) {
+      room.surfaceNotes = json.surfaceNotes;
+      const noteEl = document.getElementById(`${roomId}_surface_note`);
+      if (noteEl) { noteEl.textContent = json.surfaceNotes; noteEl.parentElement.style.display = ''; }
+    }
     recalcRoom(roomId);
     markDirty();
-    showToast(`📷 AI filled: ${filled.join(', ')} — review and adjust`);
+    const noteHint = json.surfaceNotes ? ' — ⚠️ surface issue noted' : '';
+    showToast(`📷 AI filled: ${filled.join(', ')}${noteHint} — review and adjust`);
   } catch(e) {
     console.error('[AI Photo]', e);
     alert('AI Photo Error:\n' + (e.message || 'unknown error') + '\n\nIf this says "Failed to fetch" — network issue.\nIf it says "invalid_api_key" — re-save your key in ⚙️ Settings.');
@@ -3568,10 +3688,6 @@ function accountsLoad() {
   try { return JSON.parse(localStorage.getItem(ACCOUNTS_KEY)) || []; } catch { return []; }
 }
 function accountsSave(arr) { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(arr)); }
-
-const _esc = s => (s == null ? '' : String(s))
-  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
 function renderAccounts() {
   const accounts = accountsLoad();

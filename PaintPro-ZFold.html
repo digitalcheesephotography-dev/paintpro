@@ -2184,14 +2184,23 @@ function renderRoom(room, idx) {
         <button onclick="clearSurfaceNote('${room.id}')" style="float:right;background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0;line-height:1" aria-label="Dismiss surface note">✕</button>
       </div>
 
-      <!-- AI photo analysis -->
+      <!-- AI photo / video analysis -->
       <input type="file" id="${room.id}_photoinput" accept="image/*" capture="environment" style="display:none"
              onchange="analyzeRoomPhoto('${room.id}',this)"/>
-      <button onclick="document.getElementById('${room.id}_photoinput').click()"
-              style="width:100%;height:44px;background:#0d2233;border:1px solid #2baae1;border-radius:8px;color:#2baae1;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px"
-              aria-label="AI estimate from photo">
-        📷 AI Estimate from Photo
-      </button>
+      <input type="file" id="${room.id}_videoinput" accept="video/*" style="display:none"
+             onchange="analyzeRoomVideo('${room.id}',this)"/>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+        <button onclick="document.getElementById('${room.id}_photoinput').click()"
+                style="height:44px;background:#0d2233;border:1px solid #2baae1;border-radius:8px;color:#2baae1;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer"
+                aria-label="AI estimate from photo">
+          📷 AI Photo
+        </button>
+        <button onclick="document.getElementById('${room.id}_videoinput').click()"
+                style="height:44px;background:#0d2233;border:1px solid #2baae1;border-radius:8px;color:#2baae1;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer"
+                aria-label="AI estimate from video">
+          📹 AI Video
+        </button>
+      </div>
 
       <!-- Done & advance -->
       <button class="next-room-btn" onclick="nextRoom('${room.id}')" aria-label="${isExt ? 'Done with this side, go to next' : 'Done with this room, go to next'}">
@@ -2982,10 +2991,6 @@ function renderBid() {
 }
 
 async function writeBidScope() {
-  const apiKey   = localStorage.getItem('ingersoll_anthropic_key_v1') || '';
-  const proxyUrl = localStorage.getItem('ingersoll_proxy_url_v1') || '';
-  if (!apiKey && !proxyUrl) { showToast('Add API key in ⚙️ Settings first'); return; }
-
   const btn = document.getElementById('ai-scope-btn-bid');
   const origText = btn ? btn.textContent : '';
   if (btn) { btn.textContent = '⏳ Writing...'; btn.disabled = true; }
@@ -3009,10 +3014,10 @@ async function writeBidScope() {
     }).join('\n');
 
     const extras = [
-      ex.doorCount    > 0 ? `${ex.doorCount} doors`           : '',
-      ex.winCount     > 0 ? `${ex.winCount} windows`          : '',
-      ex.shutterCount > 0 ? `${ex.shutterCount} shutters`     : '',
-      ex.washSF       > 0 ? `power wash (${ex.washSF} sf)`   : '',
+      ex.doorCount    > 0 ? `${ex.doorCount} doors`          : '',
+      ex.winCount     > 0 ? `${ex.winCount} windows`         : '',
+      ex.shutterCount > 0 ? `${ex.shutterCount} shutters`    : '',
+      ex.washSF       > 0 ? `power wash (${ex.washSF} sf)`  : '',
     ].filter(Boolean).join(', ');
 
     const prompt = `You write professional project scope paragraphs for Ingersoll Painting LLC (James Bailey, Hannibal NY, established 1978).
@@ -3030,27 +3035,7 @@ Write a concise 2-3 sentence project description for the bid proposal. Rules:
 - Convey Ingersoll Painting's professionalism and care
 - Plain text only, no markdown, no bullet points`;
 
-    const body = JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 300,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    let data;
-    if (proxyUrl) {
-      const resp = await fetch(proxyUrl, { method:'POST', headers:{'content-type':'application/json'}, body });
-      data = await resp.json();
-    } else {
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'x-api-key':apiKey, 'anthropic-version':'2023-06-01',
-                   'content-type':'application/json', 'anthropic-dangerous-allow-browser':'true' },
-        body,
-      });
-      data = await resp.json();
-    }
-
-    if (data.error) throw new Error(data.error.message);
+    const data = await callAI([{ role: 'user', content: prompt }], 'claude-sonnet-4-6', 300);
     const text = (data.content?.[0]?.text || '').trim();
     if (!text) throw new Error('Empty response from AI');
     bidScopeText = text;
@@ -3475,58 +3460,11 @@ function showToast(msg, type='') {
 // AI PHOTO-TO-ESTIMATE
 // ══════════════════════════════════════════════
 
-async function analyzeRoomPhoto(roomId, input) {
-  const file = input.files[0];
-  if (!file) return;
-  const apiKey = localStorage.getItem('ingersoll_anthropic_key_v1') || '';
-  if (!apiKey) {
-    showToast('Set your Anthropic API key in ⚙ Settings first', 'warn');
-    input.value = '';
-    return;
-  }
-  showToast('📷 Analyzing room…');
-  // Compress image to base64
-  const base64 = await new Promise(res => {
-    const img = new Image();
-    img.onload = () => {
-      const max = 1024;
-      let w = img.width, h = img.height;
-      if (w > max || h > max) { if (w > h) { h = Math.round(h * max / w); w = max; } else { w = Math.round(w * max / h); h = max; } }
-      const c = document.createElement('canvas'); c.width = w; c.height = h;
-      c.getContext('2d').drawImage(img, 0, 0, w, h);
-      res(c.toDataURL('image/jpeg', 0.8).split(',')[1]);
-    };
-    img.src = URL.createObjectURL(file);
-  });
-  input.value = '';
-  try {
-    const proxyUrl = localStorage.getItem('ingersoll_proxy_url_v1') || '';
-    let resp, data;
-    if (proxyUrl) {
-      // Use user-configured proxy (Cloudflare Worker)
-      resp = await fetch(proxyUrl, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ base64, apiKey }),
-      });
-      data = await resp.json();
-    } else {
-      // No proxy set — try Anthropic directly (works on desktop/non-PWA)
-      resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-          'anthropic-dangerous-allow-browser': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 1024,
-          messages: [{ role: 'user', content: [
-            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
-            { type: 'text', text: room.mode === 'exterior'
-              ? `You are a painting estimator. Analyze this exterior house photo and estimate dimensions in feet.
+// ── Shared helpers ─────────────────────────────────────────────────────────
+
+function aiPhotoPrompt(isExt) {
+  return isExt
+    ? `You are a painting estimator. Analyze this exterior house photo and estimate dimensions in feet.
 Respond with ONLY valid JSON — no explanation, no markdown:
 {"walls":[w1,w2,w3,w4],"height":h,"soffit":sf,"deck":dk,"doors":d,"windows":win,"surfaceNotes":""}
 Scale anchors: a standard exterior door is 6.8 ft tall and 3 ft wide; a window is typically 4 ft tall and 3 ft wide; one story is ~9-10 ft, two story ~18-20 ft; typical vinyl siding lap is 4 inches wide.
@@ -3537,7 +3475,7 @@ Scale anchors: a standard exterior door is 6.8 ft tall and 3 ft wide; a window i
 - doors: number of exterior doors visible
 - windows: number of windows visible
 - surfaceNotes: brief note on any surface issues visible (peeling, rot, chalking, moisture damage, caulking gaps) — empty string if surfaces look fine`
-              : `You are a painting estimator. Analyze this interior room photo and estimate dimensions in feet.
+    : `You are a painting estimator. Analyze this interior room photo and estimate dimensions in feet.
 Respond with ONLY valid JSON — no explanation, no markdown:
 {"walls":[w1,w2,w3,w4],"height":h,"floorLength":l,"floorWidth":w,"doors":d,"windows":win,"surfaceNotes":""}
 Scale anchors: a standard interior door is 6.8 ft tall and 2.8 ft wide; a light switch plate is 4.5 inches tall; a standard outlet is 1.3 inches wide; counter height is 3 ft; standard ceiling height is 8-9 ft.
@@ -3547,68 +3485,234 @@ Scale anchors: a standard interior door is 6.8 ft tall and 2.8 ft wide; a light 
 - floorWidth: shorter floor dimension in feet
 - doors: number of doors visible
 - windows: number of windows visible
-- surfaceNotes: brief note on any surface issues visible (peeling paint, water stains, cracks, holes, texture damage) — empty string if surfaces look fine` }
-          ]}]
-        }),
-      });
-      data = await resp.json();
+- surfaceNotes: brief note on any surface issues visible (peeling paint, water stains, cracks, holes, texture damage) — empty string if surfaces look fine`;
+}
+
+function aiVideoPrompt(isExt, frameCount) {
+  return isExt
+    ? `You are a painting estimator. These ${frameCount} images are frames from a video walkthrough of an exterior. Analyze ALL frames together to estimate dimensions in feet.
+Respond with ONLY valid JSON — no explanation, no markdown:
+{"walls":[w1,w2,w3,...],"height":h,"soffit":sf,"deck":dk,"doors":d,"windows":win,"surfaceNotes":""}
+Scale anchors: exterior door=6.8 ft tall/3 ft wide; window=4 ft tall/3 ft wide; one story ~9-10 ft; two story ~18-20 ft; vinyl siding lap=4 inches.
+- walls: ALL unique wall widths you can identify across all frames (each wall once, even if seen multiple times)
+- height: wall height in feet
+- soffit: total soffit/eave area in sq ft across all visible sides (0 if none)
+- deck: total deck/porch area in sq ft (0 if none)
+- doors: total exterior doors visible across all frames
+- windows: total unique windows visible across all frames
+- surfaceNotes: note any surface issues spotted in any frame (peeling, rot, chalking, moisture) — empty string if fine`
+    : `You are a painting estimator. These ${frameCount} images are frames from a video walkthrough of an interior room. Analyze ALL frames together — each frame shows a different wall or angle.
+Respond with ONLY valid JSON — no explanation, no markdown:
+{"walls":[w1,w2,w3,w4],"height":h,"floorLength":l,"floorWidth":w,"doors":d,"windows":win,"surfaceNotes":""}
+Scale anchors: interior door=6.8 ft tall/2.8 ft wide; light switch plate=4.5 inches tall; outlet=1.3 inches wide; counter height=3 ft; standard ceiling=8-9 ft.
+- walls: all 4 wall widths in feet, synthesized from all frames (different frames likely show different walls — use that to get all 4)
+- height: ceiling height in feet
+- floorLength: longer floor dimension in feet
+- floorWidth: shorter floor dimension in feet
+- doors: total number of doors in the room
+- windows: total number of windows in the room
+- surfaceNotes: note any surface issues spotted in any frame (peeling, stains, cracks, holes) — empty string if fine`;
+}
+
+async function callAI(messages, model = 'claude-sonnet-4-6', max_tokens = 1024) {
+  const apiKey   = localStorage.getItem('ingersoll_anthropic_key_v1') || '';
+  const proxyUrl = localStorage.getItem('ingersoll_proxy_url_v1') || '';
+  if (!apiKey && !proxyUrl) throw new Error('No API key — add one in ⚙️ Settings');
+
+  let resp;
+  if (proxyUrl) {
+    resp = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ apiKey, messages, model, max_tokens }),
+    });
+  } else {
+    resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-allow-browser': 'true',
+      },
+      body: JSON.stringify({ model, max_tokens, messages }),
+    });
+  }
+  const data = await resp.json();
+  if (data.error) throw new Error(data.error.message);
+  return data;
+}
+
+function applyAIRoomResult(roomId, json, toastPrefix) {
+  const room = rooms.find(r => r.id === roomId);
+  if (!room) return;
+  const filled = [];
+  if (json.walls?.length) {
+    room.walls = json.walls.map(ft => ({ id: 'w'+Date.now()+Math.random(), ft: Number(ft).toFixed(2) }));
+    renderWalls(room);
+    filled.push(`${json.walls.length} walls`);
+  }
+  if (json.height) {
+    room.height = Number(json.height).toFixed(2);
+    const el = document.getElementById(`${roomId}_height`);
+    if (el) el.value = room.height;
+    filled.push(`height ${json.height}'`);
+  }
+  if (room.mode === 'exterior') {
+    if (json.soffit) {
+      room.soffit = Number(json.soffit).toFixed(1);
+      const el = document.getElementById(`${roomId}_soffit`);
+      if (el) el.value = room.soffit;
+      filled.push(`soffit ${json.soffit} sf`);
     }
-    if (data.error) throw new Error(data.error.message);
-    const text = data.content?.[0]?.text || '';
-    const json = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || '{}');
+    if (json.deck) {
+      room.deck = Number(json.deck).toFixed(1);
+      const el = document.getElementById(`${roomId}_deck`);
+      if (el) el.value = room.deck;
+      filled.push(`deck ${json.deck} sf`);
+    }
+  } else {
+    if (json.floorLength) {
+      room.floorLength = Number(json.floorLength).toFixed(2);
+      const el = document.getElementById(`${roomId}_floorLength`);
+      if (el) el.value = room.floorLength;
+      filled.push(`length ${json.floorLength}'`);
+    }
+    if (json.floorWidth) {
+      room.floorWidth = Number(json.floorWidth).toFixed(2);
+      const el = document.getElementById(`${roomId}_floorWidth`);
+      if (el) el.value = room.floorWidth;
+      filled.push(`width ${json.floorWidth}'`);
+    }
+  }
+  if (json.surfaceNotes) {
+    room.surfaceNotes = json.surfaceNotes;
+    const noteEl = document.getElementById(`${roomId}_surface_note`);
+    if (noteEl) { noteEl.textContent = json.surfaceNotes; noteEl.parentElement.style.display = ''; }
+  }
+  recalcRoom(roomId);
+  markDirty();
+  const noteHint = json.surfaceNotes ? ' — ⚠️ surface issue noted' : '';
+  showToast(`${toastPrefix} ${filled.join(', ')}${noteHint} — review and adjust`);
+}
+
+// ── Photo analysis ──────────────────────────────────────────────────────────
+
+async function analyzeRoomPhoto(roomId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  showToast('📷 Analyzing photo…');
+  try {
+    const base64 = await compressToBase64(file, 1024, 0.8);
     const room = rooms.find(r => r.id === roomId);
     if (!room) return;
-    let filled = [];
-    if (json.walls?.length) {
-      room.walls = json.walls.map(ft => ({ id: 'w'+Date.now()+Math.random(), ft: ft.toFixed(2) }));
-      renderWalls(room);
-      filled.push(`${json.walls.length} walls`);
-    }
-    if (json.height) {
-      room.height = json.height.toFixed(2);
-      const el = document.getElementById(`${roomId}_height`);
-      if (el) el.value = room.height;
-      filled.push(`height ${json.height}'`);
-    }
-    if (room.mode === 'exterior') {
-      if (json.soffit) {
-        room.soffit = json.soffit.toFixed(1);
-        const el = document.getElementById(`${roomId}_soffit`);
-        if (el) el.value = room.soffit;
-        filled.push(`soffit ${json.soffit} sf`);
-      }
-      if (json.deck) {
-        room.deck = json.deck.toFixed(1);
-        const el = document.getElementById(`${roomId}_deck`);
-        if (el) el.value = room.deck;
-        filled.push(`deck ${json.deck} sf`);
-      }
-    } else {
-      if (json.floorLength) {
-        room.floorLength = json.floorLength.toFixed(2);
-        const el = document.getElementById(`${roomId}_floorLength`);
-        if (el) el.value = room.floorLength;
-        filled.push(`length ${json.floorLength}'`);
-      }
-      if (json.floorWidth) {
-        room.floorWidth = json.floorWidth.toFixed(2);
-        const el = document.getElementById(`${roomId}_floorWidth`);
-        if (el) el.value = room.floorWidth;
-        filled.push(`width ${json.floorWidth}'`);
-      }
-    }
-    if (json.surfaceNotes) {
-      room.surfaceNotes = json.surfaceNotes;
-      const noteEl = document.getElementById(`${roomId}_surface_note`);
-      if (noteEl) { noteEl.textContent = json.surfaceNotes; noteEl.parentElement.style.display = ''; }
-    }
-    recalcRoom(roomId);
-    markDirty();
-    const noteHint = json.surfaceNotes ? ' — ⚠️ surface issue noted' : '';
-    showToast(`📷 AI filled: ${filled.join(', ')}${noteHint} — review and adjust`);
+    const messages = [{ role: 'user', content: [
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+      { type: 'text', text: aiPhotoPrompt(room.mode === 'exterior') },
+    ]}];
+    const data = await callAI(messages);
+    const json = JSON.parse((data.content?.[0]?.text || '').match(/\{[\s\S]*\}/)?.[0] || '{}');
+    applyAIRoomResult(roomId, json, '📷 AI filled:');
   } catch(e) {
     console.error('[AI Photo]', e);
-    alert('AI Photo Error:\n' + (e.message || 'unknown error') + '\n\nIf this says "Failed to fetch" — network issue.\nIf it says "invalid_api_key" — re-save your key in ⚙️ Settings.');
+    showToast('AI error: ' + e.message);
+  }
+}
+
+function compressToBase64(file, maxPx, quality) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.width, h = img.height;
+      if (w > maxPx || h > maxPx) {
+        if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
+        else       { w = Math.round(w * maxPx / h); h = maxPx; }
+      }
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      res(c.toDataURL('image/jpeg', quality).split(',')[1]);
+    };
+    img.onerror = rej;
+    img.src = url;
+  });
+}
+
+// ── Video analysis ──────────────────────────────────────────────────────────
+
+async function analyzeRoomVideo(roomId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+
+  const room = rooms.find(r => r.id === roomId);
+  if (!room) return;
+
+  showToast('📹 Loading video…');
+
+  const url   = URL.createObjectURL(file);
+  const video = document.createElement('video');
+  video.src   = url;
+  video.muted = true;
+  video.playsInline = true;
+
+  try {
+    // Wait for metadata so we know duration
+    await new Promise((res, rej) => {
+      video.addEventListener('loadedmetadata', res, { once: true });
+      video.addEventListener('error', rej, { once: true });
+      video.load();
+    });
+
+    const duration   = video.duration;
+    const FRAME_COUNT = 6;
+    // Spread frames from 8% to 92% to skip intro/outro blur
+    const positions  = Array.from({ length: FRAME_COUNT }, (_, i) =>
+      duration * (0.08 + (0.84 / (FRAME_COUNT - 1)) * i)
+    );
+
+    showToast(`📹 Extracting ${FRAME_COUNT} frames…`);
+    const frames = [];
+    const canvas = document.createElement('canvas');
+    const ctx    = canvas.getContext('2d');
+
+    for (const t of positions) {
+      await new Promise(res => {
+        video.addEventListener('seeked', res, { once: true });
+        video.currentTime = t;
+      });
+      const maxPx = 1024;
+      let w = video.videoWidth, h = video.videoHeight;
+      if (w > maxPx || h > maxPx) {
+        if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
+        else       { w = Math.round(w * maxPx / h); h = maxPx; }
+      }
+      canvas.width = w; canvas.height = h;
+      ctx.drawImage(video, 0, 0, w, h);
+      frames.push(canvas.toDataURL('image/jpeg', 0.75).split(',')[1]);
+    }
+
+    URL.revokeObjectURL(url);
+    showToast(`📹 Analyzing ${FRAME_COUNT} frames with AI…`);
+
+    // Build multi-image message: interleave label + image for each frame
+    const content = [];
+    frames.forEach((b64, i) => {
+      content.push({ type: 'text', text: `Frame ${i + 1} of ${FRAME_COUNT}:` });
+      content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } });
+    });
+    content.push({ type: 'text', text: aiVideoPrompt(room.mode === 'exterior', FRAME_COUNT) });
+
+    const data = await callAI([{ role: 'user', content }], 'claude-sonnet-4-6', 1024);
+    const json = JSON.parse((data.content?.[0]?.text || '').match(/\{[\s\S]*\}/)?.[0] || '{}');
+    applyAIRoomResult(roomId, json, '📹 AI filled:');
+  } catch(e) {
+    URL.revokeObjectURL(url);
+    console.error('[AI Video]', e);
+    showToast('AI video error: ' + e.message);
   }
 }
 

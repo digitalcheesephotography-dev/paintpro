@@ -1248,8 +1248,10 @@ const DEFAULT_EXT_RATES = { walls:2.25, ceiling:1.75, floor:2.50, trim:3.50 };
 function loadExtRates() {
   try {
     const s = JSON.parse(localStorage.getItem(EXT_RATES_KEY));
-    if (s) return { walls:+s.walls||DEFAULT_EXT_RATES.walls, ceiling:+s.ceiling||DEFAULT_EXT_RATES.ceiling,
-                    floor:+s.floor||DEFAULT_EXT_RATES.floor, trim:+s.trim||DEFAULT_EXT_RATES.trim };
+    if (s) return { walls:  s.walls  != null ? +s.walls  : DEFAULT_EXT_RATES.walls,
+                    ceiling:s.ceiling != null ? +s.ceiling : DEFAULT_EXT_RATES.ceiling,
+                    floor:  s.floor  != null ? +s.floor  : DEFAULT_EXT_RATES.floor,
+                    trim:   s.trim   != null ? +s.trim   : DEFAULT_EXT_RATES.trim };
   } catch {}
   return { ...DEFAULT_EXT_RATES };
 }
@@ -1329,8 +1331,10 @@ const DEFAULT_RATES = { walls:1.85, ceiling:1.65, floor:1.65, trim:3.50 };
 function loadRates() {
   try {
     const s = JSON.parse(localStorage.getItem(RATES_KEY));
-    if (s) return { walls:+s.walls||DEFAULT_RATES.walls, ceiling:+s.ceiling||DEFAULT_RATES.ceiling,
-                    floor:+s.floor||DEFAULT_RATES.floor, trim:+s.trim||DEFAULT_RATES.trim };
+    if (s) return { walls:  s.walls  != null ? +s.walls  : DEFAULT_RATES.walls,
+                    ceiling:s.ceiling != null ? +s.ceiling : DEFAULT_RATES.ceiling,
+                    floor:  s.floor  != null ? +s.floor  : DEFAULT_RATES.floor,
+                    trim:   s.trim   != null ? +s.trim   : DEFAULT_RATES.trim };
   } catch {}
   return { ...DEFAULT_RATES };
 }
@@ -2444,6 +2448,7 @@ function switchMode(mode) {
   if (addBtn) addBtn.textContent = mode === 'exterior' ? '+ ADD SIDE' : '+ ADD ROOM / AREA';
   rooms.length = 0; roomCount = 0;
   document.getElementById('rooms-container').innerHTML = '';
+  document.getElementById('target-field').value = 'wall';
   syncRatesUI();
   addRoom();
   recalcAll();
@@ -2537,17 +2542,14 @@ function applyJobData(data) {
   setVal('client-name', data.client);
   setVal('job-address', data.address);
   setVal('notes', data.notes);
-  // Restore estimator mode
-  const newMode = data.estimatorMode || 'interior';
-  if (newMode !== estimatorMode) {
-    estimatorMode = newMode;
-    document.getElementById('mode-btn-int')?.classList.toggle('active', estimatorMode === 'interior');
-    document.getElementById('mode-btn-ext')?.classList.toggle('active', estimatorMode === 'exterior');
-    const extCard = document.getElementById('ext-extras-card');
-    if (extCard) extCard.style.display = estimatorMode === 'exterior' ? 'block' : 'none';
-    const addBtn = document.getElementById('add-room-btn');
-    if (addBtn) addBtn.textContent = estimatorMode === 'exterior' ? '+ ADD SIDE' : '+ ADD ROOM / AREA';
-  }
+  // Restore estimator mode — always sync UI even if mode hasn't changed
+  estimatorMode = data.estimatorMode || 'interior';
+  document.getElementById('mode-btn-int')?.classList.toggle('active', estimatorMode === 'interior');
+  document.getElementById('mode-btn-ext')?.classList.toggle('active', estimatorMode === 'exterior');
+  const extCard = document.getElementById('ext-extras-card');
+  if (extCard) extCard.style.display = estimatorMode === 'exterior' ? 'block' : 'none';
+  const addBtn = document.getElementById('add-room-btn');
+  if (addBtn) addBtn.textContent = estimatorMode === 'exterior' ? '+ ADD SIDE' : '+ ADD ROOM / AREA';
   // Restore rooms array and counter
   rooms.length = 0;
   (data.rooms || []).forEach(r => rooms.push(r));
@@ -2677,14 +2679,17 @@ function startNewJob() {
   // Clear active state
   rooms.length = 0; roomCount = 0;
   job.doorCount = ''; job.winCount = '';
-  job.shutterCount = ''; job.washSF = '';
+  job.shutterCount = ''; job.shutterPrice = '25';
+  job.washSF = ''; job.washRate = '0.20';
   document.getElementById('client-name').value = '';
   document.getElementById('job-address').value = '';
   document.getElementById('notes').value = '';
   document.getElementById('job-door-count').value = '';
   document.getElementById('job-win-count').value = '';
   document.getElementById('job-shutter-count').value = '';
+  document.getElementById('job-shutter-price').value = '25';
   document.getElementById('job-wash-sf').value = '';
+  document.getElementById('job-wash-rate').value = '0.20';
   document.getElementById('rooms-container').innerHTML = '';
   currentJobName = '';
   syncJobBadge();
@@ -2822,7 +2827,7 @@ function renderBid() {
         <td style="padding:8px 6px;font-size:12px;color:#555">${ex.washSF.toFixed(0)} sq ft</td>
         <td style="padding:8px 6px;font-size:12px">—</td>
         <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:right">$${ex.washTotal/ex.washSF>0?(ex.washTotal/ex.washSF).toFixed(2):0}/sf</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.washTotal/ex.washSF)}/sf</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.washTotal)}</td>
       </tr>` : '');
 
@@ -3318,8 +3323,8 @@ function saveClientFromBid() {
   const existing = contacts.find(c=>c.name.toLowerCase()===name.toLowerCase());
 
   if(existing) {
-    // Update estimate on existing contact
-    existing.estimate     = estimate;
+    // Update estimate on existing contact — only overwrite if we actually have a bid total
+    if (estimate) existing.estimate = estimate;
     existing.estimateDate = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
     existing.address      = address || existing.address;
     existing.updatedAt    = Date.now();
@@ -3564,6 +3569,10 @@ function accountsLoad() {
 }
 function accountsSave(arr) { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(arr)); }
 
+const _esc = s => (s == null ? '' : String(s))
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
 function renderAccounts() {
   const accounts = accountsLoad();
   const list = document.getElementById('accounts-list');
@@ -3577,11 +3586,13 @@ function renderAccounts() {
   if (empty) empty.style.display = 'none';
   list.innerHTML = accounts.map(a => {
     const maskedPw = a.password ? '••••••••' : '<span style="color:var(--border)">—</span>';
-    const urlEl = a.url ? `<a class="acct-url" href="${a.url}" target="_blank" rel="noopener">${a.url.replace(/^https?:\/\//,'')}</a>` : '';
-    const notesEl = a.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5">${a.notes}</div>` : '';
+    // Only allow http/https URLs in the href to block javascript: URIs
+    const safeUrl = /^https?:\/\//i.test(a.url||'') ? a.url : '';
+    const urlEl = safeUrl ? `<a class="acct-url" href="${_esc(safeUrl)}" target="_blank" rel="noopener">${_esc(safeUrl.replace(/^https?:\/\//,''))}</a>` : '';
+    const notesEl = a.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5">${_esc(a.notes)}</div>` : '';
     return `<div class="acct-card">
-      <div class="acct-service">${a.service || 'Unnamed'}</div>
-      ${a.username ? `<div class="acct-user">${a.username}</div>` : ''}
+      <div class="acct-service">${_esc(a.service) || 'Unnamed'}</div>
+      ${a.username ? `<div class="acct-user">${_esc(a.username)}</div>` : ''}
       <div class="acct-pw" id="acct-pw-display-${a.id}">${maskedPw}</div>
       ${urlEl}
       ${notesEl}
@@ -4439,15 +4450,17 @@ function processVoiceCommand(transcript) {
     }
   }
 
-  // Power wash voice ("power wash 1200", "wash 800 square feet")
-  const washMatch = t.match(/(?:power\s*wash|wash)\s+(\d[\d,]*(?:\.\d+)?)/i);
-  if (washMatch) {
-    const n = parseSpokenNumber(washMatch[1]);
-    if (n !== null && n > 0) {
-      switchTab('estimate');
-      document.getElementById('job-wash-sf').value = Math.round(n);
-      updateJobField('washSF', String(Math.round(n)));
-      return showToast(`🚿 Power wash ${Math.round(n)} sf`);
+  // Power wash voice ("power wash 1200", "wash 800 square feet") — exterior only
+  if (estimatorMode === 'exterior') {
+    const washMatch = t.match(/(?:power\s*wash|wash)\s+(\d[\d,]*(?:\.\d+)?)/i);
+    if (washMatch) {
+      const n = parseSpokenNumber(washMatch[1]);
+      if (n !== null && n > 0) {
+        switchTab('estimate');
+        document.getElementById('job-wash-sf').value = Math.round(n);
+        updateJobField('washSF', String(Math.round(n)));
+        return showToast(`🚿 Power wash ${Math.round(n)} sf`);
+      }
     }
   }
 

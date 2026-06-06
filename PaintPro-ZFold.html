@@ -2031,6 +2031,7 @@ function addRoom() {
         product: PRODUCTS[0].name, coats:'2', rates:null, open:true };
   rooms.push(room);
   renderRoom(room, rooms.length-1);
+  renderAIPhotoStrip(room.id);
   refreshRoomSelect();
   rooms.forEach(r => { if(r.id!==id) setOpen(r.id,false); });
 }
@@ -2185,15 +2186,15 @@ function renderRoom(room, idx) {
       </div>
 
       <!-- AI photo / video analysis -->
-      <input type="file" id="${room.id}_photoinput" accept="image/*" capture="environment" style="display:none"
-             onchange="analyzeRoomPhoto('${room.id}',this)"/>
+      <input type="file" id="${room.id}_photoinput" accept="image/*" multiple style="display:none"
+             onchange="addAIPhotos('${room.id}',this)"/>
       <input type="file" id="${room.id}_videoinput" accept="video/*" style="display:none"
              onchange="analyzeRoomVideo('${room.id}',this)"/>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <button onclick="document.getElementById('${room.id}_photoinput').click()"
                 style="height:44px;background:#0d2233;border:1px solid #2baae1;border-radius:8px;color:#2baae1;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer"
-                aria-label="AI estimate from photo">
-          📷 AI Photo
+                aria-label="Add wall photo to AI batch">
+          📷 Add Photo
         </button>
         <button onclick="document.getElementById('${room.id}_videoinput').click()"
                 style="height:44px;background:#0d2233;border:1px solid #2baae1;border-radius:8px;color:#2baae1;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer"
@@ -2201,6 +2202,7 @@ function renderRoom(room, idx) {
           📹 AI Video
         </button>
       </div>
+      <div id="${room.id}_aiphotos_strip"></div>
 
       <!-- AI Chat panel — opens after photo/video analysis, persists with room -->
       <div id="${room.id}_ai_chat_wrap" style="display:${(room.aiChat&&room.aiChat.length)?'':'none'};margin-top:8px;margin-bottom:8px;border:1px solid #1e3a4a;border-radius:8px;overflow:hidden">
@@ -2269,6 +2271,7 @@ function removeRoom(id) {
 // ── Wall management ───────────────────────────────
 let wallCount = 0;
 let reshootTarget = null; // {roomId, wallId} when rehooting a specific wall
+const aiPhotoBatch = {}; // roomId → [{data: base64, type: 'image/jpeg'}]
 
 function addWall(roomId, ft='') {
   const room = rooms.find(r=>r.id===roomId); if(!room) return;
@@ -2614,7 +2617,7 @@ function applyJobData(data) {
   // Re-render rooms
   const wrap = document.getElementById('rooms-container');
   if (wrap) wrap.innerHTML = '';
-  rooms.forEach((r, i) => { renderRoom(r, i); renderWalls(r); });
+  rooms.forEach((r, i) => { renderRoom(r, i); renderWalls(r); renderAIPhotoStrip(r.id); });
   refreshRoomSelect();
   bidScopeText = data.bidScopeText || '';
   currentJobName = data.name || '';
@@ -3616,6 +3619,95 @@ function applyAIRoomResult(roomId, json, toastPrefix) {
   markDirty();
   const noteHint = json.surfaceNotes ? ' — ⚠️ surface issue noted' : '';
   showToast(`${toastPrefix} ${filled.join(', ')}${noteHint} — review and adjust`);
+}
+
+// ── Multi-photo AI batch ────────────────────────────────────────────────────
+
+async function addAIPhotos(roomId, input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  input.value = '';
+  if (!aiPhotoBatch[roomId]) aiPhotoBatch[roomId] = [];
+  showToast(`📷 Loading ${files.length} photo${files.length > 1 ? 's' : ''}…`);
+  for (const file of files) {
+    const base64 = await compressToBase64(file, 1024, 0.8);
+    aiPhotoBatch[roomId].push({ data: base64, type: 'image/jpeg' });
+  }
+  renderAIPhotoStrip(roomId);
+}
+
+function removeAIPhoto(roomId, idx) {
+  if (aiPhotoBatch[roomId]) aiPhotoBatch[roomId].splice(idx, 1);
+  renderAIPhotoStrip(roomId);
+}
+
+function renderAIPhotoStrip(roomId) {
+  const strip = document.getElementById(roomId + '_aiphotos_strip');
+  if (!strip) return;
+  const photos = aiPhotoBatch[roomId] || [];
+  if (!photos.length) { strip.innerHTML = ''; return; }
+  const thumbs = photos.map((p, i) => `
+    <div style="position:relative;display:inline-block;margin-right:6px;margin-bottom:4px">
+      <img src="data:${p.type};base64,${p.data}" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #2baae1;vertical-align:top"/>
+      <button onclick="removeAIPhoto('${roomId}',${i})" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#c0392b;border:none;color:#fff;font-size:10px;cursor:pointer;line-height:18px;padding:0;text-align:center">✕</button>
+    </div>`).join('');
+  strip.innerHTML = `
+    <div style="margin-bottom:6px;line-height:1">${thumbs}</div>
+    <button onclick="analyzeAIPhotos('${roomId}')"
+            style="width:100%;height:44px;background:#0a2b0a;border:1px solid #2e8b1e;border-radius:8px;color:#2e8b1e;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">
+      🤖 Analyze ${photos.length} Photo${photos.length > 1 ? 's' : ''} →
+    </button>`;
+}
+
+function aiMultiPhotoPrompt(isExt, count) {
+  return isExt
+    ? `You are a painting estimator. These ${count} photos show different sides and angles of an exterior. Analyze ALL photos together to estimate dimensions in feet.
+Respond with ONLY valid JSON — no explanation, no markdown:
+{"walls":[w1,w2,w3,...],"height":h,"soffit":sf,"deck":dk,"doors":d,"windows":win,"surfaceNotes":""}
+Scale anchors: exterior door=6.8 ft tall/3 ft wide; window=4 ft tall/3 ft wide; one story ~9-10 ft; vinyl siding lap=4 inches.
+- walls: ALL unique wall widths you can identify across all photos
+- height: wall height in feet
+- soffit: total soffit/eave area in sq ft (0 if none)
+- deck: total deck/porch area in sq ft (0 if none)
+- doors: total exterior doors
+- windows: total unique windows
+- surfaceNotes: note any surface issues (peeling, rot, chalking, moisture) — empty string if fine`
+    : `You are a painting estimator. These ${count} photos show different walls and angles of the same interior room. Analyze ALL photos together to estimate dimensions in feet.
+Respond with ONLY valid JSON — no explanation, no markdown:
+{"walls":[w1,w2,w3,w4],"height":h,"floorLength":l,"floorWidth":w,"doors":d,"windows":win,"surfaceNotes":""}
+Scale anchors: interior door=6.8 ft tall/2.8 ft wide; light switch plate=4.5 inches tall; outlet=1.3 inches wide; counter height=3 ft; standard ceiling=8-9 ft.
+- walls: all 4 wall widths in feet — different photos likely show different walls, synthesize across all
+- height: ceiling height in feet
+- floorLength: longer floor dimension in feet
+- floorWidth: shorter floor dimension in feet
+- doors: total doors in the room
+- windows: total windows in the room
+- surfaceNotes: note any surface issues spotted in any photo (peeling, stains, cracks, holes) — empty string if fine`;
+}
+
+async function analyzeAIPhotos(roomId) {
+  const photos = aiPhotoBatch[roomId] || [];
+  if (!photos.length) return;
+  const room = rooms.find(r => r.id === roomId);
+  if (!room) return;
+  showToast(`🤖 Analyzing ${photos.length} photo${photos.length > 1 ? 's' : ''}…`);
+  try {
+    const content = [];
+    photos.forEach((p, i) => {
+      content.push({ type: 'image', source: { type: 'base64', media_type: p.type, data: p.data } });
+      content.push({ type: 'text', text: `Photo ${i + 1}` });
+    });
+    content.push({ type: 'text', text: aiMultiPhotoPrompt(room.mode === 'exterior', photos.length) });
+    const data = await callAI([{ role: 'user', content }]);
+    const json = JSON.parse((data.content?.[0]?.text || '').match(/\{[\s\S]*\}/)?.[0] || '{}');
+    applyAIRoomResult(roomId, json, `📷 AI filled (${photos.length} photos):`);
+    openAIChat(roomId, aiResultSummary(json, room.mode === 'exterior'));
+    aiPhotoBatch[roomId] = [];
+    renderAIPhotoStrip(roomId);
+  } catch(e) {
+    console.error('[AI Photos]', e);
+    showToast('AI error: ' + e.message);
+  }
 }
 
 // ── Photo analysis ──────────────────────────────────────────────────────────

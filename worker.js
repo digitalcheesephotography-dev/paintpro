@@ -46,7 +46,7 @@ export default {
         { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } });
     }
 
-    const { apiKey, base64, messages, model, max_tokens, testOnly } = body;
+    const { apiKey, base64, messages, model, max_tokens, system, testOnly } = body;
 
     if (!apiKey) {
       return new Response(JSON.stringify({ error: { message: 'Missing API key' } }),
@@ -64,12 +64,14 @@ export default {
       return new Response(JSON.stringify(d), { status: r.status, headers: { ...CORS, 'Content-Type': 'application/json' } });
     }
 
-    // Passthrough mode: app sends complete messages array (used for video frames and bid writer)
+    // Passthrough mode: app sends complete messages array (used for video frames, bid writer, and AI chat)
     if (messages) {
+      const payload = { model: model || MODEL, max_tokens: max_tokens || 1024, messages };
+      if (system) payload.system = system;
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-        body: JSON.stringify({ model: model || MODEL, max_tokens: max_tokens || 1024, messages }),
+        body: JSON.stringify(payload),
       });
       const d = await r.json();
       return new Response(JSON.stringify(d), { status: r.status, headers: { ...CORS, 'Content-Type': 'application/json' } });

@@ -2388,7 +2388,7 @@ function toggleSurf(id, surf) {
   recalcRoom(id);
 }
 function refreshRoomSelect() {
-  document.getElementById('target-room').innerHTML=rooms.map((r,i)=>`<option value="${i}">${r.name}</option>`).join('');
+  document.getElementById('target-room').innerHTML=rooms.map((r,i)=>`<option value="${i}">${_esc(r.name)}</option>`).join('');
 }
 
 // ══════════════════════════════════════════════
@@ -2833,7 +2833,7 @@ function renderBid() {
     const sf    = c.totalSF > 0 ? c.totalSF.toFixed(0)+' sf' : '—';
     return `
       <tr style="border-bottom:1px solid #e5e7eb">
-        <td style="padding:8px 6px;font-weight:700;font-size:13px">${r.name}</td>
+        <td style="padding:8px 6px;font-weight:700;font-size:13px">${_esc(r.name)}</td>
         <td style="padding:8px 6px;font-size:12px;color:#555">${surfs||'—'}</td>
         <td style="padding:8px 6px;font-size:12px">${short}</td>
         <td style="padding:8px 6px;font-size:12px;text-align:center">${r.coats}</td>
@@ -2899,8 +2899,8 @@ function renderBid() {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;font-size:13px">
         <div>
           <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:4px">Prepared For</div>
-          <div style="font-weight:700;font-size:15px">${client}</div>
-          <div style="color:#555">${addr}</div>
+          <div style="font-weight:700;font-size:15px">${_esc(client)}</div>
+          <div style="color:#555">${_esc(addr)}</div>
         </div>
         <div style="text-align:right">
           <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:4px">Date</div>
@@ -3436,20 +3436,20 @@ function buildContactCard(c) {
   div.innerHTML = `
     <div class="contact-card-header">
       <div>
-        <div class="contact-name">${c.name||'—'}</div>
-        <div class="contact-addr">${c.address||''}</div>
+        <div class="contact-name">${_esc(c.name)||'—'}</div>
+        <div class="contact-addr">${_esc(c.address)||''}</div>
       </div>
       <span class="status-badge status-${c.status||'pending'}">${STATUS_LABELS[c.status]||'Pending'}</span>
     </div>
     <div class="contact-meta">
-      ${c.phone?`<span><strong><a class="qt-phone" href="tel:${c.phone}" onclick="event.stopPropagation()">${c.phone}</a></strong></span>`:''}
-      ${c.estimate?`<span>Est: <strong>${c.estimate}</strong></span>`:''}
-      ${c.estimateDate?`<span>Date: <strong>${c.estimateDate}</strong></span>`:''}
-      ${c.notes?`<span style="color:var(--muted);font-size:12px">${c.notes.substring(0,60)}${c.notes.length>60?'…':''}</span>`:''}
+      ${c.phone?`<span><strong><a class="qt-phone" href="tel:${_esc(c.phone)}" onclick="event.stopPropagation()">${_esc(c.phone)}</a></strong></span>`:''}
+      ${c.estimate?`<span>Est: <strong>${_esc(c.estimate)}</strong></span>`:''}
+      ${c.estimateDate?`<span>Date: <strong>${_esc(c.estimateDate)}</strong></span>`:''}
+      ${c.notes?`<span style="color:var(--muted);font-size:12px">${_esc(c.notes.substring(0,60))}${c.notes.length>60?'…':''}</span>`:''}
     </div>
     <div class="contact-actions">
-      <button class="ca-btn ca-text" onclick="toggleQuickTexts('${c.id}')" aria-label="Quick text ${c.name}">💬 Quick Text</button>
-      <button class="ca-btn ca-edit" onclick="openContactModal('${c.id}')" aria-label="Edit ${c.name}">✏️ Edit</button>
+      <button class="ca-btn ca-text" onclick="toggleQuickTexts('${c.id}')" aria-label="Quick text ${_esc(c.name)}">💬 Quick Text</button>
+      <button class="ca-btn ca-edit" onclick="openContactModal('${c.id}')" aria-label="Edit ${_esc(c.name)}">✏️ Edit</button>
     </div>
     <div class="quick-texts" id="qt_${c.id}">
       ${buildQuickTexts(c)}
@@ -4097,7 +4097,9 @@ function restoreFromBackup(input) {
         input.value = '';
         return;
       }
-      Object.entries(data.localStorage).forEach(([k, v]) => localStorage.setItem(k, v));
+      Object.entries(data.localStorage).forEach(([k, v]) => {
+        if (BACKUP_KEYS.includes(k)) localStorage.setItem(k, v);
+      });
       input.value = '';
       showToast('✅ Backup restored — reloading…');
       setTimeout(() => location.reload(), 1200);
@@ -4449,20 +4451,20 @@ function renderProjects() {
     div.className = 'proj-card';
     div.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div style="font-size:16px;font-weight:700;flex:1">${p.name}</div>
-        <span class="proj-status-badge proj-${p.status}">${PROJ_STATUS[p.status]||p.status}</span>
+        <div style="font-size:16px;font-weight:700;flex:1">${_esc(p.name)}</div>
+        <span class="proj-status-badge proj-${p.status}">${PROJ_STATUS[p.status]||_esc(p.status)}</span>
       </div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:6px">
-        ${p.client?'👤 '+p.client+'&nbsp;&nbsp;':''}
-        ${p.date?'📅 '+p.date+'&nbsp;&nbsp;':''}
-        ${p.value?'💰 '+p.value:''}
+        ${p.client?'👤 '+_esc(p.client)+'&nbsp;&nbsp;':''}
+        ${p.date?'📅 '+_esc(p.date)+'&nbsp;&nbsp;':''}
+        ${p.value?'💰 '+_esc(p.value):''}
       </div>
-      ${p.notes?`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">${p.notes.substring(0,80)}${p.notes.length>80?'…':''}</div>`:''}
+      ${p.notes?`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">${_esc(p.notes.substring(0,80))}${p.notes.length>80?'…':''}</div>`:''}
       ${total>0?`<div style="font-size:12px;color:var(--blue);margin-bottom:10px">✓ ${done}/${total} tasks complete</div>`:''}
       ${(p.tasks||[]).map(t=>`
         <div class="task-row">
           <input type="checkbox" class="task-check" ${t.done?'checked':''} onchange="projToggleTask('${p.id}','${t.id}',this.checked)"/>
-          <span class="task-label${t.done?' done':''}">${t.text}</span>
+          <span class="task-label${t.done?' done':''}">${_esc(t.text)}</span>
         </div>`).join('')}
       <div style="display:flex;gap:8px;margin-top:10px">
         <button onclick="openProjectModal('${p.id}')" style="flex:1;height:40px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">✏️ Edit</button>

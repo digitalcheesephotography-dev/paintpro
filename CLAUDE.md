@@ -94,16 +94,40 @@ Dark "contractor grade" — high contrast, large tap targets, visible in bright 
 
 ## 5. Bid document conventions (STRICT — never deviate)
 
-These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat), but the in-app bid output (`renderBid()`) follows them too.
+These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat). The in-app Bid Agent follows the same pricing and tone rules.
 
-- **Font:** Georgia for bid documents (not the app fonts). The in-app bid uses system serif as a proxy.
-- **No em dashes** (`—`) anywhere in bid output. Use a hyphen, comma, or rephrase.
-- **Single "Project Services" line item** — never break out labor hours/rates per task.
-- **Embedded Ingersoll Painting logo** at the top.
-- **About the Product section** describing the paint products used.
+### Tone
+- Warm but direct. No fluff, no filler, no overselling.
+- Show per-building or per-area cost when the project has multiple structures — helps large numbers feel manageable.
+- The 1-Year Workmanship Warranty communicates confidence.
+
+### Pricing rules
+- Show paint/stain at the **retail price per gallon** on the bid.
+- **Volume Paint Discount** = difference between retail and our cost, shown per gallon. Keep as its own visible line when applicable. If there is no volume discount, skip the line and any savings callout entirely.
+- **Project Services is ONE number.** James provides this. Never ask for or show labor rates, man-hours, crew sizes, equipment costs, or supply costs separately.
+- If specialty equipment is used, mention it inside the Project Services description text only — never as a separate cost line item.
+
+### Format rules
+- **Font:** Georgia only. No other fonts in bid documents.
+- **No em dashes** (`—`) anywhere. Use a hyphen, comma, or rephrase.
+- **Embedded Ingersoll Painting logo** at the top of page 1.
+- **About the Product section** describing the paint/stain used — research the product if needed. Never assume a specific product; always ask.
 - **1-Year Workmanship Warranty** clause included.
 - **Paint disclaimer:** *"Based on the size and specifics of your project, the paint cost & materials are an estimate. Pricing may be adjusted if more paint & materials are needed. Labor costs are estimated also, based on the expected scope of work. If unforeseen issues arise during the project, adjustments may be necessary."*
 - **Output both DOCX and PDF** when delivering finished bids.
+- **Always ask for all project details before generating.** Never generate from incomplete information.
+- Test that the document fills pages cleanly. Adjust spacing so no page ends with just a footer or a few orphan lines.
+
+### Never do
+- Use em dashes
+- Reference priming unless the user specifically includes it
+- Show hourly labor rates, man-hours, or crew sizes
+- Break out equipment or supplies as separate cost line items
+- Reference workers' compensation insurance
+- Add services, sections, or line items that were not requested
+- Use any font other than Georgia
+- Create orphan pages (short pages with just a footer or a few leftover lines)
+- Assume any specific paint or stain product
 
 ---
 

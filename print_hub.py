@@ -14,10 +14,10 @@
 #
 # HOW THE FLOW WORKS:
 #   Phone (PaintPro app)
-#     → POST bid text to ntfy.sh/{TOPIC}   (requires internet on phone)
+#     → Encrypts bid → POST to ntfy.sh/{TOPIC}  (requires internet on phone)
 #     → ntfy.sh holds the message
 #     → This script is streaming ntfy.sh/{TOPIC}/json (requires internet on PC)
-#     → Receives the message, writes a temp HTML file
+#     → Receives the message, decrypts it, writes a temp HTML file
 #     → Opens http://localhost:9191/ in the browser
 #     → Browser renders formatted bid + auto-triggers print dialog
 #     → Lisa clicks Print (or Cancel)
@@ -28,19 +28,26 @@
 #           Choose "Add Python to PATH" during install.
 #
 #   Step 2: Open Command Prompt (search "cmd" in Start menu) and run:
-#               pip install requests
+#               pip install requests cryptography
 #
 #   Step 3: Edit the TOPIC line below to match what's in PaintPro.
 #           Open PaintPro-ZFold.html, search for PRINT_HUB_TOPIC,
 #           copy that same string here.
 #           Example: TOPIC = 'ingersoll-print-james2026-abc'
 #
-#   Step 4: Run this script once to test it:
+#   Step 4: Set the encryption key.
+#           In PaintPro → Settings → Print Hub → tap "Generate".
+#           Copy the 64-character key shown and paste it as PRINT_SECRET below.
+#           This key encrypts bid content in transit — even if someone
+#           subscribes to the ntfy.sh topic, they only see ciphertext.
+#           Leave PRINT_SECRET = '' to send bids as plain text (less secure).
+#
+#   Step 5: Run this script once to test it:
 #               python print_hub.py
 #           You should see "[PrintHub] Listening on ntfy.sh/..."
 #           Then tap "Send to Home Printer" on the phone to test.
 #
-#   Step 5: Set it to auto-start when Windows boots:
+#   Step 6: Set it to auto-start when Windows boots:
 #           a. Press Windows+R, type:  shell:startup  and press Enter
 #           b. A folder opens. Right-click inside → New → Shortcut
 #           c. For the location, enter:
@@ -51,30 +58,32 @@
 #
 # REQUIREMENTS:
 #   - Python 3.7 or later (python.org)
-#   - pip install requests
+#   - pip install requests cryptography
 #   - Internet connection on the PC
 #   - Any web browser (Chrome, Edge, Firefox)
 #
 # SECURITY NOTE:
-#   The TOPIC name acts as a password. Anyone who knows it can send a
-#   print job to this PC. Use a random, hard-to-guess topic name and
-#   keep it private. Change it in both this file and PRINT_HUB_TOPIC
-#   in PaintPro-ZFold.html at the same time.
+#   The PRINT_SECRET key encrypts bid content with AES-256-GCM end-to-end.
+#   Anyone who subscribes to the ntfy.sh topic only sees ciphertext.
+#   Keep the key private and change it in both places if it's ever exposed.
+#   The TOPIC name is a secondary layer — keep it private too.
 #
 # TROUBLESHOOTING:
-#   - "ModuleNotFoundError: requests" → run: pip install requests
+#   - "ModuleNotFoundError: requests" → run: pip install requests cryptography
 #   - Nothing prints when I tap the button → make sure TOPIC here matches
 #     PRINT_HUB_TOPIC in the app exactly (case-sensitive)
 #   - Browser opens but shows "Waiting..." → the message may have expired;
 #     ntfy.sh holds messages for 12 hours. Try sending again from the app.
+#   - "[Decryption failed]" in the browser → PRINT_SECRET here doesn't match
+#     the key in PaintPro Settings → Print Hub. Re-copy the key from the app.
 #   - Script crashes immediately → check Python version: python --version
 #     Must be 3.7 or later.
 # =============================================================================
 
+import base64
 import json
 import os
 import sys
-import tempfile
 import threading
 import time
 import webbrowser
@@ -84,13 +93,24 @@ try:
     import requests
 except ImportError:
     print("[PrintHub] ERROR: 'requests' package not found.")
-    print("[PrintHub] Fix: open Command Prompt and run:  pip install requests")
+    print("[PrintHub] Fix: open Command Prompt and run:  pip install requests cryptography")
     input("Press Enter to exit...")
     sys.exit(1)
+
+try:
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    _crypto_ok = True
+except ImportError:
+    _crypto_ok = False
 
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 # Must match the PRINT_HUB_TOPIC constant in PaintPro-ZFold.html exactly.
 TOPIC = 'ingersoll-print-7h112nufd393'
+
+# Encryption key — 64 hex characters (256-bit AES-GCM key).
+# Generate in PaintPro → Settings → Print Hub → tap "Generate", then paste here.
+# Leave empty to accept plain-text bids (less secure).
+PRINT_SECRET = ''
 
 # Port for the local web server (no need to change this unless 9191 is in use)
 PORT = 9191
@@ -102,6 +122,30 @@ if not TOPIC:
     print("[PrintHub] the PRINT_HUB_TOPIC constant in PaintPro-ZFold.html.")
     input("Press Enter to exit...")
     sys.exit(1)
+
+if PRINT_SECRET and not _crypto_ok:
+    print("[PrintHub] WARNING: PRINT_SECRET is set but 'cryptography' package is missing.")
+    print("[PrintHub] Fix: run:  pip install cryptography")
+    print("[PrintHub] Continuing — encrypted bids will show a decryption error.\n")
+
+
+def decrypt_bid(text):
+    """Decrypt an enc:<iv>:<ct> message. Falls back to plaintext if no secret set."""
+    if not text.startswith('enc:'):
+        return text  # plaintext fallback (no key set in app)
+    if not PRINT_SECRET:
+        return '[Encrypted bid received but PRINT_SECRET is not set in print_hub.py.\nSet PRINT_SECRET to the key shown in PaintPro → Settings → Print Hub.]'
+    if not _crypto_ok:
+        return '[Encrypted bid received but the "cryptography" package is not installed.\nRun: pip install cryptography]'
+    try:
+        _, iv_b64, ct_b64 = text.split(':', 2)
+        iv  = base64.b64decode(iv_b64)
+        ct  = base64.b64decode(ct_b64)
+        key = bytes.fromhex(PRINT_SECRET)
+        return AESGCM(key).decrypt(iv, ct, None).decode('utf-8')
+    except Exception as exc:
+        return f'[Decryption failed — check that PRINT_SECRET matches the key in PaintPro Settings]\n\n{exc}'
+
 
 # Shared state — holds the most recently received bid text
 latest_bid = {'text': ''}
@@ -191,9 +235,11 @@ class PrintHandler(BaseHTTPRequestHandler):
 def run_listener():
     """Stream messages from ntfy.sh and trigger the browser to print each one."""
     url = f'https://ntfy.sh/{TOPIC}/json'
+    enc_status = '🔒 encrypted' if PRINT_SECRET else '⚠ plaintext (no PRINT_SECRET set)'
     while True:
         try:
             print(f'[PrintHub] Listening on ntfy.sh/{TOPIC}...')
+            print(f'[PrintHub] Encryption: {enc_status}')
             with requests.get(url, stream=True, timeout=None) as r:
                 for raw_line in r.iter_lines(decode_unicode=True):
                     if not raw_line:
@@ -207,6 +253,7 @@ def run_listener():
                     msg = evt.get('message', '').strip()
                     if not msg:
                         continue
+                    msg = decrypt_bid(msg)
                     latest_bid['text'] = msg
                     client_name = msg.split('\n')[1].replace('Estimate for:', '').strip() \
                                   if len(msg.split('\n')) > 1 else '...'

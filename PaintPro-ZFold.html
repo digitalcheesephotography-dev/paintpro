@@ -926,8 +926,23 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   <!-- Print Hub -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
     <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🖨️ Print Hub</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:10px;line-height:1.5">
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">
       Send bids to your home printer wirelessly. The hub script must be running on the home PC.
+    </div>
+    <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-family:var(--font)">
+      Encryption Key <span style="color:var(--muted)">(encrypts bids in transit — optional but recommended)</span>
+    </label>
+    <div style="display:flex;gap:8px;margin-bottom:6px">
+      <input type="password" id="settings-print-secret" placeholder="64-char hex key — tap Generate to create one"
+             style="flex:1;height:44px;background:var(--dark);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:13px;padding:0 12px"
+             onchange="savePrintSecret()"/>
+      <button onclick="generatePrintSecret()"
+              style="height:44px;padding:0 14px;background:var(--dark);border:1px solid var(--blue);border-radius:8px;color:var(--blue);font-family:var(--font);font-size:13px;white-space:nowrap;cursor:pointer">
+        Generate
+      </button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:14px">
+      Tap <strong>Generate</strong>, then paste the same key into <code style="color:var(--blue)">PRINT_SECRET</code> in <code style="color:var(--blue)">print_hub.py</code>. Without a key, bids are sent as plain text.
     </div>
     <a href="https://digitalcheesephotography-dev.github.io/paintpro/printer-setup.html"
        style="display:inline-block;background:var(--dark);border:1px solid var(--border);border-radius:8px;color:var(--blue);font-family:var(--font);font-size:14px;padding:10px 18px;text-decoration:none">
@@ -3364,6 +3379,8 @@ async function printAtHome() {
   showToast('📨 Sending to home printer…');
 
   try {
+    const printSecret = localStorage.getItem('ingersoll_print_secret_v1') || '';
+    const body = printSecret ? await _encryptPrintBid(bidText, printSecret) : bidText;
     const res = await fetch(`https://ntfy.sh/${encodeURIComponent(PRINT_HUB_TOPIC)}`, {
       method: 'POST',
       headers: {
@@ -3371,7 +3388,7 @@ async function printAtHome() {
         'Priority': 'default',
         'Tags':     'printer',
       },
-      body: bidText,
+      body,
     });
     if (res.ok) {
       showToast('✓ Print job sent — check the home printer');
@@ -3381,6 +3398,32 @@ async function printAtHome() {
   } catch {
     showToast('Send failed — no internet connection', 'warn');
   }
+}
+
+async function _encryptPrintBid(text, hexKey) {
+  const keyBytes = Uint8Array.from(hexKey.match(/.{2}/g).map(h => parseInt(h, 16)));
+  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt']);
+  const iv  = crypto.getRandomValues(new Uint8Array(12));
+  const ct  = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(text));
+  return 'enc:' + btoa(String.fromCharCode(...iv)) + ':' + btoa(String.fromCharCode(...new Uint8Array(ct)));
+}
+
+function generatePrintSecret() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const hex   = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  const el    = document.getElementById('settings-print-secret');
+  if (el) el.value = hex;
+  localStorage.setItem('ingersoll_print_secret_v1', hex);
+  showToast('✅ New key generated — paste into print_hub.py');
+}
+
+function savePrintSecret() {
+  const el = document.getElementById('settings-print-secret');
+  if (!el) return;
+  const val = el.value.trim();
+  if (val && !/^[0-9a-fA-F]{64}$/.test(val)) { showToast('Key must be 64 hex characters', 'warn'); return; }
+  localStorage.setItem('ingersoll_print_secret_v1', val);
+  showToast(val ? '✅ Key saved' : 'Key cleared');
 }
 
 // ══════════════════════════════════════════════
@@ -3410,6 +3453,9 @@ function switchTab(tab) {
     if (pel) pel.value = pu;
     const pst = document.getElementById('settings-proxy-status');
     if (pst) { pst.textContent = pu ? '✓ Proxy URL saved' : ''; pst.style.color = 'var(--green)'; }
+    const ps = localStorage.getItem('ingersoll_print_secret_v1') || '';
+    const psel = document.getElementById('settings-print-secret');
+    if (psel) psel.value = ps;
     renderAccounts();
   }
 }

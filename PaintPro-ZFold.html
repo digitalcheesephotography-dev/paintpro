@@ -959,7 +959,8 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     </button>
     <div style="font-size:11px;color:var(--muted);line-height:1.6;background:var(--dark);border-radius:8px;padding:10px 12px">
       Backup includes: all saved jobs, clients, projects, notes, materials, apt pricing, and labor rates.<br>
-      <strong style="color:var(--amber)">Restore overwrites all current data — back up first!</strong>
+      <strong style="color:var(--amber)">Restore overwrites all current data — back up first!</strong><br>
+      <span style="color:var(--muted)">API key and account vault are <em>not</em> included — re-enter them after restore.</span>
     </div>
   </div>
 
@@ -4058,9 +4059,8 @@ const BACKUP_KEYS = [
   'ingersoll_apt_pricing_v1',
   'ingersoll_rates_v1',
   'ingersoll_ext_rates_v1',
-  'ingersoll_anthropic_key_v1',
   'ingersoll_proxy_url_v1',
-  'ingersoll_accounts_v1',
+  // ingersoll_anthropic_key_v1 and ingersoll_accounts_v1 excluded — contain secrets
 ];
 
 function buildBackup() {

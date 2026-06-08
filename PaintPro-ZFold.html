@@ -930,11 +930,20 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   <!-- Account Vault -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-      <div style="font-family:var(--head);font-size:20px;color:var(--blue)">🔑 Account Vault</div>
-      <button onclick="openAccountModal(null)"
-              style="height:38px;padding:0 16px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer">
-        + Add
-      </button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="font-family:var(--head);font-size:20px;color:var(--blue)">🔑 Account Vault</div>
+        <span id="vault-status" title="No master password set yet" style="font-size:15px;cursor:default">⚠️</span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button id="vault-lock-btn" onclick="_vaultLock()"
+                style="display:none;height:38px;padding:0 12px;background:transparent;border:1.5px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:13px;cursor:pointer">
+          🔒 Lock
+        </button>
+        <button onclick="openAccountModal(null)"
+                style="height:38px;padding:0 16px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer">
+          + Add
+        </button>
+      </div>
     </div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">Usernames and passwords for all your app accounts. Tap 📋 to copy a password instantly.</div>
     <div id="accounts-list"></div>
@@ -4118,11 +4127,96 @@ function restoreFromBackup(input) {
 }
 
 // ══════════════════════════════════════════════
-// ACCOUNT VAULT
+// ACCOUNT VAULT  (AES-256-GCM encrypted passwords)
 // ══════════════════════════════════════════════
 
-const ACCOUNTS_KEY = 'ingersoll_accounts_v1';
+const ACCOUNTS_KEY   = 'ingersoll_accounts_v1';
+const VAULT_SALT_KEY = 'ingersoll_vault_salt_v1';
+const VAULT_CHK_KEY  = 'ingersoll_vault_check_v1';
+let _vaultKey = null; // CryptoKey in memory only — never written to storage
 
+// ─── WebCrypto helpers ─────────────────────────
+async function _vkDerive(pw, salt) {
+  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' },
+    km, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+  );
+}
+const _b64e = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const _b64d = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+
+async function _vkEncrypt(plaintext) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, _vaultKey, new TextEncoder().encode(plaintext));
+  return 'enc:' + _b64e(iv) + ':' + _b64e(ct);
+}
+async function _vkDecryptWith(key, data) {
+  const [, ivB64, ctB64] = data.split(':');
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: _b64d(ivB64) }, key, _b64d(ctB64));
+  return new TextDecoder().decode(pt);
+}
+const _vkIsEnc = s => typeof s === 'string' && s.startsWith('enc:');
+async function _vaultDecryptField(s) { return _vkIsEnc(s) ? _vkDecryptWith(_vaultKey, s) : (s || ''); }
+
+// ─── Unlock / lock ─────────────────────────────
+async function _vaultUnlock() {
+  if (_vaultKey) return true;
+  const saltB64 = localStorage.getItem(VAULT_SALT_KEY);
+  if (!saltB64) {
+    // First time: create master password
+    const pw = prompt('Set a master password for your Account Vault.\nYou\'ll need this to add, edit, or reveal passwords.');
+    if (!pw) return false;
+    const pw2 = prompt('Confirm master password:');
+    if (pw !== pw2) { showToast('Passwords don\'t match'); return false; }
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    _vaultKey = await _vkDerive(pw, salt);
+    localStorage.setItem(VAULT_SALT_KEY, _b64e(salt));
+    localStorage.setItem(VAULT_CHK_KEY, await _vkEncrypt('paintpro-vault-ok'));
+    await _vaultMigrateAll();
+    _vaultUpdateUI();
+    return true;
+  }
+  // Existing vault — prompt and verify
+  const pw = prompt('Enter vault master password:');
+  if (!pw) return false;
+  try {
+    const candidate = await _vkDerive(pw, _b64d(saltB64));
+    const chk = localStorage.getItem(VAULT_CHK_KEY);
+    if (await _vkDecryptWith(candidate, chk) !== 'paintpro-vault-ok') throw new Error();
+    _vaultKey = candidate;
+    _vaultUpdateUI();
+    return true;
+  } catch { showToast('Wrong password'); return false; }
+}
+
+function _vaultLock() {
+  _vaultKey = null;
+  _vaultUpdateUI();
+  renderAccounts();
+  showToast('🔒 Vault locked');
+}
+
+function _vaultUpdateUI() {
+  const lockBtn = document.getElementById('vault-lock-btn');
+  const status  = document.getElementById('vault-status');
+  if (!lockBtn || !status) return;
+  const hasSalt = !!localStorage.getItem(VAULT_SALT_KEY);
+  lockBtn.style.display  = _vaultKey ? '' : 'none';
+  status.textContent     = _vaultKey ? '🔓' : (hasSalt ? '🔒' : '⚠️');
+  status.title           = _vaultKey ? 'Vault unlocked' : (hasSalt ? 'Vault locked — tap Copy/Edit to unlock' : 'No master password set yet');
+}
+
+async function _vaultMigrateAll() {
+  const accounts = accountsLoad();
+  let changed = false;
+  for (const a of accounts) {
+    if (a.password && !_vkIsEnc(a.password)) { a.password = await _vkEncrypt(a.password); changed = true; }
+  }
+  if (changed) accountsSave(accounts);
+}
+
+// ─── CRUD ──────────────────────────────────────
 function accountsLoad() {
   try { return JSON.parse(localStorage.getItem(ACCOUNTS_KEY)) || []; } catch { return []; }
 }
@@ -4130,27 +4224,26 @@ function accountsSave(arr) { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(a
 
 function renderAccounts() {
   const accounts = accountsLoad();
-  const list = document.getElementById('accounts-list');
+  const list  = document.getElementById('accounts-list');
   const empty = document.getElementById('no-accounts');
   if (!list) return;
   if (!accounts.length) {
     list.innerHTML = '';
     if (empty) empty.style.display = '';
+    _vaultUpdateUI();
     return;
   }
   if (empty) empty.style.display = 'none';
   list.innerHTML = accounts.map(a => {
     const maskedPw = a.password ? '••••••••' : '<span style="color:var(--border)">—</span>';
-    // Only allow http/https URLs in the href to block javascript: URIs
-    const safeUrl = /^https?:\/\//i.test(a.url||'') ? a.url : '';
-    const urlEl = safeUrl ? `<a class="acct-url" href="${_esc(safeUrl)}" target="_blank" rel="noopener">${_esc(safeUrl.replace(/^https?:\/\//,''))}</a>` : '';
-    const notesEl = a.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5">${_esc(a.notes)}</div>` : '';
+    const safeUrl  = /^https?:\/\//i.test(a.url||'') ? a.url : '';
+    const urlEl    = safeUrl ? `<a class="acct-url" href="${_esc(safeUrl)}" target="_blank" rel="noopener">${_esc(safeUrl.replace(/^https?:\/\//,''))}</a>` : '';
+    const notesEl  = a.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5">${_esc(a.notes)}</div>` : '';
     return `<div class="acct-card">
       <div class="acct-service">${_esc(a.service) || 'Unnamed'}</div>
       ${a.username ? `<div class="acct-user">${_esc(a.username)}</div>` : ''}
       <div class="acct-pw" id="acct-pw-display-${a.id}">${maskedPw}</div>
-      ${urlEl}
-      ${notesEl}
+      ${urlEl}${notesEl}
       <div class="acct-actions">
         ${a.password ? `<button class="acct-btn" onclick="copyAcctPassword('${a.id}', this)">📋 Copy PW</button>
         <button class="acct-btn" onclick="revealAcctPassword('${a.id}', this)">👁 Reveal</button>` : ''}
@@ -4158,33 +4251,35 @@ function renderAccounts() {
       </div>
     </div>`;
   }).join('');
+  _vaultUpdateUI();
 }
 
-function openAccountModal(id) {
-  const modal = document.getElementById('account-modal');
+async function openAccountModal(id) {
+  const modal   = document.getElementById('account-modal');
   const titleEl = document.getElementById('account-modal-title');
-  const delBtn = document.getElementById('account-delete-btn');
-  document.getElementById('account-modal-id').value = id || '';
-  document.getElementById('acct-service').value = '';
-  document.getElementById('acct-url-input').value = '';
-  document.getElementById('acct-username').value = '';
-  document.getElementById('acct-password').value = '';
-  document.getElementById('acct-notes').value = '';
-  document.getElementById('acct-password').type = 'password';
+  const delBtn  = document.getElementById('account-delete-btn');
+  document.getElementById('account-modal-id').value  = id || '';
+  document.getElementById('acct-service').value      = '';
+  document.getElementById('acct-url-input').value    = '';
+  document.getElementById('acct-username').value     = '';
+  document.getElementById('acct-password').value     = '';
+  document.getElementById('acct-notes').value        = '';
+  document.getElementById('acct-password').type      = 'password';
   document.getElementById('acct-pw-eye').textContent = '👁';
   if (id) {
+    if (!await _vaultUnlock()) return;
     const acct = accountsLoad().find(a => a.id === id);
     if (acct) {
       titleEl.textContent = 'EDIT ACCOUNT';
-      document.getElementById('acct-service').value = acct.service || '';
-      document.getElementById('acct-url-input').value = acct.url || '';
-      document.getElementById('acct-username').value = acct.username || '';
-      document.getElementById('acct-password').value = acct.password || '';
-      document.getElementById('acct-notes').value = acct.notes || '';
+      document.getElementById('acct-service').value   = acct.service || '';
+      document.getElementById('acct-url-input').value = acct.url      || '';
+      document.getElementById('acct-username').value  = acct.username || '';
+      document.getElementById('acct-password').value  = await _vaultDecryptField(acct.password);
+      document.getElementById('acct-notes').value     = acct.notes    || '';
       delBtn.style.display = '';
     }
   } else {
-    titleEl.textContent = 'ADD ACCOUNT';
+    titleEl.textContent  = 'ADD ACCOUNT';
     delBtn.style.display = 'none';
   }
   modal.style.display = '';
@@ -4195,17 +4290,19 @@ function closeAccountModal() {
   document.getElementById('account-modal').style.display = 'none';
 }
 
-function saveAccount() {
-  const id = document.getElementById('account-modal-id').value;
+async function saveAccount() {
+  if (!await _vaultUnlock()) return;
+  const id      = document.getElementById('account-modal-id').value;
   const service = document.getElementById('acct-service').value.trim();
   if (!service) { showToast('Enter a service name'); return; }
+  const rawPw = document.getElementById('acct-password').value;
   const acct = {
-    id: id || ('acct_' + Date.now()),
+    id:        id || ('acct_' + Date.now()),
     service,
-    url: document.getElementById('acct-url-input').value.trim(),
-    username: document.getElementById('acct-username').value.trim(),
-    password: document.getElementById('acct-password').value,
-    notes: document.getElementById('acct-notes').value.trim(),
+    url:       document.getElementById('acct-url-input').value.trim(),
+    username:  document.getElementById('acct-username').value.trim(),
+    password:  rawPw ? await _vkEncrypt(rawPw) : '',
+    notes:     document.getElementById('acct-notes').value.trim(),
     updatedAt: new Date().toISOString(),
   };
   let accounts = accountsLoad();
@@ -4221,33 +4318,33 @@ function deleteAccount() {
   const id = document.getElementById('account-modal-id').value;
   if (!id) return;
   if (!confirm('Delete this account?')) return;
-  const accounts = accountsLoad().filter(a => a.id !== id);
-  accountsSave(accounts);
+  accountsSave(accountsLoad().filter(a => a.id !== id));
   closeAccountModal();
   renderAccounts();
   showToast('🗑 Account deleted');
 }
 
-function copyAcctPassword(id, btn) {
+async function copyAcctPassword(id, btn) {
+  if (!await _vaultUnlock()) return;
   const acct = accountsLoad().find(a => a.id === id);
   if (!acct || !acct.password) return;
-  navigator.clipboard.writeText(acct.password).then(() => {
+  navigator.clipboard.writeText(await _vaultDecryptField(acct.password)).then(() => {
     btn.textContent = '✓ Copied!';
     btn.classList.add('copy-done');
     setTimeout(() => { btn.textContent = '📋 Copy PW'; btn.classList.remove('copy-done'); }, 2000);
   }).catch(() => showToast('Copy failed — tap to try again'));
 }
 
-function revealAcctPassword(id, btn) {
-  const el = document.getElementById(`acct-pw-display-${id}`);
-  if (!el) return;
+async function revealAcctPassword(id, btn) {
+  const el   = document.getElementById(`acct-pw-display-${id}`);
   const acct = accountsLoad().find(a => a.id === id);
-  if (!acct) return;
+  if (!el || !acct) return;
   if (btn.textContent.includes('Reveal')) {
-    el.textContent = acct.password || '—';
+    if (!await _vaultUnlock()) return;
+    el.textContent  = await _vaultDecryptField(acct.password) || '—';
     btn.textContent = '🙈 Hide';
   } else {
-    el.textContent = '••••••••';
+    el.textContent  = '••••••••';
     btn.textContent = '👁 Reveal';
   }
 }

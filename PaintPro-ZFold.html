@@ -1302,8 +1302,8 @@ const PRINT_HUB_TOPIC = 'ingersoll-print-7h112nufd393';
 //        rules_version = '2';
 //        service cloud.firestore {
 //          match /databases/{database}/documents {
-//            match /paintpro/{document} {
-//              allow read, write: if request.auth != null;
+//            match /users/{uid}/data/{document} {
+//              allow read, write: if request.auth != null && request.auth.uid == uid;
 //            }
 //          }
 //        }
@@ -1407,7 +1407,12 @@ const SYNC_KEYS = [
 ];
 
 let _db = null;        // Firestore instance (null = local-only mode)
+let _uid = null;       // current user's UID — scopes all Firestore paths
 let _syncSkip = false; // prevents Storage intercept from re-writing Firestore on incoming changes
+
+// Returns the per-user Firestore doc reference for a given key.
+// Path: users/{uid}/data/{key}  — isolates each account's data completely.
+function _userDoc(key) { return _db.collection('users').doc(_uid).collection('data').doc(key); }
 
 // Intercept localStorage writes and mirror them to Firestore transparently.
 // All existing save functions call localStorage.setItem — no changes needed anywhere else.
@@ -1415,8 +1420,8 @@ let _syncSkip = false; // prevents Storage intercept from re-writing Firestore o
   const _orig = Storage.prototype.setItem;
   Storage.prototype.setItem = function(key, value) {
     _orig.call(this, key, value);
-    if (_db && !_syncSkip && SYNC_KEYS.includes(key)) {
-      _db.collection('paintpro').doc(key)
+    if (_db && _uid && !_syncSkip && SYNC_KEYS.includes(key)) {
+      _userDoc(key)
         .set({ value: String(value), updatedAt: Date.now() })
         .catch(() => {}); // silently queued when offline; Firestore persistence replays on reconnect
     }
@@ -1444,6 +1449,7 @@ function initFirebase() {
       if (user) {
         // Signed in — initialize Firestore, boot, start sync
         document.getElementById('auth-screen').style.display = 'none';
+        _uid = user.uid;
         _db = firebase.firestore();
         // Offline persistence: data cached locally, syncs automatically when back online
         _db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
@@ -1570,7 +1576,7 @@ function setupFirestoreSync() {
 
   SYNC_KEYS.forEach(key => {
     // First load: pull Firestore data if local is empty; push local up if Firestore is empty
-    _db.collection('paintpro').doc(key).get().then(snap => {
+    _userDoc(key).get().then(snap => {
       const fsVal = (snap.exists && snap.data()?.value) ? snap.data().value : null;
       const local = localStorage.getItem(key);
       if (fsVal && (!local || local === '[]' || local === 'null')) {
@@ -1579,14 +1585,14 @@ function setupFirestoreSync() {
         _syncSkip = false;
         reloadFromSync(key);
       } else if (local && !fsVal) {
-        _db.collection('paintpro').doc(key)
+        _userDoc(key)
           .set({ value: local, updatedAt: Date.now() })
           .catch(() => {});
       }
     }).catch(() => {});
 
     // Real-time listener: apply changes that arrived from another device
-    _db.collection('paintpro').doc(key).onSnapshot(snap => {
+    _userDoc(key).onSnapshot(snap => {
       if (!snap.exists || !snap.data()?.value) return;
       if (snap.metadata.hasPendingWrites) return; // our own write echoed back — skip
       const incoming = snap.data().value;

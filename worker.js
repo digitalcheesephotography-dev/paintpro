@@ -3,11 +3,19 @@
 // Paste this entire file, click Deploy. Copy the *.workers.dev URL into
 // the app's Settings tab → Proxy URL field.
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
+const ALLOWED_ORIGINS = [
+  'https://lovely-kitsune-6c5c82.netlify.app',
+];
+
+function corsHeaders(request) {
+  const origin = request.headers.get('Origin') || '';
+  const allow  = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    'Access-Control-Allow-Origin':  allow,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+}
 
 const MODEL = 'claude-sonnet-4-6';
 
@@ -25,32 +33,34 @@ Scale anchors: a standard interior door is 6.8 ft tall and 2.8 ft wide; a light 
 
 export default {
   async fetch(request) {
+    const cors = corsHeaders(request);
+
     if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: CORS });
+      return new Response(null, { headers: cors });
     }
 
     if (request.method === 'GET') {
       return new Response('PaintPro AI Proxy is running ✓', {
         status: 200,
-        headers: { ...CORS, 'Content-Type': 'text/plain' },
+        headers: { ...cors, 'Content-Type': 'text/plain' },
       });
     }
 
     if (request.method !== 'POST') {
-      return new Response('Method not allowed', { status: 405, headers: CORS });
+      return new Response('Method not allowed', { status: 405, headers: cors });
     }
 
     let body;
     try { body = await request.json(); } catch {
       return new Response(JSON.stringify({ error: { message: 'Invalid JSON body' } }),
-        { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } });
+        { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } });
     }
 
     const { apiKey, base64, messages, model, max_tokens, system, testOnly } = body;
 
     if (!apiKey) {
       return new Response(JSON.stringify({ error: { message: 'Missing API key' } }),
-        { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } });
+        { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } });
     }
 
     // Quick key-test ping
@@ -61,7 +71,7 @@ export default {
         body: JSON.stringify({ model: MODEL, max_tokens: 5, messages: [{ role: 'user', content: 'Hi' }] }),
       });
       const d = await r.json();
-      return new Response(JSON.stringify(d), { status: r.status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify(d), { status: r.status, headers: { ...cors, 'Content-Type': 'application/json' } });
     }
 
     // Passthrough mode: app sends complete messages array (used for video frames, bid writer, and AI chat)
@@ -74,13 +84,13 @@ export default {
         body: JSON.stringify(payload),
       });
       const d = await r.json();
-      return new Response(JSON.stringify(d), { status: r.status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify(d), { status: r.status, headers: { ...cors, 'Content-Type': 'application/json' } });
     }
 
     // Legacy single-image mode (base64)
     if (!base64) {
       return new Response(JSON.stringify({ error: { message: 'Missing image data or messages' } }),
-        { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } });
+        { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } });
     }
 
     const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -100,6 +110,6 @@ export default {
     });
 
     const d = await r.json();
-    return new Response(JSON.stringify(d), { status: r.status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify(d), { status: r.status, headers: { ...cors, 'Content-Type': 'application/json' } });
   }
 };

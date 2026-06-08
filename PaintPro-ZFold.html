@@ -531,6 +531,14 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
       <button class="sf-btn" data-status="inprogress" onclick="setStatusFilter('inprogress',this)" aria-label="Filter in progress">In Progress</button>
       <button class="sf-btn" data-status="completed" onclick="setStatusFilter('completed',this)" aria-label="Filter completed">Completed</button>
     </div>
+    <div id="followup-alert" style="display:none;background:#2d1a00;border:1px solid var(--amber);border-radius:10px;padding:12px 14px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-family:var(--head);font-size:15px;letter-spacing:1px;color:var(--amber)">📅 FOLLOW-UPS DUE</span>
+        <button onclick="document.getElementById('followup-alert').style.display='none'"
+                style="background:none;border:none;color:var(--muted);font-size:22px;line-height:1;cursor:pointer;padding:0 4px">×</button>
+      </div>
+      <div id="followup-alert-list" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
     <div id="contacts-list"></div>
     <div id="no-contacts" style="text-align:center;padding:40px 20px;color:var(--muted);display:none">
       <div style="font-size:36px;margin-bottom:12px">👥</div>
@@ -771,10 +779,13 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
           <option value="inprogress">In Progress</option>
           <option value="completed">Completed</option>
         </select></label>
+      <label class="field modal-full"><span>Follow-up Date</span>
+        <input type="date" id="modal-followup-date"
+               style="height:44px;background:var(--dark);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:15px;padding:0 12px;width:100%;box-sizing:border-box"/></label>
       <label class="field modal-full"><span>Estimate Amount</span>
         <input type="text" id="modal-estimate" placeholder="e.g. $4,200.00"/></label>
       <label class="field modal-full"><span>Notes</span>
-        <textarea id="modal-notes" rows="3" placeholder="Job details, follow-up date, etc."></textarea></label>
+        <textarea id="modal-notes" rows="3" placeholder="Job details, scope, etc."></textarea></label>
     </div>
     <div class="modal-actions">
       <button class="modal-cancel" onclick="closeContactModal()" aria-label="Cancel">Cancel</button>
@@ -1697,7 +1708,7 @@ function bootApp() {
   saveActiveJob();
 
   // Follow-up badge and GPS suggestion
-  updateFollowupBadge();
+  checkFollowupNotifications();
   checkNearbyClients();
 
   if (location.protocol === 'file:') {
@@ -3030,9 +3041,9 @@ function renderBid() {
 
       <!-- ACTION BUTTONS -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px">
-        <button onclick="window.print()"
+        <button onclick="saveBidPDF()"
           style="height:50px;background:#111;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer">
-          Save as PDF
+          ⬇️ Save as PDF
         </button>
         <button onclick="shareBid()"
           style="height:50px;background:#2baae1;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer">
@@ -3259,6 +3270,42 @@ async function sendBidMessage() {
   input.focus();
 }
 
+function saveBidPDF() {
+  const bidEl = document.getElementById('bid-out');
+  if (!bidEl || !bidEl.classList.contains('visible')) { showToast('Generate a bid first', 'warn'); return; }
+  const inner = bidEl.innerHTML;
+  // Strip the no-print action buttons and agent panel — only the paper content
+  const tmp = document.createElement('div');
+  tmp.innerHTML = inner;
+  tmp.querySelectorAll('.no-print').forEach(el => el.remove());
+  const bidHTML = tmp.innerHTML;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ingersoll Painting — Bid</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Georgia,'Times New Roman',serif;font-size:13px;line-height:1.7;color:#111;background:#fff;padding:24px 20px;max-width:700px;margin:0 auto}
+img{max-width:100%}
+table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px}
+th{text-align:left;padding:3px 5px;font-size:9px;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #111;white-space:nowrap}
+td{padding:4px 5px;border-bottom:1px solid #eee;white-space:nowrap}
+@media print{body{padding:0}}
+</style>
+<script>window.onload=()=>window.print();<\/script>
+</head>
+<body>${bidHTML}</body>
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const w    = window.open(url, '_blank');
+  if (!w) showToast('Allow pop-ups to save as PDF', 'warn');
+  setTimeout(() => URL.revokeObjectURL(url), 15000);
+}
+
 function shareBid() {
   const client = document.getElementById('client-name').value || 'Client';
   const addr   = document.getElementById('job-address').value || '';
@@ -3439,7 +3486,7 @@ function switchTab(tab) {
   document.getElementById('tab-contacts').classList.toggle('active', tab==='contacts');
   document.getElementById('tab-apt').classList.toggle('active', tab==='apt');
   document.getElementById('tab-settings').classList.toggle('active', tab==='settings');
-  if(tab==='contacts') { renderContacts(); switchSubnav('clients'); }
+  if(tab==='contacts') { renderContacts(); switchSubnav('clients'); showFollowupAlert(updateFollowupBadge()); }
   if(tab==='apt') { aptRender(); renderSupplies(); }
   if(tab==='settings') {
     const k = localStorage.getItem('ingersoll_anthropic_key_v1') || '';
@@ -3592,6 +3639,7 @@ function openContactModal(id) {
   document.getElementById('modal-address').value       = c?.address || '';
   document.getElementById('modal-email').value         = c?.email || '';
   document.getElementById('modal-status').value        = c?.status || 'pending';
+  document.getElementById('modal-followup-date').value = c?.followUpDate || '';
   document.getElementById('modal-estimate').value      = c?.estimate || '';
   document.getElementById('modal-notes').value         = c?.notes || '';
   const gpsLat = c?.gpsLat ?? '';
@@ -3624,6 +3672,7 @@ function saveContact() {
     status:       document.getElementById('modal-status').value,
     estimate:     document.getElementById('modal-estimate').value.trim(),
     estimateDate: existing>=0 ? contacts[existing].estimateDate : new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),
+    followUpDate: document.getElementById('modal-followup-date').value || null,
     notes:        document.getElementById('modal-notes').value.trim(),
     gpsLat:       (() => { const v = parseFloat(document.getElementById('modal-gps-lat').value); return isNaN(v) ? null : v; })(),
     gpsLng:       (() => { const v = parseFloat(document.getElementById('modal-gps-lng').value); return isNaN(v) ? null : v; })(),
@@ -4561,21 +4610,52 @@ function captureContactGPS() {
 // FOLLOW-UP BADGE
 // ══════════════════════════════════════════════
 function updateFollowupBadge() {
-  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const contacts = loadContacts();
-  const overdue = contacts.filter(c => {
-    if (!c.estimateDate) return false;
-    if (c.status === 'completed' || c.status === 'inprogress' || c.status === 'scheduled') return false;
-    return new Date(c.estimateDate).getTime() < cutoff;
+  const today = new Date().toISOString().slice(0, 10);
+  const due = loadContacts().filter(c => {
+    if (!c.followUpDate) return false;
+    if (c.status === 'completed' || c.status === 'inprogress') return false;
+    return c.followUpDate <= today;
   });
   const badge = document.getElementById('followup-badge');
-  if (!badge) return;
-  if (overdue.length > 0) {
-    badge.textContent = overdue.length;
-    badge.style.display = 'inline-block';
-  } else {
-    badge.style.display = 'none';
+  if (badge) {
+    badge.textContent   = due.length || '';
+    badge.style.display = due.length ? 'inline-block' : 'none';
   }
+  return due;
+}
+
+function showFollowupAlert(due) {
+  const wrap = document.getElementById('followup-alert');
+  const list = document.getElementById('followup-alert-list');
+  if (!wrap || !list) return;
+  if (!due || !due.length) { wrap.style.display = 'none'; return; }
+  const today = new Date().toISOString().slice(0, 10);
+  list.innerHTML = due.map(c => {
+    const d = Math.round((new Date(today) - new Date(c.followUpDate)) / 86400000);
+    const when = d === 0 ? 'Today' : d === 1 ? 'Yesterday' : `${d}d overdue`;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;background:#1a0d00;border-radius:6px;padding:7px 10px">
+      <div>
+        <span style="font-weight:700;color:var(--text);font-size:14px">${_esc(c.name)}</span>
+        <span style="color:var(--amber);font-size:12px;margin-left:8px">${when}</span>
+      </div>
+      ${c.phone ? `<a href="tel:${_esc(c.phone)}" style="background:var(--green);color:#fff;border-radius:6px;padding:5px 14px;font-size:13px;font-weight:700;text-decoration:none;font-family:var(--font)">Call</a>` : ''}
+    </div>`;
+  }).join('');
+  wrap.style.display = '';
+}
+
+function checkFollowupNotifications() {
+  const due = updateFollowupBadge();
+  if (!due || !due.length) return;
+  showFollowupAlert(due);
+  if (!('Notification' in window)) return;
+  const fire = () => new Notification('PaintPro Follow-ups', {
+    body: due.length === 1 ? `Call ${due[0].name} today` : `${due.length} clients need follow-up calls`,
+    icon: '/icon-192.png',
+    tag:  'paintpro-followup',
+  });
+  if (Notification.permission === 'granted') fire();
+  else if (Notification.permission !== 'denied') Notification.requestPermission().then(p => { if (p === 'granted') fire(); });
 }
 
 // ── Sub-nav switching ─────────────────────────

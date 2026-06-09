@@ -3883,11 +3883,19 @@ async function addAIPhotos(roomId, input) {
   input.value = '';
   if (!aiPhotoBatch[roomId]) aiPhotoBatch[roomId] = [];
   showToast(`📷 Loading ${files.length} photo${files.length > 1 ? 's' : ''}…`);
+  let loaded = 0;
   for (const file of files) {
-    const base64 = await compressToBase64(file, 1024, 0.8);
-    aiPhotoBatch[roomId].push({ data: base64, type: 'image/jpeg' });
+    try {
+      const base64 = await compressToBase64(file, 1024, 0.8);
+      if (!base64) throw new Error('Compression returned empty data');
+      aiPhotoBatch[roomId].push({ data: base64, type: 'image/jpeg' });
+      loaded++;
+    } catch (err) {
+      console.error('[AI Photo] Compression failed:', err);
+      showToast(`⚠️ Photo ${loaded + 1} failed to load — try again`);
+    }
   }
-  renderAIPhotoStrip(roomId);
+  if (loaded > 0) renderAIPhotoStrip(roomId);
 }
 
 function removeAIPhoto(roomId, idx) {
@@ -3940,26 +3948,31 @@ Scale anchors: interior door=6.8 ft tall/2.8 ft wide; light switch plate=4.5 inc
 }
 
 async function analyzeAIPhotos(roomId) {
-  const photos = aiPhotoBatch[roomId] || [];
-  if (!photos.length) return;
+  const photos = (aiPhotoBatch[roomId] || []).filter(p => p.data && p.data.length > 10);
+  if (!photos.length) {
+    showToast('⚠️ No valid photo data — remove and re-add the photo');
+    aiPhotoBatch[roomId] = [];
+    renderAIPhotoStrip(roomId);
+    return;
+  }
   const room = rooms.find(r => r.id === roomId);
   if (!room) return;
   showToast(`🤖 Analyzing ${photos.length} photo${photos.length > 1 ? 's' : ''}…`);
   try {
     const content = [];
     photos.forEach((p, i) => {
-      content.push({ type: 'image', source: { type: 'base64', media_type: p.type, data: p.data } });
+      content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: p.data } });
       content.push({ type: 'text', text: `Photo ${i + 1}` });
     });
     content.push({ type: 'text', text: aiMultiPhotoPrompt(room.mode === 'exterior', photos.length) });
-    const data = await callAI([{ role: 'user', content }]);
+    const data = await callAI([{ role: 'user', content }], 'claude-sonnet-4-6', 1024);
     const json = JSON.parse((data.content?.[0]?.text || '').match(/\{[\s\S]*\}/)?.[0] || '{}');
     applyAIRoomResult(roomId, json, `📷 AI filled (${photos.length} photos):`);
     openAIChat(roomId, aiResultSummary(json, room.mode === 'exterior'));
     aiPhotoBatch[roomId] = [];
     renderAIPhotoStrip(roomId);
   } catch(e) {
-    console.error('[AI Photos]', e);
+    console.error('[AI Photos] Error:', e.message, e);
     showToast('AI error: ' + e.message);
   }
 }
@@ -3973,6 +3986,7 @@ function compressToBase64(file, maxPx, quality) {
     img.onload = () => {
       URL.revokeObjectURL(url);
       let w = img.width, h = img.height;
+      if (!w || !h) { rej(new Error('Image has zero dimensions')); return; }
       if (w > maxPx || h > maxPx) {
         if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
         else       { w = Math.round(w * maxPx / h); h = maxPx; }
@@ -3980,9 +3994,20 @@ function compressToBase64(file, maxPx, quality) {
       const c = document.createElement('canvas');
       c.width = w; c.height = h;
       c.getContext('2d').drawImage(img, 0, 0, w, h);
-      res(c.toDataURL('image/jpeg', quality).split(',')[1]);
+      // toBlob is more reliable than toDataURL on Android/Samsung devices
+      c.toBlob(blob => {
+        if (!blob || blob.size < 100) { rej(new Error('Canvas produced empty image')); return; }
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const b64 = (reader.result || '').split(',')[1];
+          if (!b64) { rej(new Error('Base64 encoding produced no data')); return; }
+          res(b64);
+        };
+        reader.onerror = () => rej(new Error('FileReader error'));
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', quality);
     };
-    img.onerror = rej;
+    img.onerror = () => rej(new Error('Image failed to load'));
     img.src = url;
   });
 }

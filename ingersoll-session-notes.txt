@@ -1,0 +1,95 @@
+========================================================
+INGERSOLL PAINTING LLC — SESSION NOTES
+Generated June 9, 2026
+Plain text. Open in Notepad, press Ctrl+A then Ctrl+C to copy everything.
+========================================================
+
+THE ONE LINK THAT MATTERS
+-------------------------
+Live contact card (all QR codes point here):
+https://digitalcheesephotography-dev.github.io/paintpro/contact.html
+
+Because the QR points to this web link, you can edit the page anytime
+and every QR updates automatically. You never reprint the QR.
+
+
+WHAT WE DID THIS SESSION
+------------------------
+1. Updated the contact card (contact.html): added a "Contact Us" heading
+   and a "Follow Us" social bar with Facebook, Instagram, TikTok, Google.
+
+2. Deployed it live to GitHub Pages (commit ee3cb12..e975868 on main).
+   Verified the live page has every link, the logo, and the working
+   "Save to Contacts" vCard.
+
+3. Diagnosed "nothing is clickable": the links are fine. The in-app
+   PREVIEW PANE only allows localhost, so it blocks phone/email/external
+   links. On a real phone or browser, everything works.
+
+4. Generated QR codes pointing to the contact card: logo centered, high
+   error-correction (still scans), navy + green branding, caption
+   "Scan for a Free Quote". All decode-verified.
+
+5. Made square versions sized for the 22" x 22" tailgate panel.
+
+6. Final end-to-end check: all elements PASS on the live page.
+
+
+FILES PRODUCED (saved on your laptop in folder E:\Claude)
+---------------------------------------------------------
+contact.html ................... The contact card page (deployed to GitHub)
+ingersoll-qr-navy-square.png ... BEST FOR TAILGATE. Navy framed, 6154x6154px (280 DPI at 22")
+ingersoll-qr-white-square.png .. Square, white background, 5580x5580px
+ingersoll-qr-navy-print.png .... Portrait navy frame, for yard signs / flyers
+ingersoll-qr-white-print.png ... Portrait white version, for paper / light backgrounds
+
+All QR files are 300-DPI print masters, caption "Scan for a Free Quote",
+and verified to scan to the contact card.
+
+
+CONTACT INFO ON THE CARD
+------------------------
+Phone:     (315) 952-8259   (link: tel:+13159528259)
+Email:     info@ingersollpaintingllc.com
+Website:   ingersollpaintingllc.com
+Address:   Hannibal, New York
+Facebook:  facebook.com/IngersollPainting
+Instagram: instagram.com/ingersollpainting
+TikTok:    tiktok.com/@ingersollpainting
+Google:    Maps search for "Ingersoll Painting LLC Hannibal NY"
+
+
+VERIFICATION RESULTS (LIVE PAGE) — ALL PASS
+-------------------------------------------
+Contact Us heading ......... PASS
+Follow Us heading .......... PASS
+Phone / Email / Website / Directions links ... PASS
+Facebook / Instagram / TikTok / Google links . PASS
+Save to Contacts button + vCard ............... PASS
+Embedded logo ................................. PASS
+
+
+STILL TO CONFIRM
+----------------
+TikTok is confirmed yours (a video on it lists your phone number).
+Facebook and Instagram handles were found by web search. Please tap those
+two buttons on the live card to make sure they go to YOUR accounts and not
+the separate "Ingersoll Painting & Construction" in Buffalo. If either is
+wrong, the fix takes under a minute and needs no QR reprint.
+
+
+HOW TO UPDATE THE CONTACT CARD LATER
+------------------------------------
+1. Go to github.com/digitalcheesephotography-dev/paintpro
+2. Click contact.html, then the pencil (edit) icon
+3. Make changes, commit. GitHub Pages updates within ~1 minute.
+
+
+HOSTING
+-------
+GitHub Pages (ACTIVE): serves the contact card from the main branch.
+Netlify (PAUSED — exceeded free credit; resets or upgrade to restore). Same repo.
+
+========================================================
+END OF NOTES
+========================================================

@@ -1264,23 +1264,109 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
            oninput="localStorage.setItem('ingersoll_anthropic_key_v1',this.value)"/>
     <div style="font-size:11px;color:var(--muted)">Key is stored locally on this device and never sent anywhere except Anthropic's API.</div>
   </div>
+
+  <!-- Error Log -->
+  <div class="dbg-card">
+    <div class="dbg-card-title">📋 Error Log</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5">
+      Every JavaScript error is automatically saved here. Tap <strong style="color:var(--blue)">View &amp; Copy</strong> then paste the log into Claude to diagnose issues without screenshots.
+    </p>
+    <div class="dbg-action-row">
+      <button class="dbg-action-btn" style="background:var(--blue);color:#fff" onclick="closeDebug();_errLogShow()" aria-label="View error log">View &amp; Copy</button>
+      <button class="dbg-action-btn" style="background:var(--panel);color:var(--red);border:1px solid var(--border)" onclick="_errLogClear();showToast('Error log cleared')" aria-label="Clear error log">Clear Log</button>
+    </div>
+  </div>
+</div>
+
+<!-- ERROR LOG OVERLAY -->
+<div id="_errpanel" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9999;flex-direction:column;padding:20px 16px calc(20px + var(--safe-b))">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div style="font-family:var(--head);font-size:20px;color:var(--red);letter-spacing:2px">📋 ERROR LOG</div>
+    <button onclick="document.getElementById('_errpanel').style.display='none'" style="background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 14px;font-family:var(--font);font-size:14px;cursor:pointer">✕ Close</button>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <button id="_errcopybtn" onclick="_errLogCopy()" style="flex:1;background:var(--blue);border:none;color:#fff;border-radius:8px;padding:11px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer">📋 Copy All to Clipboard</button>
+    <button onclick="_errLogClear();showToast('Log cleared')" style="background:var(--panel);border:1px solid var(--border);color:var(--red);border-radius:8px;padding:11px 14px;font-family:var(--font);font-size:14px;cursor:pointer">Clear</button>
+  </div>
+  <div id="_errcontent" style="flex:1;overflow-y:auto;font-family:monospace;font-size:12px;color:var(--text);white-space:pre-wrap;background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:12px;line-height:1.6">(no errors logged)</div>
 </div>
 
 <script>
-// Global error handler — shows error on screen instead of black screen
+// ── Error log ─────────────────────────────────────────────────────────────────
+const ERR_LOG_KEY = 'paintpro_error_log_v1';
+
+function _errLog(msg, src, line, col, stack) {
+  try {
+    const log = JSON.parse(localStorage.getItem(ERR_LOG_KEY) || '[]');
+    log.unshift({
+      ts:    new Date().toISOString(),
+      msg:   String(msg),
+      src:   String(src || ''),
+      line:  line || 0,
+      col:   col  || 0,
+      stack: stack ? String(stack) : '',
+      ua:    navigator.userAgent,
+    });
+    // Keep last 50 errors
+    localStorage.setItem(ERR_LOG_KEY, JSON.stringify(log.slice(0, 50)));
+  } catch(_) {}
+}
+
+function _errLogCopy() {
+  try {
+    const log = JSON.parse(localStorage.getItem(ERR_LOG_KEY) || '[]');
+    const text = log.map((e, i) =>
+      `[${i+1}] ${e.ts}\nMessage: ${e.msg}\nLine ${e.line} Col ${e.col}\nSource: ${e.src}\n${e.stack||'(no stack)'}\nUA: ${e.ua}`
+    ).join('\n\n' + '─'.repeat(60) + '\n\n');
+    navigator.clipboard.writeText(text || '(no errors logged)').then(
+      () => { const b = document.getElementById('_errcopybtn'); if(b) b.textContent = '✓ Copied!'; },
+      () => {}
+    );
+  } catch(_) {}
+}
+
+function _errLogClear() {
+  localStorage.removeItem(ERR_LOG_KEY);
+  const c = document.getElementById('_errcontent');
+  if (c) c.textContent = '(log cleared)';
+}
+
+function _errLogShow() {
+  const panel = document.getElementById('_errpanel');
+  if (!panel) return;
+  const log = JSON.parse(localStorage.getItem(ERR_LOG_KEY) || '[]');
+  const c = document.getElementById('_errcontent');
+  if (!c) return;
+  if (!log.length) { c.textContent = '(no errors logged)'; panel.style.display='flex'; return; }
+  c.textContent = log.map((e, i) =>
+    `[${i+1}] ${e.ts}\n${e.msg}\nLine ${e.line} Col ${e.col}\n${e.src}\n${e.stack||''}`
+  ).join('\n\n────────────────────\n\n');
+  panel.style.display = 'flex';
+}
+
 window.onerror = function(msg, src, line, col, err) {
-  document.body.style.background = '#fff';
-  document.body.innerHTML = '<div style="padding:24px;font-family:monospace;font-size:13px;color:#c00;background:#fff">'
-    + '<strong style="font-size:16px">PaintPro Error</strong><br><br>'
-    + '<strong>Message:</strong> ' + msg + '<br>'
-    + '<strong>Line:</strong> ' + line + '<br>'
-    + '<strong>Column:</strong> ' + col + '<br><br>'
-    + '<em>Screenshot this and send to Claude to fix it.</em>'
-    + '</div>';
+  _errLog(msg, src, line, col, err?.stack);
+  const short = String(msg).replace(/</g,'&lt;');
+  const panel = document.getElementById('_errpanel');
+  if (panel) { _errLogShow(); return true; }
+  // Fallback if panel not in DOM yet
+  document.body.style.background = '#0d1117';
+  document.body.innerHTML = [
+    '<div style="padding:24px;font-family:monospace;font-size:13px;color:#ef4444;background:#0d1117;min-height:100vh">',
+    '<div style="font-size:16px;font-weight:bold;margin-bottom:12px">⚠ PaintPro Error</div>',
+    '<div><b>Message:</b> ' + short + '</div>',
+    '<div><b>Line:</b> ' + line + ' &nbsp;<b>Col:</b> ' + col + '</div>',
+    '<div style="margin-top:16px;font-size:12px;color:#6b7a8d">Error saved to log. Reload the app and open ⚙ Settings → Error Log to copy it for Claude.</div>',
+    '</div>',
+  ].join('');
   return true;
 };
+
 window.addEventListener('unhandledrejection', function(e) {
-  window.onerror('Unhandled Promise: ' + e.reason, '', 0, 0, e.reason);
+  const msg = 'Unhandled Promise: ' + (e.reason?.message || e.reason);
+  _errLog(msg, '', 0, 0, e.reason?.stack);
+  // Don't blow up the UI for promise rejections — just log
+  e.preventDefault();
 });
 // ══════════════════════════════════════════════
 // CONSTANTS

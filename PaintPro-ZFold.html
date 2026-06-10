@@ -1110,6 +1110,15 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <span style="font-size:13px;font-weight:700;color:#a78bfa;flex-shrink:0">Listening…</span>
     <span id="voice-heard" style="font-size:13px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
   </div>
+  <!-- Memo recording strip — shown when memo is active -->
+  <div id="memo-strip" style="display:none;flex-direction:column;gap:4px;margin-bottom:8px;padding:8px 10px;background:#1a0505;border:1px solid #ef4444;border-radius:8px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:10px;height:10px;border-radius:50%;background:#ef4444;animation:pulse 1s infinite;flex-shrink:0"></div>
+      <span style="font-size:13px;font-weight:700;color:#ef4444;flex-shrink:0">● REC</span>
+      <span id="memo-heard" style="font-size:12px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-style:italic"></span>
+    </div>
+    <div id="memo-preview" style="font-size:12px;color:var(--text);line-height:1.5;max-height:48px;overflow:hidden;opacity:0.85"></div>
+  </div>
   <div class="bt-row1">
     <div class="bt-status-pill">
       <div class="bt-dot" id="bt-dot"></div>
@@ -1137,6 +1146,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     </div>
     <button class="dbg-gear" onclick="openDebug()" title="Manual entry / Debug" aria-label="Open debug and manual entry">⚙</button>
     <button id="mic-btn" onclick="toggleVoice()" title="Voice commands" aria-label="Start voice commands" style="background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);width:44px;height:var(--tap);font-size:20px;cursor:pointer;flex-shrink:0;transition:all .2s">🎤</button>
+    <button id="memo-btn" onclick="toggleMemo()" title="Voice memo — tap to record, tap again to save" aria-label="Start voice memo" style="background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);width:44px;height:var(--tap);font-size:20px;cursor:pointer;flex-shrink:0;transition:all .2s">🎙</button>
   </div>
 </div>
 
@@ -4871,10 +4881,14 @@ function renderNotes() {
     div.onclick = () => openNoteModal(n.id);
     div.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-        <div style="font-size:15px;font-weight:700;flex:1">${n.title||'Untitled'}</div>
-        <div style="font-size:11px;color:var(--muted);flex-shrink:0;margin-left:8px">${new Date(n.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+        <div style="font-size:15px;font-weight:700;flex:1">${_esc(n.title)||'Untitled'}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:8px">
+          <button onclick="event.stopPropagation();navigator.clipboard.writeText(${JSON.stringify((n.title||'')+'\n\n'+(n.body||''))}).then(()=>showToast('📋 Copied'))"
+            style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:3px 8px;cursor:pointer;font-family:var(--font)">📋</button>
+          <div style="font-size:11px;color:var(--muted)">${new Date(n.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+        </div>
       </div>
-      <div style="font-size:13px;color:var(--muted);line-height:1.5">${(n.body||'').substring(0,120)}${(n.body||'').length>120?'…':''}</div>`;
+      <div style="font-size:13px;color:var(--muted);line-height:1.5">${_esc((n.body||'').substring(0,120))}${(n.body||'').length>120?'…':''}</div>`;
     list.appendChild(div);
   });
 }
@@ -5176,6 +5190,12 @@ function deleteSupply() {
 let voiceRecog  = null;
 let voiceActive = false;
 
+// ── Voice Memo ────────────────────────────────
+let memoActive    = false;
+let memoRecog     = null;
+let memoLines     = [];   // [{time, text}]
+let memoStartTime = null;
+
 const NUM_WORDS = {
   zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,
   ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,
@@ -5224,27 +5244,31 @@ function parseSpokenNumber(text) {
   return wordToNum(text);
 }
 
-function processVoiceCommand(transcript) {
+function processVoiceCommand(transcript, measureOnly = false) {
   const t = transcript.toLowerCase().trim();
-  document.getElementById('voice-heard').textContent = '"'+transcript+'"';
-  dbgLog('\n🎤 Voice: "'+transcript+'"');
+  if (!measureOnly) {
+    document.getElementById('voice-heard').textContent = '"'+transcript+'"';
+    dbgLog('\n🎤 Voice: "'+transcript+'"');
+  }
 
-  // Navigation
-  if (/estimat|measure/i.test(t)&&!/add/i.test(t))         { switchTab('estimate');                          return showToast('📐 Estimator'); }
-  if (/\bcontact|client/i.test(t)&&!/add|new/i.test(t))    { switchTab('contacts');switchSubnav('clients');  return showToast('👥 Clients'); }
-  if (/\bproject/i.test(t)&&!/add|new/i.test(t))           { switchTab('contacts');switchSubnav('projects'); return showToast('📋 Projects'); }
-  if (/\bnote/i.test(t)&&!/add|new/i.test(t))              { switchTab('contacts');switchSubnav('notes');    return showToast('📝 Notes'); }
-  if (/\bmaterial|shopping|supply list|supplies list/i.test(t)&&!/add|new/i.test(t)) { switchTab('contacts');switchSubnav('materials'); return showToast('🛒 Materials'); }
-  if (/pricing|apartment|apt/i.test(t))                    { switchTab('apt');                               return showToast('🏢 Apt Pricing'); }
-  if (/add room|new room|add side|new side/i.test(t))       { switchTab('estimate');addRoom();                return showToast(estimatorMode==='exterior'?'Side added':'Room added'); }
-  if (/exterior mode|switch.*exterior|outside mode/i.test(t)) { switchTab('estimate');switchMode('exterior');  return; }
-  if (/interior mode|switch.*interior|inside mode/i.test(t))  { switchTab('estimate');switchMode('interior');  return; }
-  if (/generate|bid|proposal/i.test(t))                    { switchTab('estimate');if(!bidOpen)toggleBid(); return showToast('Proposal generated'); }
-  if (/connect|bluetooth/i.test(t))                        { connectBT();                                    return; }
-  if (/add client|add contact|new client/i.test(t))        { switchTab('contacts');switchSubnav('clients');openContactModal(null); return; }
-  if (/add project|new project/i.test(t))                  { switchTab('contacts');switchSubnav('projects');openProjectModal(null); return; }
-  if (/add note|new note/i.test(t))                        { switchTab('contacts');switchSubnav('notes');openNoteModal(null); return; }
-  if (/add material|new material|add shopping|new shopping|add list|new list/i.test(t)) { switchTab('contacts');switchSubnav('materials');openMaterialsModal(null); return; }
+  // Navigation — skipped in memo mode so conversation doesn't trigger tab switches
+  if (!measureOnly) {
+    if (/estimat|measure/i.test(t)&&!/add/i.test(t))         { switchTab('estimate');                          return showToast('📐 Estimator'); }
+    if (/\bcontact|client/i.test(t)&&!/add|new/i.test(t))    { switchTab('contacts');switchSubnav('clients');  return showToast('👥 Clients'); }
+    if (/\bproject/i.test(t)&&!/add|new/i.test(t))           { switchTab('contacts');switchSubnav('projects'); return showToast('📋 Projects'); }
+    if (/\bnote/i.test(t)&&!/add|new/i.test(t))              { switchTab('contacts');switchSubnav('notes');    return showToast('📝 Notes'); }
+    if (/\bmaterial|shopping|supply list|supplies list/i.test(t)&&!/add|new/i.test(t)) { switchTab('contacts');switchSubnav('materials'); return showToast('🛒 Materials'); }
+    if (/pricing|apartment|apt/i.test(t))                    { switchTab('apt');                               return showToast('🏢 Apt Pricing'); }
+    if (/add room|new room|add side|new side/i.test(t))       { switchTab('estimate');addRoom();                return showToast(estimatorMode==='exterior'?'Side added':'Room added'); }
+    if (/exterior mode|switch.*exterior|outside mode/i.test(t)) { switchTab('estimate');switchMode('exterior');  return; }
+    if (/interior mode|switch.*interior|inside mode/i.test(t))  { switchTab('estimate');switchMode('interior');  return; }
+    if (/generate|bid|proposal/i.test(t))                    { switchTab('estimate');if(!bidOpen)toggleBid(); return showToast('Proposal generated'); }
+    if (/connect|bluetooth/i.test(t))                        { connectBT();                                    return; }
+    if (/add client|add contact|new client/i.test(t))        { switchTab('contacts');switchSubnav('clients');openContactModal(null); return; }
+    if (/add project|new project/i.test(t))                  { switchTab('contacts');switchSubnav('projects');openProjectModal(null); return; }
+    if (/add note|new note/i.test(t))                        { switchTab('contacts');switchSubnav('notes');openNoteModal(null); return; }
+    if (/add material|new material|add shopping|new shopping|add list|new list/i.test(t)) { switchTab('contacts');switchSubnav('materials');openMaterialsModal(null); return; }
+  }
 
   // Doors & Windows count — accepts "six doors", "doors six", "17 doors",
   // and the same with leading filler verbs: "add six doors", "put six doors", "set six doors", etc.
@@ -5371,6 +5395,83 @@ function stopVoice() {
   if(btn){btn.style.background='';btn.style.borderColor='';btn.style.color='';}
   document.getElementById('voice-strip').style.display = 'none';
   showToast('🎤 Voice off');
+}
+
+// ── Voice Memo ────────────────────────────────────────────────────────────────
+
+function toggleMemo() { memoActive ? stopMemo() : startMemo(); }
+
+function startMemo() {
+  if (voiceActive) stopVoice();
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return showToast('Voice memo needs Chrome browser', 'err');
+  memoActive    = true;
+  memoLines     = [];
+  memoStartTime = Date.now();
+  memoRecog = new SR();
+  memoRecog.lang            = 'en-US';
+  memoRecog.continuous      = true;
+  memoRecog.interimResults  = true;
+  memoRecog.maxAlternatives = 1;
+  memoRecog.onstart = () => {
+    const btn = document.getElementById('memo-btn');
+    if (btn) { btn.style.background='#2b0505'; btn.style.borderColor='#ef4444'; btn.style.color='#ef4444'; }
+    document.getElementById('memo-strip').style.display = 'flex';
+  };
+  memoRecog.onresult = (e) => {
+    let interim = '', final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    document.getElementById('memo-heard').textContent = interim || final;
+    if (final.trim()) {
+      const text = applyVoiceCorrections(final.trim());
+      memoLines.push({ time: Date.now() - memoStartTime, text });
+      _updateMemoPreview();
+      // Extract measurements only — don't trigger tab switches mid-conversation
+      processVoiceCommand(text, true);
+    }
+  };
+  memoRecog.onerror = (e) => {
+    if (e.error === 'not-allowed') showToast('Mic permission denied', 'err');
+  };
+  memoRecog.onend = () => { if (memoActive) memoRecog.start(); };
+  memoRecog.start();
+  showToast('🎙 Recording — tap 🎙 again to stop and save');
+}
+
+function stopMemo() {
+  memoActive = false;
+  if (memoRecog) { memoRecog.onend = null; memoRecog.stop(); memoRecog = null; }
+  const btn = document.getElementById('memo-btn');
+  if (btn) { btn.style.background=''; btn.style.borderColor=''; btn.style.color=''; }
+  document.getElementById('memo-strip').style.display = 'none';
+  document.getElementById('memo-preview').textContent = '';
+  if (!memoLines.length) return showToast('Nothing recorded');
+  _saveMemoNote();
+}
+
+function _saveMemoNote() {
+  const client = (document.getElementById('client-name')?.value || '').trim();
+  const addr   = (document.getElementById('job-address')?.value  || '').trim();
+  const date   = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+  const parts  = ['🎙 Memo', date];
+  if (client) parts.push(client);
+  if (addr)   parts.push(addr);
+  const body   = memoLines.map(l => l.text).join('\n');
+  const note   = { id:'memo'+Date.now(), title:parts.join(' — '), body, createdAt:memoStartTime, updatedAt:Date.now() };
+  const notes  = notesLoad();
+  notes.unshift(note);
+  notesSave(notes);
+  if (document.getElementById('sub-notes')?.style.display !== 'none') renderNotes();
+  showToast('🎙 Memo saved — tap CLIENTS → NOTES to view');
+}
+
+function _updateMemoPreview() {
+  const el = document.getElementById('memo-preview');
+  if (!el) return;
+  el.textContent = memoLines.slice(-4).map(l => l.text).join(' … ');
 }
 
 const APT_KEY = 'ingersoll_apt_pricing_v1';

@@ -5,6 +5,7 @@
 
 const ALLOWED_ORIGINS = [
   'https://lovely-kitsune-6c5c82.netlify.app',
+  'https://digitalcheesephotography-dev.github.io',
 ];
 
 function corsHeaders(request) {

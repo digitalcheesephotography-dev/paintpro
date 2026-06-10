@@ -5416,7 +5416,8 @@ function startMemo() {
   memoRecog.onstart = () => {
     const btn = document.getElementById('memo-btn');
     if (btn) { btn.style.background='#2b0505'; btn.style.borderColor='#ef4444'; btn.style.color='#ef4444'; }
-    document.getElementById('memo-strip').style.display = 'flex';
+    const strip = document.getElementById('memo-strip');
+    if (strip) strip.style.display = 'flex';
   };
   memoRecog.onresult = (e) => {
     let interim = '', final = '';
@@ -5446,8 +5447,10 @@ function stopMemo() {
   if (memoRecog) { memoRecog.onend = null; memoRecog.stop(); memoRecog = null; }
   const btn = document.getElementById('memo-btn');
   if (btn) { btn.style.background=''; btn.style.borderColor=''; btn.style.color=''; }
-  document.getElementById('memo-strip').style.display = 'none';
-  document.getElementById('memo-preview').textContent = '';
+  const strip = document.getElementById('memo-strip');
+  if (strip) strip.style.display = 'none';
+  const prev = document.getElementById('memo-preview');
+  if (prev) prev.textContent = '';
   if (!memoLines.length) return showToast('Nothing recorded');
   _saveMemoNote();
 }

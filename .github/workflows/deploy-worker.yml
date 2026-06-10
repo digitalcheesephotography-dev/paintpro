@@ -1,0 +1,75 @@
+name: Deploy Cloudflare Workers
+
+# Deploys worker.js to every PaintPro worker on the Cloudflare account.
+# Runs automatically whenever worker.js changes on main.
+# Requires repo secret CLOUDFLARE_API_TOKEN (Edit Cloudflare Workers template).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'worker.js'
+      - '.github/workflows/deploy-worker.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy worker.js to all PaintPro workers
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, sys, urllib.request, urllib.error
+
+          tok = os.environ.get('CF_TOKEN', '')
+          if not tok:
+              sys.exit('CLOUDFLARE_API_TOKEN secret is not set. Add it in repo Settings -> Secrets and variables -> Actions.')
+
+          def api(path, method='GET', data=None, ctype=None):
+              req = urllib.request.Request('https://api.cloudflare.com/client/v4' + path, method=method)
+              req.add_header('Authorization', 'Bearer ' + tok)
+              if data is not None:
+                  req.add_header('Content-Type', ctype)
+                  req.data = data
+              try:
+                  return json.load(urllib.request.urlopen(req))
+              except urllib.error.HTTPError as e:
+                  body = e.read().decode('utf-8', 'replace')
+                  sys.exit(f'Cloudflare API error {e.code} on {method} {path}:\n{body}')
+
+          accounts = api('/accounts')['result']
+          if not accounts:
+              sys.exit('Token works but no Cloudflare accounts visible. Check token Account Resources.')
+
+          code = open('worker.js', 'rb').read()
+          deployed = []
+          for acct in accounts:
+              scripts = api(f"/accounts/{acct['id']}/workers/scripts")['result']
+              names = [s['id'] for s in scripts]
+              print(f"Account {acct['name']}: workers found: {names}")
+              for name in names:
+                  if 'paint' not in name.lower():
+                      continue
+                  boundary = 'XBOUNDARYpaintpro123'
+                  meta = json.dumps({'main_module': 'worker.js', 'compatibility_date': '2024-01-01'})
+                  body = (
+                      f'--{boundary}\r\n'
+                      f'Content-Disposition: form-data; name="metadata"\r\n'
+                      f'Content-Type: application/json\r\n\r\n{meta}\r\n'
+                      f'--{boundary}\r\n'
+                      f'Content-Disposition: form-data; name="worker.js"; filename="worker.js"\r\n'
+                      f'Content-Type: application/javascript+module\r\n\r\n'
+                  ).encode() + code + f'\r\n--{boundary}--\r\n'.encode()
+                  r = api(f"/accounts/{acct['id']}/workers/scripts/{name}",
+                          'PUT', body, f'multipart/form-data; boundary={boundary}')
+                  print(f"Deployed {name}: success={r['success']}")
+                  deployed.append(name)
+
+          if not deployed:
+              sys.exit('No workers with "paint" in the name were found. See the list above.')
+          print(f'Done. Updated {len(deployed)} worker(s): {deployed}')
+          PYEOF

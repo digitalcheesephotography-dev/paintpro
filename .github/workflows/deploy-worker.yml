@@ -45,6 +45,9 @@ jobs:
           if not accounts:
               sys.exit('Token works but no Cloudflare accounts visible. Check token Account Resources.')
 
+          # Both of these are PaintPro AI proxy workers (Cloudflare auto-generated names)
+          TARGETS = {'nameless-bar-ab0d', 'tiny-sound-56ab'}
+
           code = open('worker.js', 'rb').read()
           deployed = []
           for acct in accounts:
@@ -52,7 +55,7 @@ jobs:
               names = [s['id'] for s in scripts]
               print(f"Account {acct['name']}: workers found: {names}")
               for name in names:
-                  if 'paint' not in name.lower():
+                  if name not in TARGETS:
                       continue
                   boundary = 'XBOUNDARYpaintpro123'
                   meta = json.dumps({'main_module': 'worker.js', 'compatibility_date': '2024-01-01'})
@@ -70,6 +73,6 @@ jobs:
                   deployed.append(name)
 
           if not deployed:
-              sys.exit('No workers with "paint" in the name were found. See the list above.')
+              sys.exit('None of the target workers were found. See the list above.')
           print(f'Done. Updated {len(deployed)} worker(s): {deployed}')
           PYEOF

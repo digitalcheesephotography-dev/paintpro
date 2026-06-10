@@ -3818,7 +3818,15 @@ async function callAI(messages, model = 'claude-sonnet-4-6', max_tokens = 1024, 
     });
   }
   const data = await resp.json();
-  if (data.error) throw new Error(data.error.message);
+  if (data.error) {
+    const msg = data.error.message || 'Unknown AI error';
+    // Old deployed Worker only knows the single-image format and rejects
+    // everything else with exactly this message
+    if (msg.startsWith('Missing image data')) {
+      throw new Error('Cloudflare Worker is outdated — re-deploy worker.js at dash.cloudflare.com (paste the new file over the old one, hit Deploy)');
+    }
+    throw new Error(msg);
+  }
   return data;
 }
 
@@ -4063,19 +4071,21 @@ async function analyzeRoomVideo(roomId, input) {
       }
       canvas.width = w; canvas.height = h;
       ctx.drawImage(video, 0, 0, w, h);
-      frames.push(canvas.toDataURL('image/jpeg', 0.75).split(',')[1]);
+      const b64 = canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
+      if (b64) frames.push(b64);
     }
 
     URL.revokeObjectURL(url);
-    showToast(`📹 Analyzing ${FRAME_COUNT} frames with AI…`);
+    if (!frames.length) throw new Error('Could not extract frames from this video — try a different recording');
+    showToast(`📹 Analyzing ${frames.length} frames with AI…`);
 
     // Build multi-image message: interleave label + image for each frame
     const content = [];
     frames.forEach((b64, i) => {
-      content.push({ type: 'text', text: `Frame ${i + 1} of ${FRAME_COUNT}:` });
+      content.push({ type: 'text', text: `Frame ${i + 1} of ${frames.length}:` });
       content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } });
     });
-    content.push({ type: 'text', text: aiVideoPrompt(room.mode === 'exterior', FRAME_COUNT) });
+    content.push({ type: 'text', text: aiVideoPrompt(room.mode === 'exterior', frames.length) });
 
     const data = await callAI([{ role: 'user', content }], 'claude-sonnet-4-6', 1024);
     const json = JSON.parse((data.content?.[0]?.text || '').match(/\{[\s\S]*\}/)?.[0] || '{}');

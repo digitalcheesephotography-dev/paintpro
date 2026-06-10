@@ -1,4 +1,4 @@
-// PaintPro AI Proxy — Cloudflare Worker
+// PaintPro AI Proxy — Cloudflare Worker (deployed via GitHub Actions)
 // Deploy this at dash.cloudflare.com → Workers & Pages → Create Worker
 // Paste this entire file, click Deploy. Copy the *.workers.dev URL into
 // the app's Settings tab → Proxy URL field.

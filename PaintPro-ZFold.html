@@ -5513,7 +5513,7 @@ function startMemo() {
     }
     document.getElementById('memo-heard').textContent = interim || final;
     if (final.trim()) {
-      const text = applyVoiceCorrections(final.trim());
+      const text = final.trim();
       memoLines.push({ time: Date.now() - memoStartTime, text });
       _updateMemoPreview();
       // Extract measurements only — don't trigger tab switches mid-conversation

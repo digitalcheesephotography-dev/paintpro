@@ -430,4 +430,4 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
 
 ---
 
-*Last updated: May 31, 2026 (voice reliability improvements: mishear correction table, undo command, interior room naming, suffix measurement patterns, maxAlternatives=3, fraction parsing). If you make substantial changes to the app structure, update this file in the same commit.*
+*Last updated: June 11, 2026 (full diagnostic sweep: voice reliability layer restored after regression — mishear corrections, undo, room naming, fractions, hyphenated compounds, maxAlternatives=3; measurement routing now follows the open room card; quota-safe saves via `safeSet()`; Firestore sync stale-write guard; AI JSON extraction hardened via `extractAIJson()`; service worker v5 only caches OK responses). If you make substantial changes to the app structure, update this file in the same commit.*

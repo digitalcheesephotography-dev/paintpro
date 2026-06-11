@@ -4,7 +4,7 @@
 // Bump CACHE version only when the service worker logic itself changes — not for
 // routine HTML edits (those are handled by network-first already).
 
-const CACHE = 'paintpro-v4';
+const CACHE = 'paintpro-v5';
 
 const APP_SHELL = [
   './PaintPro-ZFold.html',
@@ -49,8 +49,12 @@ self.addEventListener('fetch', evt => {
     evt.respondWith(
       fetch(request)
         .then(res => {
-          const clone = res.clone();
-          caches.open(CACHE).then(cache => cache.put(request, clone));
+          // Only cache good responses — a 404/500 page must never replace the
+          // known-good copy of the app in the offline cache.
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE).then(cache => cache.put(request, clone));
+          }
           return res;
         })
         .catch(() => caches.match('./PaintPro-ZFold.html'))

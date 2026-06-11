@@ -1365,8 +1365,8 @@ window.onerror = function(msg, src, line, col, err) {
 window.addEventListener('unhandledrejection', function(e) {
   const msg = 'Unhandled Promise: ' + (e.reason?.message || e.reason);
   _errLog(msg, '', 0, 0, e.reason?.stack);
-  // Don't blow up the UI for promise rejections — just log
-  e.preventDefault();
+  // Logged to the error log; let the browser also log to console for debugging.
+  // No UI blowup either way — rejections don't trigger window.onerror.
 });
 // ══════════════════════════════════════════════
 // CONSTANTS
@@ -1387,6 +1387,17 @@ const _esc = s => (s == null ? '' : String(s))
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
   .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
+// localStorage write with quota protection. Without this, a full quota throws,
+// the data is silently lost, and the user still sees a success toast.
+function safeSet(key, value) {
+  try { localStorage.setItem(key, value); return true; }
+  catch(e) {
+    try { _errLog('localStorage save failed for ' + key + ': ' + e.message, '', 0, 0, e.stack); } catch(_) {}
+    try { showToast('⚠ SAVE FAILED — phone storage is full. Run a backup, then delete old jobs/photos.', 'err'); } catch(_) {}
+    return false;
+  }
+}
+
 // Exterior labor rates ($/sf per coat; trim $/linear ft)
 const EXT_RATES_KEY = 'ingersoll_ext_rates_v1';
 const DEFAULT_EXT_RATES = { walls:2.25, ceiling:1.75, floor:2.50, trim:3.50 };
@@ -1401,7 +1412,7 @@ function loadExtRates() {
   return { ...DEFAULT_EXT_RATES };
 }
 let extRates = loadExtRates();
-function saveExtRates() { localStorage.setItem(EXT_RATES_KEY, JSON.stringify(extRates)); }
+function saveExtRates() { safeSet(EXT_RATES_KEY, JSON.stringify(extRates)); }
 function modeRates(mode) { return mode === 'exterior' ? extRates : rates; }
 
 // ─── AUTO PRINT HUB ────────────────────────────────────────────────────────
@@ -1484,7 +1495,7 @@ function loadRates() {
   return { ...DEFAULT_RATES };
 }
 let rates = loadRates();
-function saveRates() { localStorage.setItem(RATES_KEY, JSON.stringify(rates)); }
+function saveRates() { safeSet(RATES_KEY, JSON.stringify(rates)); }
 
 // Known BLE candidates — tried in order.
 // If the D2 uses a different UUID we'll discover it via enumeration.
@@ -1558,6 +1569,7 @@ const SYNC_KEYS = [
 let _db = null;        // Firestore instance (null = local-only mode)
 let _uid = null;       // current user's UID — scopes all Firestore paths
 let _syncSkip = false; // prevents Storage intercept from re-writing Firestore on incoming changes
+const _syncMeta = {};  // key → updatedAt of the newest write we've made or applied (stale-write guard)
 
 // Returns the per-user Firestore doc reference for a given key.
 // Path: users/{uid}/data/{key}  — isolates each account's data completely.
@@ -1570,9 +1582,15 @@ function _userDoc(key) { return _db.collection('users').doc(_uid).collection('da
   Storage.prototype.setItem = function(key, value) {
     _orig.call(this, key, value);
     if (_db && _uid && !_syncSkip && SYNC_KEYS.includes(key)) {
+      const ts = Date.now();
+      _syncMeta[key] = ts; // remember when WE last wrote, so stale cloud data can't clobber it
       _userDoc(key)
-        .set({ value: String(value), updatedAt: Date.now() })
-        .catch(() => {}); // silently queued when offline; Firestore persistence replays on reconnect
+        .set({ value: String(value), updatedAt: ts })
+        .catch(e => {
+          // 'unavailable' = offline; Firestore persistence replays it on reconnect.
+          // Anything else (auth revoked, permissions) means sync is broken — log it.
+          if (e && e.code && e.code !== 'unavailable') console.warn('[Sync] write failed:', key, e.code);
+        });
     }
   };
 })();
@@ -1607,11 +1625,17 @@ function initFirebase() {
         if (soBtn) soBtn.style.display = 'inline-block';
         if (!_booted) { _booted = true; bootApp(); setupFirestoreSync(); }
       } else {
-        // Not signed in — remove loading screen and show sign-in screen
+        // Not signed in. If we're offline, signing in is impossible — boot
+        // local-only so the app still works in the truck with no signal.
+        if (!navigator.onLine) {
+          if (!_booted) { _booted = true; bootApp(); showToast('⚠ Offline — running without cloud sync', 'warn'); }
+          return;
+        }
+        // Online: remove loading screen and show sign-in screen
         const loader = document.getElementById('js-loading');
         if (loader) loader.remove();
         const s = document.getElementById('auth-screen');
-        s.style.display = 'flex';
+        if (s) s.style.display = 'flex';
       }
     });
   } catch(e) {
@@ -1729,6 +1753,7 @@ function setupFirestoreSync() {
       const fsVal = (snap.exists && snap.data()?.value) ? snap.data().value : null;
       const local = localStorage.getItem(key);
       if (fsVal && (!local || local === '[]' || local === 'null')) {
+        _syncMeta[key] = snap.data()?.updatedAt || Date.now();
         _syncSkip = true;
         localStorage.setItem(key, fsVal);
         _syncSkip = false;
@@ -1744,8 +1769,13 @@ function setupFirestoreSync() {
     _userDoc(key).onSnapshot(snap => {
       if (!snap.exists || !snap.data()?.value) return;
       if (snap.metadata.hasPendingWrites) return; // our own write echoed back — skip
-      const incoming = snap.data().value;
-      if (incoming === localStorage.getItem(key)) return;
+      const d = snap.data();
+      const incoming = d.value;
+      // Stale-write guard: if the cloud copy is older than the newest write this
+      // device made or applied, don't let it overwrite newer local data.
+      if ((d.updatedAt || 0) < (_syncMeta[key] || 0)) return;
+      if (incoming === localStorage.getItem(key)) { _syncMeta[key] = d.updatedAt || _syncMeta[key] || 0; return; }
+      _syncMeta[key] = d.updatedAt || Date.now();
       _syncSkip = true;
       localStorage.setItem(key, incoming);
       _syncSkip = false;
@@ -2271,7 +2301,7 @@ function renderRoom(room, idx) {
     <div class="room-head" onclick="toggleOpen('${room.id}')">
       <div class="room-head-left">
         <span class="room-num" id="${room.id}_num">#${idx+1}</span>
-        <input class="room-name-input" type="text" id="${room.id}_name" value="${room.name}"
+        <input class="room-name-input" type="text" id="${room.id}_name" value="${_esc(room.name)}"
           onclick="event.stopPropagation()" oninput="updateField('${room.id}','name',this.value)"/>
       </div>
       <span class="room-sf-badge" id="${room.id}_sfbadge" style="display:none"></span>
@@ -2408,10 +2438,18 @@ function setOpen(id,val) {
   const r=rooms.find(r=>r.id===id); if(!r) return;
   r.open=val;
   document.getElementById(id+'_card')?.classList.toggle('open',val);
+  // Keep the measurement target pointed at the room being worked on, so
+  // laser shots and voice commands land in the open card.
+  if (val) {
+    const idx = rooms.findIndex(x=>x.id===id);
+    const tr = document.getElementById('target-room');
+    if (idx >= 0 && tr) tr.value = idx;
+  }
 }
 function removeRoom(id) {
   if(rooms.length===1) return showToast('Need at least one room','warn');
   rooms=rooms.filter(r=>r.id!==id);
+  delete aiPhotoBatch[id];
   document.getElementById(id+'_card').remove();
   rooms.forEach((r,i)=>{ const e=document.getElementById(r.id+'_num'); if(e) e.textContent='#'+(i+1); });
   refreshRoomSelect(); recalcAll();
@@ -2544,7 +2582,12 @@ function toggleSurf(id, surf) {
   recalcRoom(id);
 }
 function refreshRoomSelect() {
-  document.getElementById('target-room').innerHTML=rooms.map((r,i)=>`<option value="${i}">${_esc(r.name)}</option>`).join('');
+  const tr = document.getElementById('target-room');
+  tr.innerHTML = rooms.map((r,i)=>`<option value="${i}">${_esc(r.name)}</option>`).join('');
+  // Rebuilding options resets the selection to the first room — point it back
+  // at the open room so measurements don't silently land in Room 1.
+  const openIdx = rooms.findIndex(r=>r.open);
+  if (openIdx >= 0) tr.value = openIdx;
 }
 
 // ══════════════════════════════════════════════
@@ -2690,7 +2733,8 @@ function toggleRoomRates(id, on) {
 }
 function updateRoomRate(id, key, val) {
   const r = rooms.find(x=>x.id===id); if(!r) return;
-  if (!r.rates) r.rates = { ...rates };
+  // Seed overrides from the rate table matching the room's mode
+  if (!r.rates) r.rates = r.mode === 'exterior' ? { ...extRates } : { ...rates };
   r.rates[key] = parseFloat(val) || 0;
   recalcRoom(id);
 }
@@ -2714,7 +2758,7 @@ function getJobSnapshot() {
 function saveActiveJob() {
   try {
     const snap = getJobSnapshot();
-    localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify(snap));
+    safeSet(ACTIVE_JOB_KEY, JSON.stringify(snap));
     updateSaveIndicator(snap.updatedAt);
   } catch (e) {
     console.warn('Auto-save failed:', e);
@@ -2800,7 +2844,7 @@ function syncJobBadge() {
 
 // Named snapshots
 function jobsLoad() { try { return JSON.parse(localStorage.getItem(SAVED_JOBS_KEY)) || []; } catch { return []; } }
-function jobsSave(list) { localStorage.setItem(SAVED_JOBS_KEY, JSON.stringify(list)); }
+function jobsSave(list) { return safeSet(SAVED_JOBS_KEY, JSON.stringify(list)); }
 function openJobsModal() {
   renderJobsList();
   document.getElementById('jobs-modal').style.display = 'block';
@@ -2853,7 +2897,7 @@ function saveSnapshot() {
     snap.createdAt = Date.now();
     list.unshift(snap);
   }
-  jobsSave(list);
+  if (!jobsSave(list)) return; // storage full — safeSet already warned the user
   currentJobName = name;
   saveActiveJob();
   syncJobBadge();
@@ -2863,6 +2907,19 @@ function saveSnapshot() {
 function loadSnapshot(id) {
   const j = jobsLoad().find(x => x.id === id);
   if (!j) return;
+  // Don't lose the job currently on screen: if it's named, silently re-save it
+  // under its name; if it's unnamed but has measurements, ask first.
+  if (currentJobName && currentJobName !== j.name) {
+    const list = jobsLoad();
+    const cur = getJobSnapshot();
+    cur.name = currentJobName;
+    const i = list.findIndex(x => x.name === currentJobName);
+    if (i >= 0) { cur.id = list[i].id; cur.createdAt = list[i].createdAt; list[i] = cur; }
+    else { cur.id = 'j' + Date.now(); cur.createdAt = Date.now(); list.unshift(cur); }
+    jobsSave(list);
+  } else if (!currentJobName && rooms.some(r => r.walls?.some(w => w.ft) || r.height || r.floorLength)) {
+    if (!confirm('Current measurements are not saved as a named job and will be replaced. Load anyway?')) return;
+  }
   applyJobData(j);
   saveActiveJob();
   closeJobsModal();
@@ -3625,7 +3682,7 @@ function loadContacts() {
   catch { return []; }
 }
 function saveContacts(contacts) {
-  localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
+  safeSet(CONTACTS_KEY, JSON.stringify(contacts));
 }
 
 function setStatusFilter(status, btn) {
@@ -3842,7 +3899,7 @@ function saveClientFromBid() {
     document.getElementById('contact-modal').classList.add('show');
   }
 }
-function fmt(n){return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function fmt(n){if(typeof n!=='number'||isNaN(n))n=0;return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
 let toastT;
 function showToast(msg, type='') {
   const el=document.getElementById('toast');
@@ -3913,7 +3970,13 @@ async function callAI(messages, model = 'claude-sonnet-4-6', max_tokens = 1024, 
       body: JSON.stringify(payload),
     });
   }
-  const data = await resp.json();
+  let data;
+  try {
+    data = await resp.json();
+  } catch(_) {
+    // Worker/Cloudflare returned non-JSON (HTML error page, empty body, etc.)
+    throw new Error(`AI server returned an invalid response (HTTP ${resp.status}). Try again in a minute.`);
+  }
   if (data.error) {
     const msg = data.error.message || 'Unknown AI error';
     // Old deployed Worker only knows the single-image format and rejects
@@ -3924,6 +3987,26 @@ async function callAI(messages, model = 'claude-sonnet-4-6', max_tokens = 1024, 
     throw new Error(msg);
   }
   return data;
+}
+
+// Pull a JSON object out of an AI text response. Models sometimes wrap JSON in
+// markdown fences or add prose around it — try the strictest parse first.
+function extractAIJson(text) {
+  text = (text || '').trim();
+  // 1. Whole response is JSON
+  try { return JSON.parse(text); } catch(_) {}
+  // 2. JSON inside a ```json fence
+  const fence = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+  if (fence) { try { return JSON.parse(fence[1]); } catch(_) {} }
+  // 3. First { to last } (legacy greedy match)
+  const greedy = text.match(/\{[\s\S]*\}/);
+  if (greedy) { try { return JSON.parse(greedy[0]); } catch(_) {} }
+  // 4. Each {...} line on its own (model added prose between objects)
+  for (const line of text.split('\n').reverse()) {
+    const m = line.match(/\{[\s\S]*\}/);
+    if (m) { try { return JSON.parse(m[0]); } catch(_) {} }
+  }
+  return {};
 }
 
 function applyAIRoomResult(roomId, json, toastPrefix) {
@@ -4070,7 +4153,7 @@ async function analyzeAIPhotos(roomId) {
     });
     content.push({ type: 'text', text: aiMultiPhotoPrompt(room.mode === 'exterior', photos.length) });
     const data = await callAI([{ role: 'user', content }], 'claude-sonnet-4-6', 1024);
-    const json = JSON.parse((data.content?.[0]?.text || '').match(/\{[\s\S]*\}/)?.[0] || '{}');
+    const json = extractAIJson(data.content?.[0]?.text);
     applyAIRoomResult(roomId, json, `📷 AI filled (${photos.length} photos):`);
     openAIChat(roomId, aiResultSummary(json, room.mode === 'exterior'));
     aiPhotoBatch[roomId] = [];
@@ -4098,8 +4181,12 @@ function compressToBase64(file, maxPx, quality) {
       const c = document.createElement('canvas');
       c.width = w; c.height = h;
       c.getContext('2d').drawImage(img, 0, 0, w, h);
-      // toBlob is more reliable than toDataURL on Android/Samsung devices
+      // toBlob is more reliable than toDataURL on Android/Samsung devices.
+      // Some Android WebViews never fire the callback — bail out after 15s
+      // instead of hanging the photo flow forever.
+      const blobTimeout = setTimeout(() => rej(new Error('Image compression timed out')), 15000);
       c.toBlob(blob => {
+        clearTimeout(blobTimeout);
         if (!blob || blob.size < 100) { rej(new Error('Canvas produced empty image')); return; }
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -4111,7 +4198,7 @@ function compressToBase64(file, maxPx, quality) {
         reader.readAsDataURL(blob);
       }, 'image/jpeg', quality);
     };
-    img.onerror = () => rej(new Error('Image failed to load'));
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Image failed to load')); };
     img.src = url;
   });
 }
@@ -4155,10 +4242,14 @@ async function analyzeRoomVideo(roomId, input) {
     const ctx    = canvas.getContext('2d');
 
     for (const t of positions) {
-      await new Promise(res => {
-        video.addEventListener('seeked', res, { once: true });
+      // Some Android encoders never fire 'seeked' — skip the frame after 4s
+      // rather than hanging the whole analysis.
+      const seeked = await new Promise(res => {
+        const timer = setTimeout(() => res(false), 4000);
+        video.addEventListener('seeked', () => { clearTimeout(timer); res(true); }, { once: true });
         video.currentTime = t;
       });
+      if (!seeked) continue;
       const maxPx = 1024;
       let w = video.videoWidth, h = video.videoHeight;
       if (w > maxPx || h > maxPx) {
@@ -4184,7 +4275,7 @@ async function analyzeRoomVideo(roomId, input) {
     content.push({ type: 'text', text: aiVideoPrompt(room.mode === 'exterior', frames.length) });
 
     const data = await callAI([{ role: 'user', content }], 'claude-sonnet-4-6', 1024);
-    const json = JSON.parse((data.content?.[0]?.text || '').match(/\{[\s\S]*\}/)?.[0] || '{}');
+    const json = extractAIJson(data.content?.[0]?.text);
     applyAIRoomResult(roomId, json, '📹 AI filled:');
     openAIChat(roomId, aiResultSummary(json, room.mode === 'exterior'));
   } catch(e) {
@@ -4291,14 +4382,16 @@ Only include fields that changed. Omit the update line entirely if nothing chang
     const data = await callAI(apiMessages, 'claude-sonnet-4-6', 512, system);
     let responseText = data.content?.[0]?.text || '…';
 
-    // Extract update JSON if present on the last non-empty line
-    const lastLine = responseText.split('\n').filter(l => l.trim()).at(-1) || '';
-    if (lastLine.trim().startsWith('{"update"')) {
+    // Extract update JSON if present on a trailing line (tolerate ``` fences)
+    const respLines = responseText.split('\n').map(l => l.trim()).filter(l => l && !/^```/.test(l));
+    const lastLine = respLines.at(-1) || '';
+    if (lastLine.startsWith('{"update"')) {
       try {
-        const parsed = JSON.parse(lastLine.trim());
+        const parsed = JSON.parse(lastLine);
         if (parsed.update) {
           applyAIRoomResult(roomId, parsed.update, '🤖 Updated:');
-          responseText = responseText.slice(0, responseText.lastIndexOf(lastLine)).trim() || '✓ Updated.';
+          responseText = responseText.slice(0, responseText.lastIndexOf(lastLine))
+            .replace(/```(?:json)?\s*$/, '').trim() || '✓ Updated.';
         }
       } catch { /* keep original text if JSON parse fails */ }
     }
@@ -4475,7 +4568,7 @@ async function _vaultMigrateAll() {
 function accountsLoad() {
   try { return JSON.parse(localStorage.getItem(ACCOUNTS_KEY)) || []; } catch { return []; }
 }
-function accountsSave(arr) { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(arr)); }
+function accountsSave(arr) { return safeSet(ACCOUNTS_KEY, JSON.stringify(arr)); }
 
 function renderAccounts() {
   const accounts = accountsLoad();
@@ -4821,7 +4914,7 @@ function projLoad() {
   try { return JSON.parse(localStorage.getItem(PROJ_KEY)) || []; }
   catch { return []; }
 }
-function projSave(data) { localStorage.setItem(PROJ_KEY, JSON.stringify(data)); }
+function projSave(data) { return safeSet(PROJ_KEY, JSON.stringify(data)); }
 
 const PROJ_STATUS = {bidding:'Bidding',scheduled:'Scheduled',inprogress:'In Progress',complete:'Complete'};
 
@@ -4949,7 +5042,7 @@ function notesLoad() {
   try { return JSON.parse(localStorage.getItem(NOTES_KEY)) || []; }
   catch { return []; }
 }
-function notesSave(data) { localStorage.setItem(NOTES_KEY, JSON.stringify(data)); }
+function notesSave(data) { return safeSet(NOTES_KEY, JSON.stringify(data)); }
 
 function renderNotes() {
   const notes  = notesLoad();
@@ -4969,7 +5062,7 @@ function renderNotes() {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
         <div style="font-size:15px;font-weight:700;flex:1">${_esc(n.title)||'Untitled'}</div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:8px">
-          <button onclick="event.stopPropagation();navigator.clipboard.writeText(${JSON.stringify((n.title||'')+'\n\n'+(n.body||''))}).then(()=>showToast('📋 Copied'))"
+          <button onclick="event.stopPropagation();copyNote('${n.id}')"
             style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:3px 8px;cursor:pointer;font-family:var(--font)">📋</button>
           <div style="font-size:11px;color:var(--muted)">${new Date(n.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
         </div>
@@ -4977,6 +5070,13 @@ function renderNotes() {
       <div style="font-size:13px;color:var(--muted);line-height:1.5">${_esc((n.body||'').substring(0,120))}${(n.body||'').length>120?'…':''}</div>`;
     list.appendChild(div);
   });
+}
+
+function copyNote(id) {
+  const n = notesLoad().find(x => x.id === id);
+  if (!n) return;
+  navigator.clipboard.writeText((n.title||'') + '\n\n' + (n.body||''))
+    .then(() => showToast('📋 Copied'), () => showToast('Copy failed','warn'));
 }
 
 function openNoteModal(id) {
@@ -5028,7 +5128,7 @@ function materialsLoad() {
   try { return JSON.parse(localStorage.getItem(MATERIALS_KEY)) || []; }
   catch { return []; }
 }
-function materialsSave(data) { localStorage.setItem(MATERIALS_KEY, JSON.stringify(data)); }
+function materialsSave(data) { return safeSet(MATERIALS_KEY, JSON.stringify(data)); }
 
 function renderMaterials() {
   const lists  = materialsLoad();
@@ -5200,7 +5300,7 @@ function supplyLoad() {
   try { return JSON.parse(localStorage.getItem(SUPPLY_KEY)) || []; }
   catch { return []; }
 }
-function supplySave(data) { localStorage.setItem(SUPPLY_KEY, JSON.stringify(data)); }
+function supplySave(data) { return safeSet(SUPPLY_KEY, JSON.stringify(data)); }
 
 function renderSupplies() {
   const supplies = supplyLoad();
@@ -5275,12 +5375,57 @@ function deleteSupply() {
 // ══════════════════════════════════════════════
 let voiceRecog  = null;
 let voiceActive = false;
+let voiceLastMeasurement = null; // {roomId, field} — enables "undo" command
 
 // ── Voice Memo ────────────────────────────────
 let memoActive    = false;
 let memoRecog     = null;
 let memoLines     = [];   // [{time, text}]
 let memoStartTime = null;
+
+// ── Mishear corrections ───────────────────────
+// Chrome consistently mishears these domain words. Applied to every transcript
+// before command parsing. Order matters: longest phrases first.
+const VOICE_CORRECTIONS = [
+  [/\band\s+a\s+half\b/gi,    'point five'],
+  [/\ba\s+half\b/gi,          'point five'],
+  [/\band\s+a\s+quarter\b/gi, 'point two five'],
+  [/\ba\s+quarter\b/gi,       'point two five'],
+  [/\bwhile\b/gi,    'wall'],
+  [/\bwhale\b/gi,    'wall'],
+  [/\bwell\b/gi,     'wall'],
+  [/\bsealing\b/gi,  'ceiling'],
+  [/\bfilling\b/gi,  'ceiling'],
+  [/\bhealing\b/gi,  'ceiling'],
+  [/\bwitch\b/gi,    'width'],
+  [/\bweight\b/gi,   'width'],
+  [/\blane\b/gi,     'length'],
+  [/\bstores\b/gi,   'doors'],
+  [/\btours\b/gi,    'doors'],
+  [/\bboards\b/gi,   'doors'],
+  [/\bfords\b/gi,    'doors'],
+  [/\bwindbows\b/gi, 'windows'],
+  [/\bwinos\b/gi,    'windows'],
+];
+
+function applyVoiceCorrections(text) {
+  let out = text;
+  for (const [re, sub] of VOICE_CORRECTIONS) out = out.replace(re, sub);
+  return out;
+}
+
+// Keywords that mark a transcript alternative as "probably what was meant" —
+// used to pick the best of Chrome's top-3 guesses.
+const VOICE_KEYWORDS = /\b(wall|ceiling|height|width|length|floor|doors?|windows?|siding|soffit|deck|shutters?|railing|wash|room|side|undo|next|done|note|client|project|material)\b/i;
+
+// Pick the best alternative from a SpeechRecognitionResult: prefer one whose
+// corrected form contains a known keyword; fall back to Chrome's top guess.
+function pickBestAlternative(result) {
+  for (let k = 0; k < result.length; k++) {
+    if (VOICE_KEYWORDS.test(applyVoiceCorrections(result[k].transcript))) return result[k].transcript;
+  }
+  return result[0].transcript;
+}
 
 const NUM_WORDS = {
   zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,
@@ -5293,7 +5438,10 @@ function wordToNum(word) {
   if (!word) return null;
   const n = parseFloat(word);
   if (!isNaN(n)) return n;
-  const w = word.toLowerCase().trim();
+  // Hyphenated compound ("thirty-two") resolves as one word = 32.
+  // A SPACED "thirty two" is handled by parseSpokenNumber as feet-inches (30'2") —
+  // do not merge spaced words here or that disambiguation breaks.
+  const w = word.toLowerCase().trim().replace(/(\w)-(\w)/g, '$1$2');
   if (NUM_WORDS.hasOwnProperty(w)) return NUM_WORDS[w];
   for (const [key, val] of Object.entries(NUM_WORDS)) {
     if (w.startsWith(key) && w.length > key.length) {
@@ -5316,12 +5464,18 @@ function parseSpokenNumber(text) {
   const ftOnly = text.match(/(\d+\.?\d*|\w+)\s+feet?/i);
   if (ftOnly) { const n=wordToNum(ftOnly[1]); if(n!==null) return n; }
 
-  // "twelve point five"
-  const pt = text.match(/(\w+)\s+point\s+(\w+)/i);
-  if (pt) { const w=wordToNum(pt[1]),d=wordToNum(pt[2]); if(w!==null&&d!==null) return parseFloat(w+'.'+d); }
+  // "twelve point five" / "twelve point two five" (multi-word decimals)
+  const pt = text.match(/([\w-]+)\s+point\s+(\w+(?:\s+\w+)*)/i);
+  if (pt) {
+    const w = wordToNum(pt[1]);
+    const digits = pt[2].trim().split(/\s+/).map(d => wordToNum(d));
+    if (w !== null && digits.every(d => d !== null && d >= 0 && d <= 9)) {
+      return parseFloat(w + '.' + digits.join(''));
+    }
+  }
 
-  // "twelve five" shorthand
-  const two = text.match(/^(\w+)\s+(\w+)$/i);
+  // "twelve five" shorthand (12'5") — hyphenated first word allowed ("thirty-two five" = 32'5")
+  const two = text.match(/^([\w-]+)\s+([\w-]+)$/i);
   if (two) {
     const a=wordToNum(two[1]), b=wordToNum(two[2]);
     if (a!==null&&b!==null&&b<12) return a+b/12;
@@ -5331,10 +5485,69 @@ function parseSpokenNumber(text) {
 }
 
 function processVoiceCommand(transcript, measureOnly = false) {
+  const corrected = applyVoiceCorrections(transcript.trim());
+  const wasCorrected = corrected.toLowerCase() !== transcript.trim().toLowerCase();
+  transcript = corrected;
   const t = transcript.toLowerCase().trim();
   if (!measureOnly) {
-    document.getElementById('voice-heard').textContent = '"'+transcript+'"';
+    const vh = document.getElementById('voice-heard');
+    if (vh) vh.textContent = '"'+transcript+'"' + (wasCorrected ? ' ✦' : '');
     dbgLog('\n🎤 Voice: "'+transcript+'"');
+  }
+
+  // Undo — removes the last wall added or blanks the last field filled by voice
+  if (/^(?:undo|scratch that|oops|wrong|clear that|clear)$/i.test(t)) {
+    if (!voiceLastMeasurement) return showToast('Nothing to undo','warn');
+    const ur = rooms.find(x => x.id === voiceLastMeasurement.roomId);
+    if (ur) {
+      if (voiceLastMeasurement.field === 'wall') {
+        if (ur.walls.length) removeWall(ur.id, ur.walls[ur.walls.length-1].id);
+      } else {
+        ur[voiceLastMeasurement.field] = '';
+        const el = document.getElementById(`${ur.id}_${voiceLastMeasurement.field}`);
+        if (el) el.value = '';
+        recalcRoom(ur.id); markDirty();
+      }
+      showToast('↩ Undone');
+    }
+    voiceLastMeasurement = null;
+    return;
+  }
+
+  // Room naming — "name room kitchen" / "call this room master bedroom" /
+  // "room name living room" / "name it garage" / "call it back"
+  const nameMatch = t.match(/^(?:name\s+(?:this\s+)?room|call\s+(?:this\s+)?room|room\s+name|name\s+it|call\s+it)\s+(.+)$/i);
+  if (nameMatch) {
+    const vr = rooms.find(r => r.open) || rooms[rooms.length-1];
+    if (!vr) return showToast('Add a room first','warn');
+    const newName = nameMatch[1].trim().replace(/\b\w/g, c => c.toUpperCase());
+    vr.name = newName;
+    const nEl = document.getElementById(`${vr.id}_name`);
+    if (nEl) nEl.value = newName;
+    markDirty();
+    return showToast(`✏️ ${newName}`);
+  }
+
+  // Exterior side naming shortcuts — "front side" / "left side" / "back" / "right"
+  if (estimatorMode === 'exterior') {
+    const sideMatch = t.match(/^(front|back|left|right)(?:\s+side)?$/i);
+    if (sideMatch) {
+      const vr = rooms.find(r => r.open) || rooms[rooms.length-1];
+      if (vr) {
+        const newName = sideMatch[1][0].toUpperCase() + sideMatch[1].slice(1) + ' Side';
+        vr.name = newName;
+        const nEl = document.getElementById(`${vr.id}_name`);
+        if (nEl) nEl.value = newName;
+        markDirty();
+        return showToast(`✏️ ${newName}`);
+      }
+    }
+  }
+
+  // Advance to next room/side — "next" / "next side" / "next room" / "done"
+  if (!measureOnly && /^(?:next(?:\s+(?:side|room))?|done)$/i.test(t)) {
+    const vr = rooms.find(r => r.open) || rooms[rooms.length-1];
+    if (vr) { nextRoom(vr.id); return; }
   }
 
   // Navigation — skipped in memo mode so conversation doesn't trigger tab switches
@@ -5368,7 +5581,7 @@ function processVoiceCommand(transcript, measureOnly = false) {
     const n = parseSpokenNumber(doorMatch[1].trim());
     if (n !== null && n >= 0 && n < 1000) {
       const count = Math.round(n);
-      switchTab('estimate');
+      if (!measureOnly) switchTab('estimate');
       document.getElementById('job-door-count').value = count;
       updateJobField('doorCount', String(count));
       return showToast(`🚪 ${count} door${count===1?'':'s'}`);
@@ -5379,7 +5592,7 @@ function processVoiceCommand(transcript, measureOnly = false) {
     const n = parseSpokenNumber(winMatch[1].trim());
     if (n !== null && n >= 0 && n < 1000) {
       const count = Math.round(n);
-      switchTab('estimate');
+      if (!measureOnly) switchTab('estimate');
       document.getElementById('job-win-count').value = count;
       updateJobField('winCount', String(count));
       return showToast(`🪟 ${count} window${count===1?'':'s'}`);
@@ -5395,7 +5608,7 @@ function processVoiceCommand(transcript, measureOnly = false) {
     const n = parseSpokenNumber(shutMatch[1].trim());
     if (n !== null && n >= 0 && n < 500) {
       const count = Math.round(n);
-      switchTab('estimate');
+      if (!measureOnly) switchTab('estimate');
       document.getElementById('job-shutter-count').value = count;
       updateJobField('shutterCount', String(count));
       return showToast(`🪟 ${count} shutter${count===1?'':'s'}`);
@@ -5408,7 +5621,7 @@ function processVoiceCommand(transcript, measureOnly = false) {
     if (washMatch) {
       const n = parseSpokenNumber(washMatch[1]);
       if (n !== null && n > 0) {
-        switchTab('estimate');
+        if (!measureOnly) switchTab('estimate');
         document.getElementById('job-wash-sf').value = Math.round(n);
         updateJobField('washSF', String(Math.round(n)));
         return showToast(`🚿 Power wash ${Math.round(n)} sf`);
@@ -5432,8 +5645,14 @@ function processVoiceCommand(transcript, measureOnly = false) {
   if (feet && feet>0 && feet<500) {
     if (target && target!=='wall') document.getElementById('target-field').value = target;
     if (target==='wall' || !target) document.getElementById('target-field').value = 'wall';
+    // Voice always targets the open room card
+    const openIdx = rooms.findIndex(r => r.open);
+    if (openIdx >= 0) document.getElementById('target-room').value = openIdx;
     const fw=Math.floor(feet), ins=Math.round((feet-fw)*12);
     applyMeasurement(feet, `${fw}'${ins}"`);
+    // Remember what we just filled so "undo" can reverse it
+    const applied = rooms[openIdx >= 0 ? openIdx : (parseInt(document.getElementById('target-room').value) || 0)];
+    if (applied) voiceLastMeasurement = { roomId: applied.id, field: (target && target!=='wall') ? target : 'wall' };
     return;
   }
 
@@ -5450,19 +5669,22 @@ function startVoice() {
   voiceRecog.lang = 'en-US';
   voiceRecog.continuous = true;
   voiceRecog.interimResults = true;
+  voiceRecog.maxAlternatives = 3;
   voiceRecog.onstart = () => {
     voiceActive = true;
     const btn = document.getElementById('mic-btn');
     if(btn){btn.style.background='#2d1a4e';btn.style.borderColor='#a78bfa';btn.style.color='#a78bfa';}
-    document.getElementById('voice-strip').style.display = 'flex';
+    const strip = document.getElementById('voice-strip');
+    if (strip) strip.style.display = 'flex';
   };
   voiceRecog.onresult = (e) => {
     let interim='', final='';
     for(let i=e.resultIndex;i<e.results.length;i++){
-      if(e.results[i].isFinal) final+=e.results[i][0].transcript;
+      if(e.results[i].isFinal) final+=pickBestAlternative(e.results[i]);
       else interim+=e.results[i][0].transcript;
     }
-    document.getElementById('voice-heard').textContent = interim||final;
+    const vh = document.getElementById('voice-heard');
+    if (vh) vh.textContent = interim||final;
     if(final.trim()) processVoiceCommand(final.trim());
   };
   voiceRecog.onerror = (e) => {
@@ -5476,10 +5698,12 @@ function startVoice() {
 
 function stopVoice() {
   voiceActive = false;
+  voiceLastMeasurement = null;
   if(voiceRecog){voiceRecog.onend=null;voiceRecog.stop();voiceRecog=null;}
   const btn = document.getElementById('mic-btn');
   if(btn){btn.style.background='';btn.style.borderColor='';btn.style.color='';}
-  document.getElementById('voice-strip').style.display = 'none';
+  const strip = document.getElementById('voice-strip');
+  if (strip) strip.style.display = 'none';
   showToast('🎤 Voice off');
 }
 
@@ -5498,7 +5722,7 @@ function startMemo() {
   memoRecog.lang            = 'en-US';
   memoRecog.continuous      = true;
   memoRecog.interimResults  = true;
-  memoRecog.maxAlternatives = 1;
+  memoRecog.maxAlternatives = 3;
   memoRecog.onstart = () => {
     const btn = document.getElementById('memo-btn');
     if (btn) { btn.style.background='#2b0505'; btn.style.borderColor='#ef4444'; btn.style.color='#ef4444'; }
@@ -5508,12 +5732,13 @@ function startMemo() {
   memoRecog.onresult = (e) => {
     let interim = '', final = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      if (e.results[i].isFinal) final += pickBestAlternative(e.results[i]);
       else interim += e.results[i][0].transcript;
     }
-    document.getElementById('memo-heard').textContent = interim || final;
+    const mh = document.getElementById('memo-heard');
+    if (mh) mh.textContent = interim || final;
     if (final.trim()) {
-      const text = final.trim();
+      const text = applyVoiceCorrections(final.trim());
       memoLines.push({ time: Date.now() - memoStartTime, text });
       _updateMemoPreview();
       // Extract measurements only — don't trigger tab switches mid-conversation
@@ -5570,7 +5795,7 @@ function aptLoad() {
   try { return JSON.parse(localStorage.getItem(APT_KEY)) || {locations:[]}; }
   catch { return {locations:[]}; }
 }
-function aptSaveData(data) { localStorage.setItem(APT_KEY, JSON.stringify(data)); }
+function aptSaveData(data) { return safeSet(APT_KEY, JSON.stringify(data)); }
 
 function aptRender() {
   const data = aptLoad();

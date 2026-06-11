@@ -2120,7 +2120,7 @@ function applyMeasurement(feet, disp) {
     // Normal — add new wall
     addWall(room.id, feet.toFixed(2));
     showToast(`${disp} → Wall ${room.walls.length} · ${room.name}`);
-  } else if (['height','floorLength','floorWidth','soffit','deck'].includes(field)) {
+  } else if (['height','floorLength','floorWidth','soffit','deck','deckL','deckW'].includes(field)) {
     const el = document.getElementById(`${room.id}_${field}`);
     if (!el) return;
     el.value = feet.toFixed(2);
@@ -2129,7 +2129,7 @@ function applyMeasurement(feet, disp) {
     el.classList.add('bt-flash');
     setTimeout(() => el.classList.remove('bt-flash'), 900);
     updateField(room.id, field, feet.toFixed(2));
-    const labels = {height:'Height', floorLength:'Floor/Ceil Length', floorWidth:'Floor/Ceil Width', soffit:'Soffit', deck:'Deck'};
+    const labels = {height:'Height', floorLength:'Floor/Ceil Length', floorWidth:'Floor/Ceil Width', soffit:'Soffit', deckL:'Deck Length', deckW:'Deck Width'};
     showToast(`${disp} → ${labels[field]||field} · ${room.name}`);
     document.querySelectorAll('.dim-shoot.active').forEach(b=>b.classList.remove('active'));
     if (field === 'floorLength') {
@@ -2137,6 +2137,12 @@ function applyMeasurement(feet, disp) {
       document.getElementById(`${room.id}_floorWidth_shoot`)?.classList.add('active');
       showToast('📐 Now shoot for Width');
     } else if (field === 'floorWidth') {
+      document.getElementById('target-field').value = 'wall';
+    } else if (field === 'deckL') {
+      document.getElementById('target-field').value = 'deckW';
+      document.getElementById(`${room.id}_deckW_shoot`)?.classList.add('active');
+      showToast('📐 Now shoot for Deck Width');
+    } else if (field === 'deckW') {
       document.getElementById('target-field').value = 'wall';
     }
   }
@@ -2221,7 +2227,7 @@ function addRoom() {
   const name  = isExt ? 'Side '+roomCount : 'Room '+roomCount;
   const extProduct = PRODUCTS.find(p => p.name.includes('Ext'))?.name || PRODUCTS[0].name;
   const room  = isExt
-    ? { id, name, walls:[], height:'9', soffit:'', deck:'',
+    ? { id, name, walls:[], height:'9', soffit:'', deckL:'', deckW:'',
         surfaces:{walls:true, ceiling:false, trim:false, floor:false},
         product: extProduct, coats:'2', rates:null, open:true, mode:'exterior' }
     : { id, name, walls:[], height:'8', floorLength:'', floorWidth:'',
@@ -2279,7 +2285,12 @@ function renderRoom(room, idx) {
   const s3 = isExt ? 'Deck'    : 'Floor';
   const s4 = 'Trim';
 
-  // Dimension section: interior = floor L×W; exterior = soffit sqft + deck sqft
+  // Migrate old single-value deck field → deckL/deckW
+  if (room.deck && !room.deckL) { room.deckL = room.deck; room.deckW = '1'; delete room.deck; }
+  const deckSFPreview = (parseFloat(room.deckL)||0)*(parseFloat(room.deckW)||0);
+  const deckSFHint = deckSFPreview > 0 ? `= ${deckSFPreview.toFixed(1)} sf` : '';
+
+  // Dimension section: interior = floor L×W; exterior = soffit sqft + deck L×W
   const dimSection = isExt ? `
       <!-- Exterior: Soffit and Deck area inputs (shown when surface is toggled on) -->
       <div id="${room.id}_soffit_row" style="display:${room.surfaces.ceiling?'':'none'};margin-bottom:12px">
@@ -2290,11 +2301,26 @@ function renderRoom(room, idx) {
         </label>
       </div>
       <div id="${room.id}_deck_row" style="display:${room.surfaces.floor?'':'none'};margin-bottom:12px">
-        <label class="field">
-          <span>Deck / Porch Area (sq ft total)</span>
-          <input type="number" id="${room.id}_deck" value="${room.deck||''}" min="0" step="0.1" inputmode="decimal"
-            oninput="updateField('${room.id}','deck',this.value)"/>
-        </label>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">📐 Deck / Porch size (tap 📐 then pull trigger, or type it in)</div>
+        <div class="floor-dims" style="display:grid">
+          <label class="field">
+            <span>Length (ft)</span>
+            <div style="display:flex;gap:6px">
+              <input type="number" id="${room.id}_deckL" value="${room.deckL||''}" min="0" step="0.01" inputmode="decimal"
+                oninput="updateField('${room.id}','deckL',this.value)" style="flex:1;min-width:0" placeholder="ft"/>
+              <button class="dim-shoot" id="${room.id}_deckL_shoot" onclick="armDimShot('${room.id}','deckL')" aria-label="Shoot deck length">📐</button>
+            </div>
+          </label>
+          <label class="field">
+            <span>Width (ft)</span>
+            <div style="display:flex;gap:6px">
+              <input type="number" id="${room.id}_deckW" value="${room.deckW||''}" min="0" step="0.01" inputmode="decimal"
+                oninput="updateField('${room.id}','deckW',this.value)" style="flex:1;min-width:0" placeholder="ft"/>
+              <button class="dim-shoot" id="${room.id}_deckW_shoot" onclick="armDimShot('${room.id}','deckW')" aria-label="Shoot deck width">📐</button>
+            </div>
+          </label>
+          <span id="${room.id}_deckSFhint" style="font-size:12px;color:var(--muted);grid-column:1/-1;margin-top:-4px">${deckSFHint}</span>
+        </div>
       </div>` : `
       <!-- Interior: floor / ceiling footprint -->
       <div class="floor-dims" id="${room.id}_floordims" style="display:${room.surfaces.ceiling||room.surfaces.floor?'grid':'none'}">
@@ -2550,7 +2576,7 @@ function armDimShot(roomId, field) {
   document.getElementById('target-room').value  = idx;
   // Highlight the active shoot button
   document.getElementById(`${roomId}_${field}_shoot`)?.classList.add('active');
-  const dimLabels = {floorLength:'Length', floorWidth:'Width', soffit:'Soffit area', deck:'Deck area'};
+  const dimLabels = {floorLength:'Length', floorWidth:'Width', soffit:'Soffit area', deckL:'Deck Length', deckW:'Deck Width'};
   showToast(`📐 Shoot for ${dimLabels[field]||field} · ${rooms[idx].name}`);
 }
 
@@ -2633,6 +2659,12 @@ function updateField(id,field,val) {
     const el = document.getElementById(w.id+'_ht');
     if (el) el.placeholder = val || 'H';
   });
+  // Refresh deck SF hint when either dimension changes
+  if(field==='deckL'||field==='deckW') {
+    const sf = (parseFloat(r.deckL)||0)*(parseFloat(r.deckW)||0);
+    const hint = document.getElementById(`${id}_deckSFhint`);
+    if(hint) hint.textContent = sf>0 ? `= ${sf.toFixed(1)} sf` : '';
+  }
   recalcRoom(id);
 }
 function clearSurfaceNote(id) {
@@ -2679,7 +2711,7 @@ function calcExt(room) {
   const perimeter = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0), 0);
   const h        = parseFloat(room.height) || 0;
   const soffitSF = parseFloat(room.soffit) || 0;
-  const deckSF   = parseFloat(room.deck)   || 0;
+  const deckSF   = (parseFloat(room.deckL)||0) * (parseFloat(room.deckW)||0);
   const c        = parseInt(room.coats)    || 1;
   // Each siding run can override the side height (gables, walk-out basements)
   const sidingSF = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0)*(parseFloat(w.ht)||h), 0);
@@ -5775,7 +5807,27 @@ function processVoiceCommand(transcript, measureOnly = false) {
   else if (/^height\s+/i.test(t))  { target='height';      numStr=t.replace(/^height\s+/i,''); }
   else if (/^ceiling\s+/i.test(t)) { target='height';      numStr=t.replace(/^ceiling\s+/i,''); }
   else if (/^soffit\s+/i.test(t))  { target='soffit';      numStr=t.replace(/^soffit\s+/i,''); }
-  else if (/^deck\s+/i.test(t))    { target='deck';        numStr=t.replace(/^deck\s+/i,''); }
+  else if (/^deck\s+/i.test(t)) {
+    const deckRest = t.replace(/^deck\s+/i,'');
+    const deckBy = deckRest.match(/^(.+?)\s+(?:by|times|x|at)\s+(.+)$/i);
+    if (deckBy) {
+      const dL = parseSpokenNumber(deckBy[1].trim()), dW = parseSpokenNumber(deckBy[2].trim());
+      if (dL!==null && dW!==null && dL>0 && dW>0 && dL<500 && dW<500) {
+        const openIdx = rooms.findIndex(r => r.open);
+        const wr = rooms[openIdx >= 0 ? openIdx : 0];
+        if (wr) {
+          wr.deckL = dL.toFixed(2); wr.deckW = dW.toFixed(2);
+          const elL = document.getElementById(`${wr.id}_deckL`); if(elL) elL.value = wr.deckL;
+          const elW = document.getElementById(`${wr.id}_deckW`); if(elW) elW.value = wr.deckW;
+          updateField(wr.id,'deckL',wr.deckL); updateField(wr.id,'deckW',wr.deckW);
+          markDirty();
+          showToast(`Deck ${dL}×${dW} = ${(dL*dW).toFixed(0)} sf · ${wr.name}`);
+        }
+        return;
+      }
+    }
+    target='deckL'; numStr=deckRest;
+  }
   else if (/^siding\s+/i.test(t))  { target='wall';        numStr=t.replace(/^siding\s+/i,''); }
   else if (/^length\s+/i.test(t))  { target='floorLength'; numStr=t.replace(/^length\s+/i,''); }
   else if (/^width\s+/i.test(t))   { target='floorWidth';  numStr=t.replace(/^width\s+/i,''); }

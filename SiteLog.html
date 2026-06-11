@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>SiteLog — Ingersoll Painting</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue:#2baae1;--green:#2e8b1e;--red:#c0392b;--amber:#f59e0b;
+  --dark:#0d1117;--panel:#161b22;--card:#1a2030;--border:#252c3a;
+  --text:#e2e8f0;--muted:#6b7a8d;
+  --head:'Bebas Neue',sans-serif;
+  --font:'Barlow Condensed','Arial Narrow',sans-serif;
+  --tap:54px;--r:12px;--gap:12px;
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;background:var(--dark);color:var(--text);font-family:var(--font);font-size:16px;overflow:hidden;}
+
+/* ── Header ── */
+#hdr{
+  display:flex;align-items:center;gap:8px;
+  padding:calc(var(--safe-t) + 10px) 12px 10px;
+  background:var(--panel);border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:100;
+}
+.logo-mark{font-family:var(--head);font-size:26px;color:var(--blue);letter-spacing:1px;line-height:1;flex-shrink:0;}
+#job-name{flex:1;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hdr-btn{
+  background:var(--card);border:1px solid var(--border);color:var(--text);
+  font-size:17px;min-width:40px;height:40px;border-radius:var(--r);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.hdr-btn:active{opacity:.7;}
+#btn-analyze-all{
+  background:rgba(43,170,225,.15);border-color:var(--blue);color:var(--blue);
+  font-family:var(--head);font-size:13px;letter-spacing:.5px;padding:0 10px;min-width:0;
+  white-space:nowrap;
+}
+
+/* ── Phase tabs ── */
+#phase-bar{
+  display:flex;background:var(--panel);border-bottom:1px solid var(--border);
+}
+.phase-tab{
+  flex:1;height:42px;background:none;border:none;border-bottom:2px solid transparent;
+  color:var(--muted);font-family:var(--head);font-size:15px;letter-spacing:.5px;
+  cursor:pointer;transition:color .15s,border-color .15s;
+}
+.phase-tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+.phase-tab[data-phase=before].active{color:var(--amber);border-bottom-color:var(--amber);}
+.phase-tab[data-phase=during].active{color:var(--blue);border-bottom-color:var(--blue);}
+.phase-tab[data-phase=after].active{color:var(--green);border-bottom-color:var(--green);}
+
+/* ── Main scroll ── */
+#main{
+  height:calc(100vh - 52px - 42px - var(--safe-b));
+  overflow-y:auto;padding:12px;
+  padding-bottom:calc(90px + var(--safe-b));
+}
+
+/* ── Photo grid ── */
+#photo-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(155px,1fr));
+  gap:var(--gap);
+}
+.photo-card{
+  background:var(--panel);border:1px solid var(--border);border-radius:var(--r);
+  overflow:hidden;cursor:pointer;transition:transform .1s;
+}
+.photo-card:active{transform:scale(.97);}
+.photo-thumb{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;background:var(--card);}
+.thumb-placeholder{
+  width:100%;aspect-ratio:4/3;background:var(--card);
+  display:flex;align-items:center;justify-content:center;font-size:30px;
+}
+.photo-meta{padding:8px;}
+.phase-badge{
+  display:inline-block;font-size:10px;font-family:var(--head);letter-spacing:.5px;
+  padding:2px 7px;border-radius:4px;margin-bottom:5px;
+}
+.phase-badge.before{background:rgba(245,158,11,.15);color:var(--amber);}
+.phase-badge.during{background:rgba(43,170,225,.15);color:var(--blue);}
+.phase-badge.after{background:rgba(46,139,30,.15);color:var(--green);}
+.photo-label{font-size:12px;color:var(--text);line-height:1.35;min-height:30px;}
+.photo-label.unlabeled{color:var(--muted);font-style:italic;}
+.card-analyze-btn{
+  width:100%;margin-top:6px;padding:5px;
+  background:var(--card);border:1px solid var(--border);color:var(--blue);
+  font-family:var(--head);font-size:12px;letter-spacing:.5px;border-radius:6px;cursor:pointer;
+}
+.card-analyze-btn:active{opacity:.7;}
+.card-spinner{text-align:center;font-size:11px;color:var(--muted);margin-top:6px;display:none;}
+
+/* ── Empty state ── */
+#empty-state{
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  min-height:55vh;gap:12px;color:var(--muted);text-align:center;padding:20px;
+}
+#empty-state.show{display:flex;}
+.empty-icon{font-size:52px;}
+.empty-head{font-family:var(--head);font-size:22px;letter-spacing:1px;color:var(--text);}
+.empty-sub{font-size:14px;line-height:1.5;}
+
+/* ── FABs ── */
+#fab{
+  position:fixed;bottom:calc(20px + var(--safe-b));right:18px;
+  width:58px;height:58px;border-radius:50%;
+  background:var(--blue);color:#fff;border:none;font-size:28px;
+  cursor:pointer;box-shadow:0 4px 18px rgba(43,170,225,.45);
+  display:flex;align-items:center;justify-content:center;z-index:200;
+  transition:transform .12s;
+}
+#fab:active{transform:scale(.92);}
+#fab-report{
+  position:fixed;bottom:calc(88px + var(--safe-b));right:18px;
+  width:48px;height:48px;border-radius:50%;
+  background:var(--green);color:#fff;border:none;font-size:20px;
+  cursor:pointer;box-shadow:0 4px 14px rgba(46,139,30,.4);
+  display:flex;align-items:center;justify-content:center;z-index:200;
+  transition:transform .12s;
+}
+#fab-report:active{transform:scale(.92);}
+
+/* ── Toast ── */
+#toast{
+  position:fixed;bottom:calc(105px + var(--safe-b));left:50%;
+  transform:translateX(-50%) translateY(14px);
+  background:var(--panel);border:1px solid var(--border);color:var(--text);
+  padding:9px 18px;border-radius:20px;font-size:14px;
+  opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:999;
+  white-space:nowrap;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ── Modal overlays ── */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.72);
+  display:flex;align-items:flex-end;justify-content:center;
+  z-index:500;opacity:0;pointer-events:none;transition:opacity .2s;
+}
+.modal-overlay.open{opacity:1;pointer-events:all;}
+.sheet{
+  background:var(--panel);border-radius:var(--r) var(--r) 0 0;
+  width:100%;max-width:520px;max-height:88vh;overflow-y:auto;
+  padding-bottom:calc(16px + var(--safe-b));
+  transform:translateY(36px);transition:transform .2s;
+}
+.modal-overlay.open .sheet{transform:translateY(0);}
+.handle{width:38px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 6px;}
+.modal-ttl{
+  font-family:var(--head);font-size:22px;letter-spacing:1px;
+  padding:6px 16px 12px;border-bottom:1px solid var(--border);
+}
+.modal-body{padding:16px;}
+
+/* ── Form fields ── */
+.frow{margin-bottom:14px;}
+.flabel{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;letter-spacing:.3px;}
+.finput{
+  width:100%;background:var(--card);border:1px solid var(--border);
+  color:var(--text);font-family:var(--font);font-size:15px;
+  padding:10px 12px;border-radius:var(--r);outline:none;
+}
+.finput:focus{border-color:var(--blue);}
+textarea.finput{resize:vertical;min-height:68px;}
+
+/* ── Buttons ── */
+.btn-primary{
+  width:100%;height:var(--tap);background:var(--blue);color:#fff;border:none;
+  font-family:var(--head);font-size:18px;letter-spacing:1px;border-radius:var(--r);cursor:pointer;
+}
+.btn-primary:active{opacity:.8;}
+.btn-secondary{
+  width:100%;height:var(--tap);background:var(--card);color:var(--text);
+  border:1px solid var(--border);font-family:var(--head);font-size:18px;
+  letter-spacing:1px;border-radius:var(--r);cursor:pointer;margin-top:8px;
+}
+.btn-secondary:active{opacity:.8;}
+.btn-danger{
+  width:100%;height:var(--tap);background:var(--red);color:#fff;border:none;
+  font-family:var(--head);font-size:18px;letter-spacing:1px;border-radius:var(--r);cursor:pointer;margin-top:8px;
+}
+.btn-danger:active{opacity:.8;}
+
+/* ── Phase picker ── */
+.phase-picker{display:flex;gap:10px;margin-bottom:16px;}
+.phase-opt{
+  flex:1;height:62px;border-radius:var(--r);border:2px solid var(--border);
+  background:var(--card);color:var(--muted);
+  font-family:var(--head);font-size:15px;letter-spacing:.5px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+}
+.phase-opt .opt-icon{font-size:18px;}
+.phase-opt.sel-before{border-color:var(--amber);color:var(--amber);}
+.phase-opt.sel-during{border-color:var(--blue);color:var(--blue);}
+.phase-opt.sel-after{border-color:var(--green);color:var(--green);}
+
+/* ── Jobs list ── */
+.job-row{
+  display:flex;align-items:center;gap:10px;
+  padding:11px 10px;background:var(--card);border-radius:var(--r);
+  margin-bottom:8px;border:1px solid var(--border);cursor:pointer;
+}
+.job-row:active{opacity:.8;}
+.job-row.current{border-color:var(--blue);}
+.job-info{flex:1;overflow:hidden;}
+.job-name{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.job-sub{font-size:12px;color:var(--muted);margin-top:2px;}
+.job-del{background:none;border:none;color:var(--muted);font-size:18px;padding:4px 6px;cursor:pointer;flex-shrink:0;}
+.job-del:active{color:var(--red);}
+.job-edit-btn{background:none;border:none;color:var(--muted);font-size:16px;padding:4px 6px;cursor:pointer;flex-shrink:0;}
+.job-edit-btn:active{color:var(--blue);}
+
+/* ── Lightbox ── */
+#lightbox{
+  position:fixed;inset:0;background:rgba(0,0,0,.96);
+  z-index:600;display:none;flex-direction:column;
+}
+#lightbox.open{display:flex;}
+#lb-hdr{
+  display:flex;align-items:center;gap:10px;
+  padding:calc(var(--safe-t) + 8px) 12px 8px;flex-shrink:0;
+}
+#lb-close{background:none;border:none;color:var(--text);font-size:24px;cursor:pointer;padding:4px 8px;line-height:1;}
+#lb-badge{font-family:var(--head);font-size:13px;letter-spacing:.5px;}
+#lb-ts{flex:1;font-size:12px;color:var(--muted);text-align:right;}
+#lb-img-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:8px;overflow:hidden;min-height:0;}
+#lb-img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;display:block;}
+#lb-footer{
+  padding:10px 14px calc(var(--safe-b) + 10px);
+  background:var(--panel);border-top:1px solid var(--border);flex-shrink:0;
+}
+#lb-label{
+  width:100%;background:var(--card);border:1px solid var(--border);color:var(--text);
+  font-family:var(--font);font-size:14px;padding:8px 10px;border-radius:var(--r);
+  resize:none;min-height:52px;outline:none;margin-bottom:8px;
+}
+#lb-label:focus{border-color:var(--blue);}
+.lb-actions{display:flex;gap:8px;}
+.lb-action{
+  flex:1;height:44px;border-radius:var(--r);border:none;cursor:pointer;
+  font-family:var(--head);font-size:15px;letter-spacing:.5px;
+}
+#lb-ai{background:rgba(43,170,225,.2);color:var(--blue);border:1px solid var(--blue);}
+#lb-save{background:var(--green);color:#fff;}
+#lb-delete{background:var(--red);color:#fff;}
+
+/* ── Report overlay ── */
+#report-overlay{
+  position:fixed;inset:0;background:var(--dark);
+  z-index:700;display:none;flex-direction:column;
+}
+#report-overlay.open{display:flex;}
+#rpt-hdr{
+  display:flex;align-items:center;gap:10px;
+  padding:calc(var(--safe-t) + 8px) 12px 8px;
+  background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;
+}
+#rpt-close{background:none;border:none;color:var(--text);font-size:24px;cursor:pointer;padding:4px 8px;line-height:1;}
+#rpt-title{flex:1;font-family:var(--head);font-size:18px;letter-spacing:.5px;}
+#rpt-print{
+  background:var(--blue);color:#fff;border:none;
+  font-family:var(--head);font-size:14px;letter-spacing:.5px;
+  padding:8px 14px;border-radius:var(--r);cursor:pointer;
+}
+#rpt-print:active{opacity:.8;}
+#rpt-scroll{flex:1;overflow-y:auto;padding:16px;background:#888;}
+#rpt-preview{
+  background:#fff;color:#222;border-radius:6px;
+  max-width:620px;margin:0 auto;padding:36px 40px;
+  font-family:Georgia,serif;line-height:1.5;
+  box-shadow:0 4px 24px rgba(0,0,0,.3);
+}
+
+/* ── Settings key hint ── */
+.key-hint{
+  font-size:12px;color:var(--muted);margin-top:5px;padding:5px 8px;
+  background:var(--card);border-radius:6px;
+}
+.key-hint.ok{color:var(--green);}
+
+/* ── Print ── */
+@media print{
+  #app,#fab,#fab-report,#toast,#lightbox,
+  .modal-overlay,#file-input{display:none!important;}
+  body{background:#fff!important;overflow:visible!important;}
+  html,body{height:auto!important;}
+  #report-overlay{
+    position:static!important;background:#fff!important;
+    display:block!important;
+  }
+  #rpt-hdr{display:none!important;}
+  #rpt-scroll{
+    overflow:visible!important;padding:0!important;
+    background:#fff!important;
+  }
+  #rpt-preview{
+    box-shadow:none!important;border-radius:0!important;
+    max-width:none!important;padding:0!important;
+    page-break-inside:auto;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- ── App shell ── -->
+<div id="app">
+  <header id="hdr">
+    <span class="logo-mark">SITELOG</span>
+    <span id="job-name">No job loaded</span>
+    <button id="btn-analyze-all" class="hdr-btn" onclick="analyzeAll()" style="display:none">✨ ALL</button>
+    <button class="hdr-btn" onclick="openJobsModal()" title="Jobs">📁</button>
+    <button class="hdr-btn" onclick="openSettings()" title="Settings">⚙️</button>
+  </header>
+
+  <div id="phase-bar">
+    <button class="phase-tab active" data-phase="all" onclick="setPhase('all')">ALL</button>
+    <button class="phase-tab" data-phase="before" onclick="setPhase('before')">BEFORE</button>
+    <button class="phase-tab" data-phase="during" onclick="setPhase('during')">DURING</button>
+    <button class="phase-tab" data-phase="after" onclick="setPhase('after')">AFTER</button>
+  </div>
+
+  <div id="main">
+    <div id="empty-state">
+      <div class="empty-icon">📸</div>
+      <div class="empty-head">No Photos Yet</div>
+      <div class="empty-sub">Tap <strong>+</strong> to add site photos.<br>Organize by Before, During, and After.</div>
+    </div>
+    <div id="photo-grid"></div>
+  </div>
+
+  <button id="fab" onclick="openAddModal()">+</button>
+  <button id="fab-report" onclick="openReport()" title="Generate report">📄</button>
+</div>
+
+<!-- ── Toast ── -->
+<div id="toast"></div>
+
+<!-- ── Modal: Add Photo ── -->
+<div id="modal-add" class="modal-overlay" onclick="bgClose(event,'modal-add')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-ttl">ADD PHOTOS</div>
+    <div class="modal-body">
+      <div class="flabel">PHASE</div>
+      <div class="phase-picker">
+        <button class="phase-opt" data-phase="before" onclick="pickPhase('before')">
+          <span class="opt-icon">🟡</span>BEFORE
+        </button>
+        <button class="phase-opt" data-phase="during" onclick="pickPhase('during')">
+          <span class="opt-icon">🔵</span>DURING
+        </button>
+        <button class="phase-opt" data-phase="after" onclick="pickPhase('after')">
+          <span class="opt-icon">🟢</span>AFTER
+        </button>
+      </div>
+      <button class="btn-primary" onclick="triggerPicker()">📷 CHOOSE / TAKE PHOTOS</button>
+      <button class="btn-secondary" onclick="closeModal('modal-add')">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Jobs ── -->
+<div id="modal-jobs" class="modal-overlay" onclick="bgClose(event,'modal-jobs')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-ttl">JOBS</div>
+    <div class="modal-body">
+      <button class="btn-primary" onclick="newJob()">+ NEW JOB</button>
+      <div id="jobs-list" style="margin-top:14px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Job Edit ── -->
+<div id="modal-job-edit" class="modal-overlay" onclick="bgClose(event,'modal-job-edit')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-ttl" id="je-ttl">NEW JOB</div>
+    <div class="modal-body">
+      <div class="frow">
+        <label class="flabel">CLIENT NAME</label>
+        <input class="finput" id="je-client" type="text" placeholder="Homeowner name">
+      </div>
+      <div class="frow">
+        <label class="flabel">ADDRESS</label>
+        <input class="finput" id="je-address" type="text" placeholder="123 Main St, Somewhere NY">
+      </div>
+      <div class="frow">
+        <label class="flabel">DATE</label>
+        <input class="finput" id="je-date" type="date">
+      </div>
+      <div class="frow">
+        <label class="flabel">SCOPE / NOTES (optional)</label>
+        <textarea class="finput" id="je-notes" placeholder="Interior living room and hallway, 2 coats..."></textarea>
+      </div>
+      <button class="btn-primary" onclick="saveJobEdit()">SAVE JOB</button>
+      <button class="btn-secondary" onclick="closeModal('modal-job-edit')">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Settings ── -->
+<div id="modal-settings" class="modal-overlay" onclick="bgClose(event,'modal-settings')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="modal-ttl">SETTINGS</div>
+    <div class="modal-body">
+      <div class="frow">
+        <label class="flabel">CLAUDE API KEY (for AI labels)</label>
+        <input class="finput" id="set-key" type="password" placeholder="sk-ant-api03-...">
+        <div class="key-hint" id="key-hint">Not set — AI labels disabled</div>
+      </div>
+      <div class="frow">
+        <label class="flabel">COMPANY NAME (reports)</label>
+        <input class="finput" id="set-company" type="text" placeholder="Ingersoll Painting LLC">
+      </div>
+      <div class="frow">
+        <label class="flabel">PHONE (reports)</label>
+        <input class="finput" id="set-phone" type="tel" placeholder="(315) 555-0100">
+      </div>
+      <button class="btn-primary" onclick="saveSettings()">SAVE SETTINGS</button>
+      <button class="btn-secondary" onclick="closeModal('modal-settings')">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Lightbox ── -->
+<div id="lightbox">
+  <div id="lb-hdr">
+    <button id="lb-close" onclick="closeLightbox()">✕</button>
+    <span id="lb-badge"></span>
+    <span id="lb-ts"></span>
+  </div>
+  <div id="lb-img-wrap">
+    <img id="lb-img" src="" alt="">
+  </div>
+  <div id="lb-footer">
+    <textarea id="lb-label" placeholder="Add a label or description…"></textarea>
+    <div class="lb-actions">
+      <button class="lb-action" id="lb-ai" onclick="lbAnalyze()">✨ AI LABEL</button>
+      <button class="lb-action" id="lb-save" onclick="lbSave()">SAVE</button>
+      <button class="lb-action" id="lb-delete" onclick="lbDelete()">DELETE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Report overlay ── -->
+<div id="report-overlay">
+  <div id="rpt-hdr">
+    <button id="rpt-close" onclick="closeReport()">✕</button>
+    <span id="rpt-title">PROGRESS REPORT</span>
+    <button id="rpt-print" onclick="window.print()">🖨 PRINT / PDF</button>
+  </div>
+  <div id="rpt-scroll">
+    <div id="rpt-preview"></div>
+  </div>
+</div>
+
+<!-- ── Hidden file input ── -->
+<input type="file" id="file-input" accept="image/*" multiple style="display:none" onchange="handleFiles(event)">
+
+<script>
+'use strict';
+
+// ── Constants ──
+const DB_NAME   = 'sitelog-photos';
+const DB_STORE  = 'photos';
+const LS_JOBS   = 'sitelog_jobs_v1';
+const LS_ACTIVE = 'sitelog_active_v1';
+const LS_PREFS  = 'sitelog_prefs_v1';
+const AI_MODEL  = 'claude-haiku-4-5-20251001';
+
+// ── State ──
+let db          = null;
+let jobs        = [];
+let currentJob  = null;   // { id, client, address, date, notes, photos }
+let photos      = [];     // metadata only; blobs in IndexedDB
+let activePhase = 'all';
+let selPhase    = 'before';
+let lbPhotoId   = null;
+let editJobId   = null;   // null = new job
+let prefs       = { apiKey:'', company:'Ingersoll Painting LLC', phone:'' };
+
+// ── IndexedDB ──
+function dbOpen(){
+  return new Promise((res,rej)=>{
+    const r = indexedDB.open(DB_NAME,1);
+    r.onupgradeneeded = e => e.target.result.createObjectStore(DB_STORE);
+    r.onsuccess = e => { db = e.target.result; res(db); };
+    r.onerror   = e => rej(e.target.error);
+  });
+}
+function dbPut(id,blob){
+  return new Promise((res,rej)=>{
+    const tx = db.transaction(DB_STORE,'readwrite');
+    tx.objectStore(DB_STORE).put(blob,id);
+    tx.oncomplete = res;
+    tx.onerror = e => rej(e.target.error);
+  });
+}
+function dbGet(id){
+  return new Promise((res,rej)=>{
+    const r = db.transaction(DB_STORE,'readonly').objectStore(DB_STORE).get(id);
+    r.onsuccess = e => res(e.target.result);
+    r.onerror   = e => rej(e.target.error);
+  });
+}
+function dbDel(id){
+  return new Promise((res,rej)=>{
+    const tx = db.transaction(DB_STORE,'readwrite');
+    tx.objectStore(DB_STORE).delete(id);
+    tx.oncomplete = res;
+    tx.onerror = e => rej(e.target.error);
+  });
+}
+
+// ── Image compression ──
+function compress(file){
+  return new Promise(res=>{
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = ()=>{
+      URL.revokeObjectURL(url);
+      const MAX=1600; let w=img.width,h=img.height;
+      if(w>MAX||h>MAX){ if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;} }
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      c.toBlob(b=>res(b),'image/jpeg',0.78);
+    };
+    img.src=url;
+  });
+}
+
+// ── Persistence ──
+function persist(){
+  if(currentJob){ currentJob.photos=photos; syncJobToList(); }
+  try{ localStorage.setItem(LS_JOBS, JSON.stringify(jobs)); }catch{}
+}
+function syncJobToList(){
+  const i=jobs.findIndex(j=>j.id===currentJob.id);
+  if(i>=0) jobs[i]=currentJob; else jobs.unshift(currentJob);
+}
+function loadState(){
+  try{ jobs=JSON.parse(localStorage.getItem(LS_JOBS)||'[]'); }catch{ jobs=[]; }
+  try{ prefs={...prefs,...JSON.parse(localStorage.getItem(LS_PREFS)||'{}')}; }catch{}
+  const aid=localStorage.getItem(LS_ACTIVE);
+  currentJob = (aid && jobs.find(j=>j.id===aid)) || jobs[0] || null;
+  photos = currentJob ? (currentJob.photos||[]) : [];
+  if(currentJob) localStorage.setItem(LS_ACTIVE,currentJob.id);
+}
+
+// ── Job management ──
+function newJob(){
+  editJobId=null;
+  document.getElementById('je-ttl').textContent='NEW JOB';
+  document.getElementById('je-client').value='';
+  document.getElementById('je-address').value='';
+  document.getElementById('je-date').value=todayISO();
+  document.getElementById('je-notes').value='';
+  closeModal('modal-jobs');
+  openModal('modal-job-edit');
+}
+function editJob(id,e){
+  e&&e.stopPropagation();
+  const j=jobs.find(x=>x.id===id); if(!j) return;
+  editJobId=id;
+  document.getElementById('je-ttl').textContent='EDIT JOB';
+  document.getElementById('je-client').value=j.client||'';
+  document.getElementById('je-address').value=j.address||'';
+  document.getElementById('je-date').value=j.date||'';
+  document.getElementById('je-notes').value=j.notes||'';
+  openModal('modal-job-edit');
+}
+function saveJobEdit(){
+  const client=document.getElementById('je-client').value.trim();
+  if(!client){ showToast('Enter a client name'); return; }
+  const address=document.getElementById('je-address').value.trim();
+  const date=document.getElementById('je-date').value;
+  const notes=document.getElementById('je-notes').value.trim();
+  if(editJobId){
+    const j=jobs.find(x=>x.id===editJobId);
+    if(j){ j.client=client; j.address=address; j.date=date; j.notes=notes; }
+    if(currentJob&&currentJob.id===editJobId){ Object.assign(currentJob,{client,address,date,notes}); }
+  } else {
+    persist(); // save current before switching
+    const j={ id:'job_'+Date.now(), client, address, date, notes, photos:[] };
+    jobs.unshift(j);
+    currentJob=j; photos=[];
+    localStorage.setItem(LS_ACTIVE,j.id);
+  }
+  persist();
+  closeModal('modal-job-edit');
+  updateHeader();
+  renderGrid();
+  showToast(editJobId ? 'Job updated' : 'New job created');
+}
+function loadJob(id){
+  if(currentJob&&currentJob.id===id){ closeModal('modal-jobs'); return; }
+  persist();
+  currentJob=jobs.find(j=>j.id===id);
+  if(!currentJob) return;
+  photos=currentJob.photos||[];
+  localStorage.setItem(LS_ACTIVE,id);
+  closeModal('modal-jobs');
+  setPhase('all');
+  updateHeader();
+  renderGrid();
+  showToast('Loaded: '+currentJob.client);
+}
+function deleteJob(id,e){
+  e.stopPropagation();
+  const j=jobs.find(x=>x.id===id); if(!j) return;
+  if(!confirm('Delete "'+j.client+'" and all its photos?')) return;
+  (j.photos||[]).forEach(p=>dbDel(p.id).catch(()=>{}));
+  jobs=jobs.filter(x=>x.id!==id);
+  if(currentJob&&currentJob.id===id){
+    currentJob=jobs[0]||null;
+    photos=currentJob?(currentJob.photos||[]):[];
+    if(currentJob) localStorage.setItem(LS_ACTIVE,currentJob.id);
+    else localStorage.removeItem(LS_ACTIVE);
+    updateHeader(); renderGrid();
+  }
+  try{ localStorage.setItem(LS_JOBS,JSON.stringify(jobs)); }catch{}
+  renderJobsList();
+  showToast('Job deleted');
+}
+
+// ── Add photos ──
+function openAddModal(){
+  if(!currentJob){ showToast('Create a job first'); openJobsModal(); return; }
+  openModal('modal-add');
+}
+function pickPhase(phase){
+  selPhase=phase;
+  document.querySelectorAll('.phase-opt').forEach(b=>{
+    b.classList.remove('sel-before','sel-during','sel-after');
+  });
+  document.querySelector('.phase-opt[data-phase="'+phase+'"]')?.classList.add('sel-'+phase);
+}
+function triggerPicker(){
+  closeModal('modal-add');
+  document.getElementById('file-input').click();
+}
+async function handleFiles(e){
+  const files=Array.from(e.target.files); e.target.value='';
+  if(!files.length||!currentJob) return;
+  showToast('Adding '+files.length+' photo'+(files.length>1?'s':'')+'…');
+  const newIds=[];
+  for(const file of files){
+    const id='p'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+    const blob=await compress(file);
+    await dbPut(id,blob);
+    const meta={id, jobId:currentJob.id, phase:selPhase, aiLabel:'', manualLabel:'', ts:new Date().toISOString()};
+    photos.push(meta);
+    newIds.push(id);
+  }
+  persist();
+  renderGrid();
+  updateAnalyzeAllBtn();
+  if(prefs.apiKey){ for(const id of newIds) analyzePhoto(id,true); }
+}
+
+// ── AI analysis ──
+async function analyzePhoto(photoId, silent=false){
+  if(!prefs.apiKey){ if(!silent) showToast('Add API key in Settings'); return; }
+  const meta=photos.find(p=>p.id===photoId); if(!meta) return;
+  // Spinner on card
+  const card=document.getElementById('card-'+photoId);
+  setCardSpinner(card,true);
+  try{
+    const blob=await dbGet(photoId); if(!blob) throw new Error('Photo not found');
+    const b64=await toB64(blob);
+    const phaseCtx=meta.phase==='before'?'before any work begins'
+      :meta.phase==='during'?'while painting is in progress'
+      :'after painting is complete';
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':prefs.apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({
+        model:AI_MODEL,
+        max_tokens:100,
+        messages:[{
+          role:'user',
+          content:[
+            {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64.split(',')[1]}},
+            {type:'text',text:'Painting job site photo taken '+phaseCtx+'. In 1-2 short sentences: identify the room/area and describe what you see. Be specific, professional, no fluff.'}
+          ]
+        }]
+      })
+    });
+    if(!resp.ok){
+      const err=await resp.json().catch(()=>({}));
+      throw new Error(err.error?.message||'API error '+resp.status);
+    }
+    const data=await resp.json();
+    meta.aiLabel=(data.content?.[0]?.text||'').trim();
+    persist();
+    refreshCard(card,meta);
+    if(lbPhotoId===photoId) document.getElementById('lb-label').value=meta.manualLabel||meta.aiLabel;
+  }catch(err){
+    if(!silent) showToast('AI error: '+err.message);
+    console.error(err);
+  } finally{
+    setCardSpinner(card,false);
+    updateAnalyzeAllBtn();
+  }
+}
+async function analyzeAll(){
+  if(!prefs.apiKey){ showToast('Add API key in Settings'); return; }
+  const unlabeled=photos.filter(p=>!p.aiLabel&&!p.manualLabel);
+  if(!unlabeled.length){ showToast('All photos already labeled'); return; }
+  showToast('Analyzing '+unlabeled.length+' photos…');
+  for(const p of unlabeled) await analyzePhoto(p.id,true);
+  showToast('Done');
+}
+function toB64(blob){
+  return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.onerror=rej; r.readAsDataURL(blob); });
+}
+
+// ── Card helpers ──
+function setCardSpinner(card,on){
+  if(!card) return;
+  const btn=card.querySelector('.card-analyze-btn');
+  const spin=card.querySelector('.card-spinner');
+  if(btn)  btn.style.display=on?'none':'';
+  if(spin) spin.style.display=on?'block':'none';
+}
+function refreshCard(card,meta){
+  if(!card) return;
+  const label=meta.manualLabel||meta.aiLabel;
+  const el=card.querySelector('.photo-label');
+  if(el){ el.textContent=label||'Tap to label'; el.className='photo-label'+(label?'':' unlabeled'); }
+  const btn=card.querySelector('.card-analyze-btn');
+  if(btn) btn.style.display=label?'none':'';
+}
+
+// ── Render grid ──
+function renderGrid(){
+  const grid=document.getElementById('photo-grid');
+  const empty=document.getElementById('empty-state');
+  const list=activePhase==='all' ? photos : photos.filter(p=>p.phase===activePhase);
+  if(!list.length){ grid.innerHTML=''; empty.classList.add('show'); return; }
+  empty.classList.remove('show');
+  grid.innerHTML=list.map(p=>{
+    const label=p.manualLabel||p.aiLabel;
+    const ph=p.phase;
+    return `<div class="photo-card" id="card-${p.id}" onclick="openLightbox('${p.id}')">
+      <div class="thumb-placeholder" id="thumb-${p.id}">📷</div>
+      <div class="photo-meta">
+        <span class="phase-badge ${ph}">${ph.charAt(0).toUpperCase()+ph.slice(1)}</span>
+        <div class="photo-label${label?'':' unlabeled'}">${esc(label||'Tap to label')}</div>
+        ${!label?`<button class="card-analyze-btn" onclick="event.stopPropagation();analyzePhoto('${p.id}')">✨ AI LABEL</button>
+        <div class="card-spinner">Analyzing…</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  list.forEach(p=>hydrateThumb(p.id));
+  updateAnalyzeAllBtn();
+}
+async function hydrateThumb(id){
+  const el=document.getElementById('thumb-'+id); if(!el) return;
+  try{
+    const blob=await dbGet(id); if(!blob) return;
+    const url=URL.createObjectURL(blob);
+    const img=document.createElement('img');
+    img.className='photo-thumb'; img.src=url; img.alt='';
+    img.onload=()=>URL.revokeObjectURL(url);
+    el.replaceWith(img);
+  }catch{}
+}
+function updateAnalyzeAllBtn(){
+  const btn=document.getElementById('btn-analyze-all');
+  const unlabeled=photos.filter(p=>!p.aiLabel&&!p.manualLabel).length;
+  btn.style.display=(prefs.apiKey&&unlabeled>0)?'flex':'none';
+  if(unlabeled>0) btn.textContent='✨ '+unlabeled;
+}
+
+// ── Phase filter ──
+function setPhase(phase){
+  activePhase=phase;
+  document.querySelectorAll('.phase-tab').forEach(t=>t.classList.toggle('active',t.dataset.phase===phase));
+  renderGrid();
+}
+
+// ── Header ──
+function updateHeader(){
+  const el=document.getElementById('job-name');
+  if(!currentJob){ el.textContent='No job — tap 📁 to start'; return; }
+  el.textContent=currentJob.client+(currentJob.address?' · '+currentJob.address:'');
+}
+
+// ── Jobs modal ──
+function openJobsModal(){ renderJobsList(); openModal('modal-jobs'); }
+function renderJobsList(){
+  const el=document.getElementById('jobs-list');
+  if(!jobs.length){
+    el.innerHTML='<p style="color:var(--muted);font-size:13px;text-align:center;padding:8px 0;">No jobs yet.</p>';
+    return;
+  }
+  el.innerHTML=jobs.map(j=>`
+    <div class="job-row${currentJob?.id===j.id?' current':''}" onclick="loadJob('${j.id}')">
+      <div class="job-info">
+        <div class="job-name">${esc(j.client)}</div>
+        <div class="job-sub">${esc(j.address||'')}${j.date?' · '+j.date:''}  ·  ${(j.photos||[]).length} photo${(j.photos||[]).length!==1?'s':''}</div>
+      </div>
+      <button class="job-edit-btn" onclick="editJob('${j.id}',event)" title="Edit">✏️</button>
+      <button class="job-del" onclick="deleteJob('${j.id}',event)" title="Delete">🗑</button>
+    </div>`).join('');
+}
+
+// ── Settings ──
+function openSettings(){
+  document.getElementById('set-key').value=prefs.apiKey?'••••'+prefs.apiKey.slice(-4):'';
+  document.getElementById('set-company').value=prefs.company||'';
+  document.getElementById('set-phone').value=prefs.phone||'';
+  updateKeyHint();
+  openModal('modal-settings');
+}
+function updateKeyHint(){
+  const h=document.getElementById('key-hint');
+  if(prefs.apiKey){ h.textContent='Key set ✓ — AI labels enabled'; h.className='key-hint ok'; }
+  else { h.textContent='Not set — AI labels disabled'; h.className='key-hint'; }
+}
+function saveSettings(){
+  const kv=document.getElementById('set-key').value.trim();
+  if(kv&&!kv.startsWith('••')) prefs.apiKey=kv;
+  else if(!kv) prefs.apiKey='';
+  prefs.company=document.getElementById('set-company').value.trim()||'Ingersoll Painting LLC';
+  prefs.phone=document.getElementById('set-phone').value.trim();
+  try{ localStorage.setItem(LS_PREFS,JSON.stringify(prefs)); }catch{}
+  closeModal('modal-settings');
+  updateAnalyzeAllBtn();
+  showToast('Settings saved');
+}
+
+// ── Lightbox ──
+async function openLightbox(photoId){
+  lbPhotoId=photoId;
+  const m=photos.find(p=>p.id===photoId); if(!m) return;
+  // Badge
+  const badge=document.getElementById('lb-badge');
+  badge.textContent=m.phase.charAt(0).toUpperCase()+m.phase.slice(1);
+  badge.className='phase-badge '+m.phase;
+  // Timestamp
+  document.getElementById('lb-ts').textContent=m.ts?fmtDate(m.ts):'';
+  // Label
+  document.getElementById('lb-label').value=m.manualLabel||m.aiLabel||'';
+  // Image
+  const img=document.getElementById('lb-img');
+  img.src='';
+  const blob=await dbGet(photoId);
+  if(blob){
+    const url=URL.createObjectURL(blob);
+    img.src=url; img.onload=()=>URL.revokeObjectURL(url);
+  }
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox(){
+  document.getElementById('lightbox').classList.remove('open');
+  document.getElementById('lb-img').src='';
+  lbPhotoId=null;
+}
+async function lbAnalyze(){
+  if(!lbPhotoId) return;
+  document.getElementById('lb-ai').textContent='Analyzing…';
+  await analyzePhoto(lbPhotoId);
+  document.getElementById('lb-ai').textContent='✨ AI LABEL';
+  const m=photos.find(p=>p.id===lbPhotoId);
+  if(m) document.getElementById('lb-label').value=m.manualLabel||m.aiLabel||'';
+}
+function lbSave(){
+  if(!lbPhotoId) return;
+  const m=photos.find(p=>p.id===lbPhotoId); if(!m) return;
+  m.manualLabel=document.getElementById('lb-label').value.trim();
+  persist();
+  const card=document.getElementById('card-'+lbPhotoId);
+  refreshCard(card,m);
+  updateAnalyzeAllBtn();
+  showToast('Label saved');
+}
+function lbDelete(){
+  if(!lbPhotoId) return;
+  if(!confirm('Delete this photo?')) return;
+  const id=lbPhotoId;
+  dbDel(id).catch(()=>{});
+  photos=photos.filter(p=>p.id!==id);
+  persist();
+  closeLightbox();
+  renderGrid();
+  showToast('Photo deleted');
+}
+
+// ── Report ──
+async function openReport(){
+  if(!currentJob){ showToast('No job loaded'); return; }
+  if(!photos.length){ showToast('No photos to report'); return; }
+  showToast('Building report…');
+  const company=esc(prefs.company||'Ingersoll Painting LLC');
+  const phone=prefs.phone?esc(prefs.phone):'';
+  const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  let html=`
+    <div style="text-align:center;padding-bottom:20px;margin-bottom:24px;border-bottom:2px solid #222;">
+      <div style="font-size:30px;font-weight:bold;color:#111;margin-bottom:4px;">${company}</div>
+      ${phone?`<div style="font-size:14px;color:#555;">${phone}</div>`:''}
+    </div>
+    <div style="margin-bottom:24px;">
+      <h1 style="font-size:22px;margin-bottom:12px;font-weight:bold;">Job Progress Report</h1>
+      <table style="font-size:14px;color:#333;border-collapse:collapse;">
+        <tr><td style="padding:3px 16px 3px 0;color:#666;font-weight:normal;">Client:</td><td style="font-weight:600;">${esc(currentJob.client)}</td></tr>
+        ${currentJob.address?`<tr><td style="padding:3px 16px 3px 0;color:#666;">Address:</td><td>${esc(currentJob.address)}</td></tr>`:''}
+        ${currentJob.date?`<tr><td style="padding:3px 16px 3px 0;color:#666;">Date:</td><td>${currentJob.date}</td></tr>`:''}
+        ${currentJob.notes?`<tr><td style="padding:3px 16px 3px 0;color:#666;vertical-align:top;">Scope:</td><td>${esc(currentJob.notes)}</td></tr>`:''}
+      </table>
+    </div>`;
+  const sections=[
+    {phase:'before',label:'Before',color:'#c47a00'},
+    {phase:'during',label:'During',color:'#0a6e9c'},
+    {phase:'after', label:'After', color:'#2a6e1a'}
+  ];
+  for(const sec of sections){
+    const list=photos.filter(p=>p.phase===sec.phase);
+    if(!list.length) continue;
+    html+=`<div style="margin-bottom:28px;page-break-inside:avoid;">
+      <div style="background:${sec.color};color:#fff;padding:7px 14px;border-radius:4px;
+        font-size:13px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase;
+        margin-bottom:14px;">${sec.label}</div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">`;
+    for(const p of list){
+      const label=p.manualLabel||p.aiLabel||'';
+      let src='';
+      try{ const blob=await dbGet(p.id); if(blob) src=await toB64(blob); }catch{}
+      html+=`<div style="break-inside:avoid;">
+        ${src?`<img src="${src}" style="width:100%;border-radius:4px;display:block;margin-bottom:6px;" alt="">`
+             :`<div style="width:100%;height:120px;background:#eee;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:12px;margin-bottom:6px;">No image</div>`}
+        ${label?`<p style="font-size:11px;color:#444;line-height:1.4;margin:0;">${esc(label)}</p>`:''}
+      </div>`;
+    }
+    html+=`</div></div>`;
+  }
+  html+=`<div style="margin-top:28px;padding-top:12px;border-top:1px solid #ccc;
+    font-size:11px;color:#888;text-align:center;">
+    ${company}${phone?' · '+phone:''} — Report generated ${today}
+  </div>`;
+  document.getElementById('rpt-preview').innerHTML=html;
+  document.getElementById('report-overlay').classList.add('open');
+}
+function closeReport(){
+  document.getElementById('report-overlay').classList.remove('open');
+}
+
+// ── Modal helpers ──
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+function bgClose(e,id){ if(e.target===document.getElementById(id)) closeModal(id); }
+
+// ── Toast ──
+let _tt;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),2300);
+}
+
+// ── Utils ──
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function fmtDate(iso){ try{ return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }catch{ return ''; } }
+
+// ── Init ──
+(async function init(){
+  await dbOpen();
+  loadState();
+  updateHeader();
+  pickPhase('before'); // default selection highlight
+  if(!currentJob){
+    // First launch — open new job flow after modal animates
+    openJobsModal();
+    setTimeout(newJob,320);
+  } else {
+    renderGrid();
+  }
+})();
+</script>
+</body>
+</html>

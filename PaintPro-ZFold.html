@@ -2079,6 +2079,23 @@ function speakMeasurement(feet) {
 function applyMeasurement(feet, disp) {
   speakMeasurement(feet);
   document.getElementById('last-reading').textContent = disp;
+
+  // Armed wall-height shot takes priority — fills that wall's own height box
+  if (wallHtTarget) {
+    const wroom = rooms.find(r=>r.id===wallHtTarget.roomId);
+    const wall  = wroom?.walls.find(w=>w.id===wallHtTarget.wallId);
+    if (wall) {
+      const wallIdx = wroom.walls.findIndex(w=>w.id===wallHtTarget.wallId);
+      wall.ht = feet.toFixed(2);
+      renderWalls(wroom);
+      recalcRoom(wroom.id);
+      markDirty();
+      showToast(`${disp} → Wall ${wallIdx+1} height · ${wroom.name}`);
+    }
+    wallHtTarget = null; // one shot, then back to Next Wall
+    return;
+  }
+
   const field   = document.getElementById('target-field').value;
   const roomIdx = parseInt(document.getElementById('target-room').value);
   const room    = rooms[roomIdx];
@@ -2235,7 +2252,8 @@ function nextRoom(currentId) {
   if (tr) tr.value = targetIdx;
   const tf = document.getElementById('target-field');
   if (tf) tf.value = 'wall';
-  // Clear any active dim-shoot highlights
+  // Clear any active dim-shoot highlights and armed shots
+  wallHtTarget = null;
   document.querySelectorAll('.dim-shoot.active, .wall-reshoot.active').forEach(b => b.classList.remove('active'));
   // Scroll to the target room
   setTimeout(() => {
@@ -2459,6 +2477,7 @@ function removeRoom(id) {
 // ── Wall management ───────────────────────────────
 let wallCount = 0;
 let reshootTarget = null; // {roomId, wallId} when rehooting a specific wall
+let wallHtTarget  = null; // {roomId, wallId} when the next laser shot is a wall's own height
 const aiPhotoBatch = {}; // roomId → [{data: base64, type: 'image/jpeg'}]
 
 function addWall(roomId, ft='', ht='') {
@@ -2481,6 +2500,7 @@ function removeWall(roomId, wallId) {
 
 function setReshootTarget(roomId, wallId) {
   // Clear previous
+  wallHtTarget = null;
   document.querySelectorAll('.wall-reshoot.active').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.dim-shoot.active').forEach(b=>b.classList.remove('active'));
   if(reshootTarget && reshootTarget.roomId===roomId && reshootTarget.wallId===wallId) {
@@ -2499,9 +2519,28 @@ function setReshootTarget(roomId, wallId) {
   showToast(`Shoot to replace Wall ${wallIdx+1}`);
 }
 
+// Arm a specific wall's height box for the next laser shot.
+// Flow with the DISTO: shoot the length (adds the wall) → tap 📐 on that
+// line → shoot the height → done, that wall now has its own height.
+function armWallHt(roomId, wallId) {
+  reshootTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active').forEach(b=>b.classList.remove('active'));
+  if (wallHtTarget && wallHtTarget.roomId === roomId && wallHtTarget.wallId === wallId) {
+    wallHtTarget = null; // toggle off
+    showToast('Height shot cancelled — back to Next Wall', 'warn');
+    return;
+  }
+  wallHtTarget = {roomId, wallId};
+  document.getElementById(`${wallId}_htshoot`)?.classList.add('active');
+  const room = rooms.find(r=>r.id===roomId);
+  const idx = room ? room.walls.findIndex(w=>w.id===wallId) : -1;
+  showToast(`📐 Shoot the height for Wall ${idx+1}`);
+}
+
 // Arm a ceiling/floor dimension field for the next laser shot.
 function armDimShot(roomId, field) {
   reshootTarget = null;  // clear any wall reshoot
+  wallHtTarget = null;   // clear any wall-height shot
   document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active').forEach(b=>b.classList.remove('active'));
   const idx = rooms.findIndex(r=>r.id===roomId);
   if (idx < 0) return;
@@ -2547,8 +2586,10 @@ function renderWalls(room) {
         title="Height for this wall only — blank uses the room height"
         aria-label="Height for this wall only"
         oninput="updateWallHt('${room.id}','${wall.id}',this.value)"
-        style="flex:0 0 56px;text-align:center"/>
-      <span class="wall-unit">ft</span>
+        style="flex:0 0 52px;text-align:center"/>
+      <button class="dim-shoot" id="${wall.id}_htshoot" title="Shoot this wall's height with the laser"
+        aria-label="Shoot height for this wall"
+        onclick="armWallHt('${room.id}','${wall.id}')">📐</button>
       <button class="wall-reshoot" title="Reshoot this wall"
         onclick="setReshootTarget('${room.id}','${wall.id}')">⟳</button>
       <button class="wall-del" onclick="removeWall('${room.id}','${wall.id}')">✕</button>`;

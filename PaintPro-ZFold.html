@@ -117,6 +117,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .wall-row input{flex:1;height:46px;font-size:17px}
 .wall-unit{font-size:13px;color:var(--muted);flex-shrink:0}
 .wall-del{background:transparent;border:none;color:var(--red);font-size:20px;cursor:pointer;padding:0 4px;flex-shrink:0;line-height:1}
+.wall-label{font-size:12px;color:var(--muted);font-style:italic;margin:-4px 0 8px 4px;cursor:pointer}
 .wall-reshoot{background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:16px;cursor:pointer;padding:0 6px;flex-shrink:0;height:36px;transition:all .15s}
 .wall-reshoot.active{border-color:var(--blue);color:var(--blue);background:#162535}
 .dim-shoot{background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:16px;cursor:pointer;padding:0 10px;flex-shrink:0;height:var(--tap);transition:all .15s}
@@ -2535,7 +2536,8 @@ function renderWalls(room) {
     row.className = 'wall-row';
     row.id = wall.id+'_row';
     row.innerHTML = `
-      <span class="wall-badge">W${i+1}</span>
+      <span class="wall-badge" onclick="editWallLabel('${room.id}','${wall.id}')"
+        style="cursor:pointer" title="Tap to label this wall (e.g. pantry wall, ask her)">W${i+1}</span>
       <input type="number" id="${wall.id}_ft" value="${wall.ft}" min="0" step="0.01"
         inputmode="decimal" placeholder="0.00"
         oninput="updateWall('${room.id}','${wall.id}',this.value)"/>
@@ -2551,8 +2553,28 @@ function renderWalls(room) {
         onclick="setReshootTarget('${room.id}','${wall.id}')">⟳</button>
       <button class="wall-del" onclick="removeWall('${room.id}','${wall.id}')">✕</button>`;
     container.appendChild(row);
+    if (wall.label) {
+      const lab = document.createElement('div');
+      lab.className = 'wall-label';
+      lab.id = wall.id+'_label';
+      lab.textContent = '🏷 ' + wall.label;
+      lab.onclick = () => editWallLabel(room.id, wall.id);
+      container.appendChild(lab);
+    }
   });
   updatePerimeterDisplay(room);
+}
+
+// Tap the W# badge to name a wall line, just like a label on a paper sheet:
+// "pantry wall (ask her)", "kitchen window wall 2 windows", "dog wall".
+function editWallLabel(roomId, wallId) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  const wall = room.walls.find(w=>w.id===wallId); if(!wall) return;
+  const v = prompt('Label this wall (e.g. "pantry wall (ask her)")', wall.label||'');
+  if (v === null) return;
+  wall.label = v.trim();
+  renderWalls(room);
+  markDirty();
 }
 
 function updatePerimeterDisplay(room) {
@@ -5562,6 +5584,28 @@ function processVoiceCommand(transcript, measureOnly = false) {
         markDirty();
         return showToast(`✏️ ${newName}`);
       }
+    }
+  }
+
+  // Wall labeling — "call that pantry wall" / "label dog wall" tags the wall
+  // just measured (or the last wall in the open room), like writing a name
+  // next to a line on the paper sheet.
+  const wlMatch = t.match(/^(?:label|tag|call\s+that)\s+(.+)$/i);
+  if (wlMatch) {
+    let lr = null, lw = null;
+    if (voiceLastMeasurement && voiceLastMeasurement.field === 'wall') {
+      lr = rooms.find(x => x.id === voiceLastMeasurement.roomId);
+      lw = lr && lr.walls.length ? lr.walls[lr.walls.length-1] : null;
+    }
+    if (!lw) {
+      lr = rooms.find(r => r.open) || rooms[rooms.length-1];
+      lw = lr && lr.walls.length ? lr.walls[lr.walls.length-1] : null;
+    }
+    if (lw) {
+      lw.label = wlMatch[1].trim().replace(/^\w/, c => c.toUpperCase());
+      renderWalls(lr);
+      markDirty();
+      return showToast('🏷 ' + lw.label);
     }
   }
 

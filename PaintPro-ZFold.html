@@ -122,6 +122,13 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .wall-reshoot.active{border-color:var(--blue);color:var(--blue);background:#162535}
 .dim-shoot{background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:16px;cursor:pointer;padding:0 10px;flex-shrink:0;height:var(--tap);transition:all .15s}
 .dim-shoot.active{border-color:var(--blue);color:var(--blue);background:#162535}
+.deck-sec-row{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.deck-sec-num{font-size:12px;font-weight:700;color:var(--muted);min-width:20px}
+.deck-sec-input{width:62px;height:40px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:14px;text-align:center;outline:none;padding:0 4px}
+.deck-sec-sf{font-size:12px;color:var(--blue);font-weight:700;min-width:52px;text-align:right}
+.deck-shoot{background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:14px;cursor:pointer;padding:0 6px;flex-shrink:0;height:36px;transition:all .15s}
+.deck-shoot.active{border-color:var(--blue);color:var(--blue);background:#162535}
+.wall-remove{background:transparent;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:0 4px;flex-shrink:0;line-height:1}
 .next-room-btn{width:100%;height:54px;background:var(--green);border:none;border-radius:10px;color:#fff;font-family:var(--head);font-size:18px;font-weight:700;letter-spacing:2px;cursor:pointer;margin-top:10px;margin-bottom:4px;transition:filter .15s}
 .next-room-btn:hover{filter:brightness(1.1)}
 .next-room-btn:active{filter:brightness(.9)}
@@ -2081,6 +2088,32 @@ function applyMeasurement(feet, disp) {
   speakMeasurement(feet);
   document.getElementById('last-reading').textContent = disp;
 
+  // Armed deck-section shot takes priority
+  if (deckShotTarget) {
+    const droom = rooms.find(r=>r.id===deckShotTarget.roomId);
+    const sec   = droom?.deckSections?.find(s=>s.id===deckShotTarget.sectionId);
+    if (sec) {
+      sec[deckShotTarget.field] = feet.toFixed(2);
+      const el = document.getElementById(`${sec.id}_${deckShotTarget.field}`);
+      if (el) { el.value = sec[deckShotTarget.field]; el.classList.remove('bt-flash'); void el.offsetWidth; el.classList.add('bt-flash'); setTimeout(()=>el.classList.remove('bt-flash'),900); }
+      renderDeckSections(droom.id);
+      recalcRoom(droom.id);
+      markDirty();
+      const fieldLabel = deckShotTarget.field==='l'?'Length':'Width';
+      showToast(`${disp} → Deck ${fieldLabel} · ${droom.name}`);
+      if (deckShotTarget.field === 'l') {
+        const nxt = {...deckShotTarget, field:'w'};
+        deckShotTarget = nxt;
+        document.getElementById(`${sec.id}_w_shoot`)?.classList.add('active');
+        showToast('📐 Now shoot Deck Width');
+      } else {
+        document.querySelectorAll('.deck-shoot.active').forEach(b=>b.classList.remove('active'));
+        deckShotTarget = null;
+      }
+    } else { deckShotTarget = null; }
+    return;
+  }
+
   // Armed wall-height shot takes priority — fills that wall's own height box
   if (wallHtTarget) {
     const wroom = rooms.find(r=>r.id===wallHtTarget.roomId);
@@ -2120,7 +2153,7 @@ function applyMeasurement(feet, disp) {
     // Normal — add new wall
     addWall(room.id, feet.toFixed(2));
     showToast(`${disp} → Wall ${room.walls.length} · ${room.name}`);
-  } else if (['height','floorLength','floorWidth','soffit','deck','deckL','deckW'].includes(field)) {
+  } else if (['height','floorLength','floorWidth','soffit'].includes(field)) {
     const el = document.getElementById(`${room.id}_${field}`);
     if (!el) return;
     el.value = feet.toFixed(2);
@@ -2129,7 +2162,7 @@ function applyMeasurement(feet, disp) {
     el.classList.add('bt-flash');
     setTimeout(() => el.classList.remove('bt-flash'), 900);
     updateField(room.id, field, feet.toFixed(2));
-    const labels = {height:'Height', floorLength:'Floor/Ceil Length', floorWidth:'Floor/Ceil Width', soffit:'Soffit', deckL:'Deck Length', deckW:'Deck Width'};
+    const labels = {height:'Height', floorLength:'Floor/Ceil Length', floorWidth:'Floor/Ceil Width', soffit:'Soffit'};
     showToast(`${disp} → ${labels[field]||field} · ${room.name}`);
     document.querySelectorAll('.dim-shoot.active').forEach(b=>b.classList.remove('active'));
     if (field === 'floorLength') {
@@ -2137,12 +2170,6 @@ function applyMeasurement(feet, disp) {
       document.getElementById(`${room.id}_floorWidth_shoot`)?.classList.add('active');
       showToast('📐 Now shoot for Width');
     } else if (field === 'floorWidth') {
-      document.getElementById('target-field').value = 'wall';
-    } else if (field === 'deckL') {
-      document.getElementById('target-field').value = 'deckW';
-      document.getElementById(`${room.id}_deckW_shoot`)?.classList.add('active');
-      showToast('📐 Now shoot for Deck Width');
-    } else if (field === 'deckW') {
       document.getElementById('target-field').value = 'wall';
     }
   }
@@ -2227,7 +2254,7 @@ function addRoom() {
   const name  = isExt ? 'Side '+roomCount : 'Room '+roomCount;
   const extProduct = PRODUCTS.find(p => p.name.includes('Ext'))?.name || PRODUCTS[0].name;
   const room  = isExt
-    ? { id, name, walls:[], height:'9', soffit:'', deckL:'', deckW:'',
+    ? { id, name, walls:[], height:'9', soffit:'', deckSections:[],
         surfaces:{walls:true, ceiling:false, trim:false, floor:false},
         product: extProduct, coats:'2', rates:null, open:true, mode:'exterior' }
     : { id, name, walls:[], height:'8', floorLength:'', floorWidth:'',
@@ -2235,6 +2262,7 @@ function addRoom() {
         product: PRODUCTS[0].name, coats:'2', rates:null, open:true };
   rooms.push(room);
   renderRoom(room, rooms.length-1);
+  renderDeckSections(room.id);
   renderAIPhotoStrip(room.id);
   refreshRoomSelect();
   rooms.forEach(r => { if(r.id!==id) setOpen(r.id,false); });
@@ -2285,12 +2313,19 @@ function renderRoom(room, idx) {
   const s3 = isExt ? 'Deck'    : 'Floor';
   const s4 = 'Trim';
 
-  // Migrate old single-value deck field → deckL/deckW
-  if (room.deck && !room.deckL) { room.deckL = room.deck; room.deckW = '1'; delete room.deck; }
-  const deckSFPreview = (parseFloat(room.deckL)||0)*(parseFloat(room.deckW)||0);
-  const deckSFHint = deckSFPreview > 0 ? `= ${deckSFPreview.toFixed(1)} sf` : '';
+  // Migrate old deck fields → deckSections array
+  if (!room.deckSections) {
+    if (room.deckL || room.deckW) {
+      room.deckSections = [{id:'ds_'+(++roomCount), l:room.deckL||'', w:room.deckW||''}];
+    } else if (room.deck) {
+      room.deckSections = [{id:'ds_'+(++roomCount), l:room.deck||'', w:'1'}];
+    } else {
+      room.deckSections = [];
+    }
+    delete room.deckL; delete room.deckW; delete room.deck;
+  }
 
-  // Dimension section: interior = floor L×W; exterior = soffit sqft + deck L×W
+  // Dimension section: interior = floor L×W; exterior = soffit sqft + deck sections
   const dimSection = isExt ? `
       <!-- Exterior: Soffit and Deck area inputs (shown when surface is toggled on) -->
       <div id="${room.id}_soffit_row" style="display:${room.surfaces.ceiling?'':'none'};margin-bottom:12px">
@@ -2301,26 +2336,12 @@ function renderRoom(room, idx) {
         </label>
       </div>
       <div id="${room.id}_deck_row" style="display:${room.surfaces.floor?'':'none'};margin-bottom:12px">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">📐 Deck / Porch size (tap 📐 then pull trigger, or type it in)</div>
-        <div class="floor-dims" style="display:grid">
-          <label class="field">
-            <span>Length (ft)</span>
-            <div style="display:flex;gap:6px">
-              <input type="number" id="${room.id}_deckL" value="${room.deckL||''}" min="0" step="0.01" inputmode="decimal"
-                oninput="updateField('${room.id}','deckL',this.value)" style="flex:1;min-width:0" placeholder="ft"/>
-              <button class="dim-shoot" id="${room.id}_deckL_shoot" onclick="armDimShot('${room.id}','deckL')" aria-label="Shoot deck length">📐</button>
-            </div>
-          </label>
-          <label class="field">
-            <span>Width (ft)</span>
-            <div style="display:flex;gap:6px">
-              <input type="number" id="${room.id}_deckW" value="${room.deckW||''}" min="0" step="0.01" inputmode="decimal"
-                oninput="updateField('${room.id}','deckW',this.value)" style="flex:1;min-width:0" placeholder="ft"/>
-              <button class="dim-shoot" id="${room.id}_deckW_shoot" onclick="armDimShot('${room.id}','deckW')" aria-label="Shoot deck width">📐</button>
-            </div>
-          </label>
-          <span id="${room.id}_deckSFhint" style="font-size:12px;color:var(--muted);grid-column:1/-1;margin-top:-4px">${deckSFHint}</span>
+        <div class="walls-header">
+          <span class="walls-label">Deck / Porch sections (L × W)</span>
+          <span class="walls-perimeter" id="${room.id}_deck_total"></span>
         </div>
+        <div id="${room.id}_deck_sections"></div>
+        <button class="add-wall-btn" onclick="addDeckSection('${room.id}')">+ Add Section</button>
       </div>` : `
       <!-- Interior: floor / ceiling footprint -->
       <div class="floor-dims" id="${room.id}_floordims" style="display:${room.surfaces.ceiling||room.surfaces.floor?'grid':'none'}">
@@ -2505,6 +2526,7 @@ function removeRoom(id) {
 let wallCount = 0;
 let reshootTarget = null; // {roomId, wallId} when rehooting a specific wall
 let wallHtTarget  = null; // {roomId, wallId} when the next laser shot is a wall's own height
+let deckShotTarget = null; // {roomId, sectionId, field:'l'|'w'} for deck section shots
 const aiPhotoBatch = {}; // roomId → [{data: base64, type: 'image/jpeg'}]
 
 function addWall(roomId, ft='', ht='') {
@@ -2526,10 +2548,9 @@ function removeWall(roomId, wallId) {
 }
 
 function setReshootTarget(roomId, wallId) {
-  // Clear previous
   wallHtTarget = null;
-  document.querySelectorAll('.wall-reshoot.active').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.dim-shoot.active').forEach(b=>b.classList.remove('active'));
+  deckShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active').forEach(b=>b.classList.remove('active'));
   if(reshootTarget && reshootTarget.roomId===roomId && reshootTarget.wallId===wallId) {
     // Toggle off
     reshootTarget = null;
@@ -2551,7 +2572,8 @@ function setReshootTarget(roomId, wallId) {
 // line → shoot the height → done, that wall now has its own height.
 function armWallHt(roomId, wallId) {
   reshootTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active').forEach(b=>b.classList.remove('active'));
+  deckShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active').forEach(b=>b.classList.remove('active'));
   if (wallHtTarget && wallHtTarget.roomId === roomId && wallHtTarget.wallId === wallId) {
     wallHtTarget = null; // toggle off
     showToast('Height shot cancelled — back to Next Wall', 'warn');
@@ -2566,9 +2588,10 @@ function armWallHt(roomId, wallId) {
 
 // Arm a ceiling/floor dimension field for the next laser shot.
 function armDimShot(roomId, field) {
-  reshootTarget = null;  // clear any wall reshoot
-  wallHtTarget = null;   // clear any wall-height shot
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active').forEach(b=>b.classList.remove('active'));
+  reshootTarget = null;
+  wallHtTarget = null;
+  deckShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active').forEach(b=>b.classList.remove('active'));
   const idx = rooms.findIndex(r=>r.id===roomId);
   if (idx < 0) return;
   // Route the next shot to this room + field
@@ -2576,7 +2599,7 @@ function armDimShot(roomId, field) {
   document.getElementById('target-room').value  = idx;
   // Highlight the active shoot button
   document.getElementById(`${roomId}_${field}_shoot`)?.classList.add('active');
-  const dimLabels = {floorLength:'Length', floorWidth:'Width', soffit:'Soffit area', deckL:'Deck Length', deckW:'Deck Width'};
+  const dimLabels = {floorLength:'Length', floorWidth:'Width', soffit:'Soffit area'};
   showToast(`📐 Shoot for ${dimLabels[field]||field} · ${rooms[idx].name}`);
 }
 
@@ -2592,6 +2615,78 @@ function updateWallHt(roomId, wallId, val) {
   const wall = room.walls.find(w=>w.id===wallId); if(!wall) return;
   wall.ht = val;
   recalcRoom(roomId);
+}
+
+// ── Deck Sections (multi L×W areas) ───────────────
+let _deckSecCount = 0;
+function addDeckSection(roomId, l='', w='') {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  if (!room.deckSections) room.deckSections = [];
+  const sid = 'dks_'+(++_deckSecCount);
+  room.deckSections.push({id:sid, l:l.toString(), w:w.toString()});
+  renderDeckSections(roomId);
+  recalcRoom(roomId);
+  markDirty();
+}
+function removeDeckSection(roomId, sectionId) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  room.deckSections = (room.deckSections||[]).filter(s=>s.id!==sectionId);
+  renderDeckSections(roomId);
+  recalcRoom(roomId);
+  markDirty();
+}
+function updateDeckSection(roomId, sectionId, field, val) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  const sec = (room.deckSections||[]).find(s=>s.id===sectionId); if(!sec) return;
+  sec[field] = val;
+  renderDeckSections(roomId);
+  recalcRoom(roomId);
+  markDirty();
+}
+function renderDeckSections(roomId) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  const container = document.getElementById(`${roomId}_deck_sections`); if(!container) return;
+  const sections = room.deckSections||[];
+  container.innerHTML = '';
+  let total = 0;
+  sections.forEach((sec, i) => {
+    const l = parseFloat(sec.l)||0, w = parseFloat(sec.w)||0;
+    const sf = l*w; total += sf;
+    const sfStr = sf>0 ? `${sf.toFixed(1)} sf` : '';
+    const row = document.createElement('div');
+    row.className = 'deck-sec-row';
+    row.innerHTML = `
+      <span class="deck-sec-num">#${i+1}</span>
+      <div style="display:flex;align-items:center;gap:4px;flex:1">
+        <input type="number" id="${sec.id}_l" value="${sec.l||''}" min="0" step="0.01" inputmode="decimal"
+          placeholder="L ft" oninput="updateDeckSection('${roomId}','${sec.id}','l',this.value)"
+          class="deck-sec-input"/>
+        <button class="deck-shoot" id="${sec.id}_l_shoot" onclick="armDeckShot('${roomId}','${sec.id}','l')" aria-label="Shoot length">📐</button>
+        <span style="color:var(--muted);font-size:12px">×</span>
+        <input type="number" id="${sec.id}_w" value="${sec.w||''}" min="0" step="0.01" inputmode="decimal"
+          placeholder="W ft" oninput="updateDeckSection('${roomId}','${sec.id}','w',this.value)"
+          class="deck-sec-input"/>
+        <button class="deck-shoot" id="${sec.id}_w_shoot" onclick="armDeckShot('${roomId}','${sec.id}','w')" aria-label="Shoot width">📐</button>
+        <span class="deck-sec-sf">${sfStr}</span>
+      </div>
+      <button class="wall-remove" onclick="removeDeckSection('${roomId}','${sec.id}')" aria-label="Remove section">✕</button>`;
+    container.appendChild(row);
+  });
+  const totEl = document.getElementById(`${roomId}_deck_total`);
+  if(totEl) totEl.textContent = total>0 ? `${total.toFixed(0)} sf total` : '';
+}
+function armDeckShot(roomId, sectionId, field) {
+  reshootTarget = null;
+  wallHtTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active').forEach(b=>b.classList.remove('active'));
+  if (deckShotTarget && deckShotTarget.sectionId===sectionId && deckShotTarget.field===field) {
+    deckShotTarget = null;
+    showToast('Deck shot cancelled', 'warn');
+    return;
+  }
+  deckShotTarget = {roomId, sectionId, field};
+  document.getElementById(`${sectionId}_${field}_shoot`)?.classList.add('active');
+  showToast(`📐 Shoot deck ${field==='l'?'Length':'Width'}`);
 }
 
 function renderWalls(room) {
@@ -2659,12 +2754,6 @@ function updateField(id,field,val) {
     const el = document.getElementById(w.id+'_ht');
     if (el) el.placeholder = val || 'H';
   });
-  // Refresh deck SF hint when either dimension changes
-  if(field==='deckL'||field==='deckW') {
-    const sf = (parseFloat(r.deckL)||0)*(parseFloat(r.deckW)||0);
-    const hint = document.getElementById(`${id}_deckSFhint`);
-    if(hint) hint.textContent = sf>0 ? `= ${sf.toFixed(1)} sf` : '';
-  }
   recalcRoom(id);
 }
 function clearSurfaceNote(id) {
@@ -2711,7 +2800,7 @@ function calcExt(room) {
   const perimeter = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0), 0);
   const h        = parseFloat(room.height) || 0;
   const soffitSF = parseFloat(room.soffit) || 0;
-  const deckSF   = (parseFloat(room.deckL)||0) * (parseFloat(room.deckW)||0);
+  const deckSF   = (room.deckSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
   const c        = parseInt(room.coats)    || 1;
   // Each siding run can override the side height (gables, walk-out basements)
   const sidingSF = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0)*(parseFloat(w.ht)||h), 0);
@@ -2928,7 +3017,7 @@ function applyJobData(data) {
   // Re-render rooms
   const wrap = document.getElementById('rooms-container');
   if (wrap) wrap.innerHTML = '';
-  rooms.forEach((r, i) => { renderRoom(r, i); renderWalls(r); renderAIPhotoStrip(r.id); });
+  rooms.forEach((r, i) => { renderRoom(r, i); renderWalls(r); renderDeckSections(r.id); renderAIPhotoStrip(r.id); });
   refreshRoomSelect();
   bidScopeText = data.bidScopeText || '';
   bidAgentChat = data.bidAgentChat || [];
@@ -5816,17 +5905,21 @@ function processVoiceCommand(transcript, measureOnly = false) {
         const openIdx = rooms.findIndex(r => r.open);
         const wr = rooms[openIdx >= 0 ? openIdx : 0];
         if (wr) {
-          wr.deckL = dL.toFixed(2); wr.deckW = dW.toFixed(2);
-          const elL = document.getElementById(`${wr.id}_deckL`); if(elL) elL.value = wr.deckL;
-          const elW = document.getElementById(`${wr.id}_deckW`); if(elW) elW.value = wr.deckW;
-          updateField(wr.id,'deckL',wr.deckL); updateField(wr.id,'deckW',wr.deckW);
-          markDirty();
-          showToast(`Deck ${dL}×${dW} = ${(dL*dW).toFixed(0)} sf · ${wr.name}`);
+          addDeckSection(wr.id, dL.toFixed(2), dW.toFixed(2));
+          showToast(`Deck section ${dL}×${dW} = ${(dL*dW).toFixed(0)} sf · ${wr.name}`);
         }
         return;
       }
     }
-    target='deckL'; numStr=deckRest;
+    // Plain "deck 14" — open a new section with just length; user shoots/types width
+    { const dL = parseSpokenNumber(deckRest.trim());
+      if (dL!==null && dL>0 && dL<500) {
+        const openIdx = rooms.findIndex(r => r.open);
+        const wr = rooms[openIdx >= 0 ? openIdx : 0];
+        if (wr) { addDeckSection(wr.id, dL.toFixed(2), ''); showToast(`Deck length ${dL} ft — now enter width · ${wr.name}`); }
+        return;
+      }
+    }
   }
   else if (/^siding\s+/i.test(t))  { target='wall';        numStr=t.replace(/^siding\s+/i,''); }
   else if (/^length\s+/i.test(t))  { target='floorLength'; numStr=t.replace(/^length\s+/i,''); }

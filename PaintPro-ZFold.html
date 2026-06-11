@@ -275,10 +275,11 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .contact-meta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
 .contact-meta span{font-size:12px;color:var(--muted)}
 .contact-meta strong{color:var(--text)}
-.contact-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.contact-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .ca-btn{height:44px;border-radius:8px;border:none;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer}
 .ca-text{background:var(--green);color:#fff}
 .ca-edit{background:var(--panel);color:var(--text);border:1px solid var(--border)!important;border:none}
+.ca-estimate{background:var(--blue);color:#fff}
 .quick-texts{margin-top:10px;display:none}
 .quick-texts.open{display:block}
 .qt-btn{display:block;width:100%;text-align:left;padding:10px 14px;background:var(--dark);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:13px;cursor:pointer;margin-bottom:6px;line-height:1.4}
@@ -3825,11 +3826,24 @@ function buildContactCard(c) {
     <div class="contact-actions">
       <button class="ca-btn ca-text" onclick="toggleQuickTexts('${c.id}')" aria-label="Quick text ${_esc(c.name)}">💬 Quick Text</button>
       <button class="ca-btn ca-edit" onclick="openContactModal('${c.id}')" aria-label="Edit ${_esc(c.name)}">✏️ Edit</button>
+      <button class="ca-btn ca-estimate" onclick="startEstimateFromClient('${c.id}')" aria-label="Start estimate for ${_esc(c.name)}">📋 Estimate</button>
     </div>
     <div class="quick-texts" id="qt_${c.id}">
       ${buildQuickTexts(c)}
     </div>`;
   return div;
+}
+
+function startEstimateFromClient(id) {
+  const contacts = loadContacts();
+  const c = contacts.find(x => x.id === id);
+  if (!c) return;
+  startNewJob();
+  document.getElementById('client-name').value = c.name || '';
+  document.getElementById('job-address').value = c.address || '';
+  markDirty();
+  switchTab('estimate');
+  showToast(`Estimate started for ${c.name||'client'}`);
 }
 
 function buildQuickTexts(c) {

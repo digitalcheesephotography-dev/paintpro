@@ -2460,10 +2460,10 @@ let wallCount = 0;
 let reshootTarget = null; // {roomId, wallId} when rehooting a specific wall
 const aiPhotoBatch = {}; // roomId → [{data: base64, type: 'image/jpeg'}]
 
-function addWall(roomId, ft='') {
+function addWall(roomId, ft='', ht='') {
   const room = rooms.find(r=>r.id===roomId); if(!room) return;
   const wid = 'w'+(++wallCount);
-  room.walls.push({id:wid, ft:ft.toString()});
+  room.walls.push({id:wid, ft:ft.toString(), ht:ht.toString()});
   renderWalls(room);
   recalcRoom(roomId);
   // Focus new wall input
@@ -2520,6 +2520,12 @@ function updateWall(roomId, wallId, val) {
   updatePerimeterDisplay(room);
   recalcRoom(roomId);
 }
+function updateWallHt(roomId, wallId, val) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  const wall = room.walls.find(w=>w.id===wallId); if(!wall) return;
+  wall.ht = val;
+  recalcRoom(roomId);
+}
 
 function renderWalls(room) {
   const container = document.getElementById(room.id+'_walls'); if(!container) return;
@@ -2533,6 +2539,13 @@ function renderWalls(room) {
       <input type="number" id="${wall.id}_ft" value="${wall.ft}" min="0" step="0.01"
         inputmode="decimal" placeholder="0.00"
         oninput="updateWall('${room.id}','${wall.id}',this.value)"/>
+      <span class="wall-unit">×</span>
+      <input type="number" id="${wall.id}_ht" value="${wall.ht||''}" min="0" step="0.1"
+        inputmode="decimal" placeholder="${_esc(room.height||'H')}"
+        title="Height for this wall only — blank uses the room height"
+        aria-label="Height for this wall only"
+        oninput="updateWallHt('${room.id}','${wall.id}',this.value)"
+        style="flex:0 0 56px;text-align:center"/>
       <span class="wall-unit">ft</span>
       <button class="wall-reshoot" title="Reshoot this wall"
         onclick="setReshootTarget('${room.id}','${wall.id}')">⟳</button>
@@ -2551,6 +2564,11 @@ function updateField(id,field,val) {
   const r=rooms.find(r=>r.id===id); if(!r) return;
   r[field]=val;
   if(field==='name') refreshRoomSelect();
+  // Wall-row height placeholders show the room height — keep them current
+  if(field==='height') r.walls.forEach(w => {
+    const el = document.getElementById(w.id+'_ht');
+    if (el) el.placeholder = val || 'H';
+  });
   recalcRoom(id);
 }
 function clearSurfaceNote(id) {
@@ -2599,7 +2617,8 @@ function calcExt(room) {
   const soffitSF = parseFloat(room.soffit) || 0;
   const deckSF   = parseFloat(room.deck)   || 0;
   const c        = parseInt(room.coats)    || 1;
-  const sidingSF = perimeter * h;
+  // Each siding run can override the side height (gables, walk-out basements)
+  const sidingSF = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0)*(parseFloat(w.ht)||h), 0);
   const trimLF   = perimeter;
 
   const p     = PRODUCTS.find(x=>x.name===room.product) || PRODUCTS[4] || PRODUCTS[0];
@@ -2617,7 +2636,7 @@ function calcExt(room) {
             + (room.surfaces.trim    ? trimLF*r.trim*c      : 0);
 
   const totalSF = (room.surfaces.walls?sidingSF:0)+(room.surfaces.ceiling?soffitSF:0)+(room.surfaces.floor?deckSF:0);
-  const valid   = (perimeter>0&&h>0) || soffitSF>0 || deckSF>0;
+  const valid   = sidingSF>0 || soffitSF>0 || deckSF>0;
   return {wallSF:sidingSF, floorSF:soffitSF+deckSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, valid};
 }
 
@@ -2629,7 +2648,9 @@ function calc(room) {
   const fW = parseFloat(room.floorWidth)  || 0;
   const c  = parseInt(room.coats)         || 1;
 
-  const wallSF  = perimeter * h;   // walls: perimeter × height
+  // Walls: each wall can override the room height (knee walls, stairwells,
+  // vaulted sections) — blank per-wall height falls back to the room height.
+  const wallSF  = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0)*(parseFloat(w.ht)||h), 0);
   const floorSF = fL * fW;         // ceiling/floor: length × width
   const trimLF  = perimeter;
 
@@ -2648,7 +2669,7 @@ function calc(room) {
             + (room.surfaces.trim    ? trimLF*r.trim*c     : 0);
 
   const totalSF = (room.surfaces.walls?wallSF:0)+(room.surfaces.ceiling?floorSF:0)+(room.surfaces.floor?floorSF:0);
-  const valid   = (perimeter>0&&h>0) || floorSF>0;
+  const valid   = wallSF>0 || floorSF>0;
   return {wallSF, floorSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, valid};
 }
 
@@ -5629,6 +5650,26 @@ function processVoiceCommand(transcript, measureOnly = false) {
     }
   }
 
+  // Mixed-height wall — "wall twelve by four" / "twelve by four" / "siding forty by nine".
+  // Adds ONE wall line with its own height (overrides room height for that wall only).
+  // In memo mode the wall/siding keyword is required so conversation numbers
+  // ("two at four") can't create phantom walls.
+  const byMatch = t.match(/^(?:(?:add|put|set|do|record|enter|mark)\s+)?(wall\s+|siding\s+)?(.+?)\s+(?:by|times|x|at)\s+(.+)$/i);
+  if (byMatch && (byMatch[1] || !measureOnly)) {
+    const wLen = parseSpokenNumber(byMatch[2].trim());
+    const wHt  = parseSpokenNumber(byMatch[3].trim());
+    if (wLen !== null && wHt !== null && wLen > 0 && wLen < 500 && wHt > 0 && wHt < 60) {
+      const openIdx = rooms.findIndex(r => r.open);
+      const wr = rooms[openIdx >= 0 ? openIdx : (parseInt(document.getElementById('target-room')?.value) || 0)];
+      if (wr) {
+        addWall(wr.id, wLen.toFixed(2), String(wHt));
+        voiceLastMeasurement = { roomId: wr.id, field: 'wall' };
+        markDirty();
+        return showToast(`📏 Wall ${wLen} × ${wHt} ft`);
+      }
+    }
+  }
+
   // Measurements
   let target=null, numStr=t;
   if      (/^wall\s+/i.test(t))    { target='wall';        numStr=t.replace(/^wall\s+/i,''); }
@@ -5642,7 +5683,9 @@ function processVoiceCommand(transcript, measureOnly = false) {
   else if (/^floor\s+/i.test(t))   { target='floorLength'; numStr=t.replace(/^floor\s+/i,''); }
 
   const feet = parseSpokenNumber(numStr.trim());
-  if (feet && feet>0 && feet<500) {
+  // In memo mode a keyword is required — a bare number in conversation
+  // ("fourteen") must not silently become a wall measurement.
+  if (feet && feet>0 && feet<500 && (target || !measureOnly)) {
     if (target && target!=='wall') document.getElementById('target-field').value = target;
     if (target==='wall' || !target) document.getElementById('target-field').value = 'wall';
     // Voice always targets the open room card
@@ -5657,7 +5700,8 @@ function processVoiceCommand(transcript, measureOnly = false) {
   }
 
   if (target) showToast('Could not parse number','warn');
-  else { showToast('Command not recognized','warn'); dbgLog('  Not recognized'); }
+  else if (!measureOnly) { showToast('Command not recognized','warn'); dbgLog('  Not recognized'); }
+  // measureOnly (memo mode): normal conversation is expected — no warning spam
 }
 
 function toggleVoice() { voiceActive ? stopVoice() : startVoice(); }

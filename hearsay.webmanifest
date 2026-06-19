@@ -1,0 +1,10 @@
+{
+  "name": "HearSay",
+  "short_name": "HearSay",
+  "description": "Standalone note taker with live transcription and AI",
+  "start_url": "/hearsay.html",
+  "display": "standalone",
+  "background_color": "#10131c",
+  "theme_color": "#10131c",
+  "icons": []
+}

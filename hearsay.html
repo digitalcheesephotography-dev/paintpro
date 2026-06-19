@@ -1,0 +1,1473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#10131c">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>HearSay — Standalone Note Taker</title>
+<style>
+  :root{
+    --bg:#10131c; --panel:#171b28; --panel2:#1e2333; --line:#2a3148;
+    --text:#e7eaf3; --dim:#8b93ad; --accent:#f5b942; --accent2:#7aa2ff;
+    --danger:#ff6b6b; --ok:#5fd38a; --radius:10px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  [hidden]{display:none !important;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg); color:var(--text);
+    font:15px/1.5 "Segoe UI", system-ui, sans-serif;
+    overflow:hidden;
+  }
+  button{font:inherit; cursor:pointer; border:none; border-radius:8px;}
+  input,textarea,select{font:inherit; color:var(--text); background:var(--panel2); border:1px solid var(--line); border-radius:8px;}
+  input:focus,textarea:focus,select:focus{outline:1px solid var(--accent2);}
+
+  #app{display:flex; height:100vh;}
+
+  /* ---------- sidebar ---------- */
+  #sidebar{width:280px; min-width:220px; background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column;}
+  .side-head{display:flex; align-items:center; justify-content:space-between; padding:14px 14px 10px;}
+  .logo{font-size:18px; font-weight:600;}
+  .logo .owl{font-size:22px; margin-right:4px;}
+  #btnNew{background:var(--accent); color:#1a1304; font-weight:700; width:32px; height:32px; font-size:20px; line-height:1;}
+  #btnNew:hover{filter:brightness(1.1);}
+  #search{margin:0 14px 10px; padding:8px 10px; width:calc(100% - 28px);}
+  #noteList{list-style:none; overflow-y:auto; flex:1; padding:0 8px;}
+  #noteList li{
+    padding:10px 10px; border-radius:var(--radius); cursor:pointer; margin-bottom:4px;
+    border:1px solid transparent;
+  }
+  #noteList li:hover{background:var(--panel2);}
+  #noteList li.active{background:var(--panel2); border-color:var(--line);}
+  #noteList .nt{font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  #noteList .nm{font-size:12px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .side-foot{padding:10px 14px; font-size:12px; color:var(--dim); border-top:1px solid var(--line); display:flex; flex-direction:column; gap:6px;}
+  #btnSync{background:var(--panel2); border:1px solid var(--line); color:var(--text); padding:7px 10px; font-size:13px;}
+  #btnSync:hover{border-color:var(--accent2);}
+  #btnSettings{background:var(--panel2); border:1px solid var(--line); color:var(--text); padding:7px 10px; font-size:13px;}
+  #btnSettings:hover{border-color:var(--accent);}
+  #syncStatus{font-size:12px;}
+  #syncStatus.err{color:var(--danger);}
+  #syncDisconnect{font-size:11px; cursor:pointer; text-decoration:underline;}
+  #aiStatusLine{font-size:12px; color:var(--dim);}
+
+  /* ---------- main ---------- */
+  #main{flex:1; display:flex; flex-direction:column; min-width:0;}
+
+  .empty{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; text-align:center; padding:30px;}
+  .empty .big{font-size:64px;}
+  .empty h1{font-size:24px;}
+  .empty p{color:var(--dim); max-width:480px;}
+  .empty .start{background:var(--accent); color:#1a1304; font-weight:700; padding:12px 22px; font-size:16px;}
+
+  #editor{flex:1; display:flex; flex-direction:column; min-height:0;}
+  .topbar{display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:14px 18px 10px; border-bottom:1px solid var(--line);}
+  #title{flex:1; min-width:160px; font-size:18px; font-weight:600; padding:8px 10px; background:transparent; border-color:transparent;}
+  #title:hover,#title:focus{background:var(--panel2); border-color:var(--line);}
+  #lang{padding:8px; max-width:150px;}
+  #btnRec{background:var(--accent); color:#1a1304; font-weight:700; padding:9px 16px;}
+  #btnRec.recording{background:var(--danger); color:#fff;}
+  #timer{font-variant-numeric:tabular-nums; color:var(--dim); min-width:46px;}
+  .iconbtn{background:var(--panel2); color:var(--text); border:1px solid var(--line); padding:9px 12px;}
+  .iconbtn:hover{border-color:var(--accent2);}
+  #btnDelete:hover{border-color:var(--danger); color:var(--danger);}
+
+  #liveBar{margin:10px 18px 0; padding:9px 12px; border-radius:var(--radius); background:#2a2415; border:1px solid #57451c; font-size:14px;}
+  #liveBar .dot{display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--danger); margin-right:8px;}
+  #interim{color:var(--dim); font-style:italic;}
+  #notice{margin:10px 18px 0; padding:9px 12px; border-radius:var(--radius); background:#26203a; border:1px solid #463a6b; font-size:13px; color:#c9c2e8;}
+
+  #player{margin:10px 18px 0; width:calc(100% - 36px); height:36px;}
+
+  .tabs{display:flex; gap:4px; padding:12px 18px 0;}
+  .tabs button{background:transparent; color:var(--dim); padding:8px 14px; border-radius:8px 8px 0 0; border-bottom:2px solid transparent;}
+  .tabs button:hover{color:var(--text);}
+  .tabs button.active{color:var(--accent); border-bottom-color:var(--accent);}
+
+  .pane{flex:1; min-height:0; display:flex; flex-direction:column; padding:12px 18px 18px;}
+  #transcript{flex:1; resize:none; padding:14px; line-height:1.7; font-size:15px;}
+
+  .toolrow{display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;}
+  .gen{background:var(--accent2); color:#0b1020; font-weight:600; padding:9px 16px;}
+  .gen:hover{filter:brightness(1.1);}
+  .gen:disabled{opacity:0.6; cursor:not-allowed; filter:none;}
+  .hint{color:var(--dim); font-size:13px; align-self:center;}
+
+  .scrollbox{overflow-y:auto; flex:1;}
+  #summaryList{list-style:none;}
+  #summaryList li{padding:10px 14px; margin-bottom:8px; background:var(--panel2); border:1px solid var(--line); border-radius:var(--radius);}
+  #summaryList li::before{content:"• "; color:var(--accent);}
+
+  #actionList{list-style:none;}
+  #actionList li{display:flex; gap:10px; align-items:flex-start; padding:10px 14px; margin-bottom:8px; background:var(--panel2); border:1px solid var(--line); border-radius:var(--radius);}
+  #actionList input[type=checkbox]{margin-top:4px; accent-color:var(--ok); width:16px; height:16px;}
+  #actionList li.done .atext{text-decoration:line-through; color:var(--dim);}
+  #actionList .atext{flex:1;}
+  #actionList .ax{background:none; color:var(--dim); font-size:16px; padding:0 4px;}
+  #actionList .ax:hover{color:var(--danger);}
+
+  #cardBox{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;}
+  #card{
+    width:min(560px, 100%); min-height:200px; padding:28px; text-align:center;
+    background:var(--panel2); border:1px solid var(--line); border-radius:16px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+    cursor:pointer; font-size:18px;
+  }
+  #card .side{font-size:12px; letter-spacing:2px; color:var(--dim); text-transform:uppercase;}
+  #card.back{border-color:var(--accent);}
+  #card.back .answer{color:var(--accent); font-weight:700;}
+  .cardnav{display:flex; gap:10px; align-items:center;}
+  .cardnav button{background:var(--panel2); border:1px solid var(--line); color:var(--text); padding:8px 16px;}
+  #cardCount{color:var(--dim); min-width:60px; text-align:center;}
+  .placeholder{color:var(--dim); text-align:center; margin-top:30px;}
+
+  /* ---------- chat ---------- */
+  #tab-chat{gap:0;}
+  #chatMessages{flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding-bottom:10px;}
+  .chat-q{align-self:flex-end; background:var(--accent2); color:#0b1020; padding:10px 14px; border-radius:14px 14px 4px 14px; max-width:80%; font-weight:600;}
+  .chat-a{align-self:flex-start; background:var(--panel2); border:1px solid var(--line); padding:10px 14px; border-radius:14px 14px 14px 4px; max-width:90%; white-space:pre-wrap; line-height:1.6;}
+  .chat-empty{color:var(--dim); text-align:center; margin:auto; padding:20px;}
+  #chatInputRow{display:flex; gap:8px; padding-top:12px; border-top:1px solid var(--line); margin-top:10px;}
+  #chatInput{flex:1; padding:10px 12px; resize:none; height:44px; line-height:1.4;}
+  #btnChatSend{background:var(--accent); color:#1a1304; font-weight:700; padding:10px 16px; white-space:nowrap;}
+  #btnChatSend:disabled{opacity:0.5; cursor:not-allowed;}
+  .no-key-hint{color:var(--dim); font-size:13px; align-self:center;}
+
+  /* ---------- settings modal ---------- */
+  #settingsModal{
+    display:none; position:fixed; inset:0; z-index:100;
+    background:rgba(0,0,0,0.7); align-items:center; justify-content:center; padding:20px;
+  }
+  #settingsModal.open{display:flex;}
+  .settings-box{
+    background:var(--panel); border:1px solid var(--line); border-radius:16px;
+    padding:28px; width:min(480px, 100%); display:flex; flex-direction:column; gap:16px;
+  }
+  .settings-box h2{font-size:18px; display:flex; align-items:center; gap:8px;}
+  .settings-section{display:flex; flex-direction:column; gap:8px;}
+  .settings-section label{font-size:13px; color:var(--dim);}
+  .settings-section input{padding:10px 12px; width:100%;}
+  .settings-row{display:flex; gap:8px;}
+  #btnSaveKey{background:var(--ok); color:#0b1a10; font-weight:700; padding:10px 18px;}
+  #btnClearKey{background:var(--panel2); border:1px solid var(--line); color:var(--danger); padding:10px 14px;}
+  #btnCloseSettings{background:var(--panel2); border:1px solid var(--line); color:var(--text); padding:10px 14px; align-self:flex-end;}
+  #settingsAiStatus{font-size:13px; padding:8px 12px; border-radius:8px; background:var(--panel2);}
+  .settings-box p{font-size:13px; color:var(--dim); line-height:1.6;}
+  .settings-box a{color:var(--accent2);}
+
+  #btnBack{display:none;}
+
+  /* unfolded Z Fold / small tablet: keep two panes, slimmer sidebar */
+  @media (max-width:760px){
+    #sidebar{width:200px; min-width:180px;}
+    .topbar{padding:10px; gap:8px;}
+    .pane{padding:10px;}
+  }
+
+  /* folded cover screen / phone: master-detail, one pane at a time */
+  @media (max-width:600px){
+    #btnBack{display:block;}
+    #sidebar{width:100%; min-width:0; border-right:none;}
+    #main{display:none;}
+    #app.note-open #sidebar{display:none;}
+    #app.note-open #main{display:flex;}
+    #title{min-width:100px;}
+    .tabs{overflow-x:auto; padding:8px 8px 0; scrollbar-width:none;}
+    .tabs::-webkit-scrollbar{display:none;}
+    .tabs button{padding:8px 9px; white-space:nowrap; flex:0 0 auto;}
+    #noteList li{padding:14px 12px;}
+    button{min-height:38px;}
+    #card{min-height:160px; padding:18px; font-size:16px;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <aside id="sidebar">
+    <header class="side-head">
+      <div class="logo"><span class="owl">👂</span>HearSay</div>
+      <button id="btnNew" title="New note">+</button>
+    </header>
+    <input id="search" type="search" placeholder="Search notes…">
+    <ul id="noteList"></ul>
+    <footer class="side-foot">
+      <button id="btnSettings">⚙ AI Settings</button>
+      <button id="btnSync" hidden></button>
+      <div id="syncStatus"></div>
+      <div id="aiStatusLine">No Claude key — using local analysis</div>
+      <div id="privacyLine">🔒 Everything stays on this device</div>
+      <div id="syncDisconnect" hidden>Disconnect Google Drive</div>
+    </footer>
+  </aside>
+
+  <main id="main">
+
+    <div id="empty" class="empty">
+      <div class="big">👂</div>
+      <h1>HearSay</h1>
+      <p>Your standalone note taker. Record a meeting or lecture, watch the live transcript appear,
+         then generate a <b>summary</b>, <b>action items</b>, and <b>flashcards</b> — all without
+         an account, a subscription, or sending your notes anywhere.</p>
+      <button class="start" id="btnStart">＋ Create your first note</button>
+      <p style="font-size:13px">Tip: live transcription works best in Microsoft Edge or Google Chrome.</p>
+    </div>
+
+    <div id="editor" hidden>
+      <div class="topbar">
+        <button id="btnBack" class="iconbtn" title="All notes">←</button>
+        <input id="title" placeholder="Untitled note" spellcheck="false">
+        <select id="lang" title="Transcription language">
+          <option value="en-US">English (US)</option>
+          <option value="en-GB">English (UK)</option>
+          <option value="en-AU">English (AU)</option>
+          <option value="es-ES">Español</option>
+          <option value="fr-FR">Français</option>
+          <option value="de-DE">Deutsch</option>
+          <option value="it-IT">Italiano</option>
+          <option value="pt-BR">Português</option>
+          <option value="hi-IN">हिन्दी</option>
+          <option value="zh-CN">中文</option>
+          <option value="ja-JP">日本語</option>
+          <option value="ar-SA">العربية</option>
+        </select>
+        <button id="btnRec">🎙 Record</button>
+        <span id="timer"></span>
+        <button id="btnExport" class="iconbtn" title="Download note as Markdown">⬇ Export</button>
+        <button id="btnAudio" class="iconbtn" title="Download recording" hidden>🔊 Audio</button>
+        <button id="btnDelete" class="iconbtn" title="Delete note">🗑</button>
+      </div>
+
+      <div id="notice" hidden></div>
+      <div id="liveBar" hidden><span class="dot"></span>Listening… <span id="interim"></span></div>
+      <audio id="player" controls hidden></audio>
+
+      <nav class="tabs">
+        <button data-tab="transcript" class="active">📝 Transcript</button>
+        <button data-tab="summary">✨ Summary</button>
+        <button data-tab="actions">✅ Action Items</button>
+        <button data-tab="cards">🎓 Flashcards</button>
+        <button data-tab="chat">💬 Ask AI</button>
+      </nav>
+
+      <section class="pane" id="tab-transcript">
+        <textarea id="transcript" placeholder="Press 🎙 Record to start live transcription, or just type your notes here…" spellcheck="false"></textarea>
+      </section>
+
+      <section class="pane" id="tab-summary" hidden>
+        <div class="toolrow">
+          <button id="btnSummarize" class="gen">✨ Generate summary</button>
+          <span class="hint" id="summaryHint">Picks out the key points from your transcript.</span>
+        </div>
+        <div class="scrollbox"><ul id="summaryList"></ul><p class="placeholder" id="summaryEmpty">No summary yet.</p></div>
+      </section>
+
+      <section class="pane" id="tab-actions">
+        <div class="toolrow">
+          <button id="btnExtract" class="gen">✨ Find action items</button>
+          <button id="btnAddAction" class="iconbtn">＋ Add manually</button>
+          <span class="hint" id="actionsHint">Looks for tasks, commitments, and deadlines.</span>
+        </div>
+        <div class="scrollbox"><ul id="actionList"></ul><p class="placeholder" id="actionsEmpty">No action items yet.</p></div>
+      </section>
+
+      <section class="pane" id="tab-cards">
+        <div class="toolrow">
+          <button id="btnCards" class="gen">✨ Generate flashcards</button>
+          <span class="hint" id="cardsHint">Fill-in-the-blank cards from key sentences. Click a card to flip it.</span>
+        </div>
+        <div id="cardBox">
+          <p class="placeholder" id="cardsEmpty">No flashcards yet.</p>
+          <div id="card" hidden></div>
+          <div class="cardnav" id="cardNav" hidden>
+            <button id="cardPrev">← Prev</button>
+            <span id="cardCount"></span>
+            <button id="cardNext">Next →</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="pane" id="tab-chat" hidden>
+        <div id="chatMessages"><p class="chat-empty">Ask anything about your notes — Claude will answer based on your transcript.</p></div>
+        <div id="chatInputRow">
+          <textarea id="chatInput" placeholder="Ask something…" rows="1"></textarea>
+          <button id="btnChatSend">Ask</button>
+        </div>
+      </section>
+
+    </div>
+
+  </main>
+</div>
+
+<!-- Settings modal -->
+<div id="settingsModal">
+  <div class="settings-box">
+    <h2>⚙ AI Settings</h2>
+    <div id="settingsAiStatus">No API key set — using local analysis</div>
+    <div class="settings-section">
+      <label>Claude API Key</label>
+      <input id="aiKeyInput" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+      <div class="settings-row">
+        <button id="btnSaveKey">Save key</button>
+        <button id="btnClearKey">Remove key</button>
+      </div>
+    </div>
+    <p>
+      With a Claude API key, the Summary, Action Items, and Flashcards tabs use real AI instead of
+      local pattern-matching — and you get the <b>Ask AI</b> tab to chat about any note.<br><br>
+      Get a key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>.
+      Your key is stored only on this device, never sent anywhere except Anthropic's API.
+    </p>
+    <button id="btnCloseSettings">Close</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================== storage ============================== */
+
+let db = null;
+function openDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open("owlnotes", 1); // legacy DB name — keeps notes saved before the HearSay rename
+    req.onupgradeneeded = e => e.target.result.createObjectStore("notes", { keyPath: "id" });
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror  = () => reject(req.error);
+  });
+}
+function tx(mode){ return db.transaction("notes", mode).objectStore("notes"); }
+function dbPut(note){ return new Promise((res, rej) => { const r = tx("readwrite").put(note); r.onsuccess = res; r.onerror = () => rej(r.error); }); }
+function dbDelete(id){ return new Promise((res, rej) => { const r = tx("readwrite").delete(id); r.onsuccess = res; r.onerror = () => rej(r.error); }); }
+function dbAll(){ return new Promise((res, rej) => { const r = tx("readonly").getAll(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+
+/* ============================== state ============================== */
+
+let notes = [];          // metadata cache of all notes (full objects)
+let current = null;      // currently open note object
+let saveTimer = null;
+
+const $ = id => document.getElementById(id);
+
+function newNote(){
+  return {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+    title: "",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    transcript: "",
+    summary: [],
+    actions: [],   // {text, done}
+    cards: [],     // {front, back}
+    chat: [],      // {q, a, ts}
+    audio: null,   // Blob
+    lang: $("lang").value || "en-US"
+  };
+}
+
+function persist(){
+  if (!current) return;
+  current.updatedAt = Date.now();
+  dbPut(current).catch(err => console.error("save failed", err));
+  renderList();
+  scheduleSync();
+}
+function persistSoon(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(persist, 500);
+}
+
+/* ============================== Claude AI ============================== */
+
+const CLAUDE_MODEL = "claude-haiku-4-5-20251001";
+let claudeKey = localStorage.getItem("hearsay-claude-key") || "";
+
+function saveClaudeKey(key){
+  claudeKey = key.trim();
+  if (claudeKey) localStorage.setItem("hearsay-claude-key", claudeKey);
+  else localStorage.removeItem("hearsay-claude-key");
+  updateAiUi();
+}
+
+function updateAiUi(){
+  const hasKey = !!claudeKey;
+  const statusEl = $("settingsAiStatus");
+  const sideEl = $("aiStatusLine");
+  if (hasKey) {
+    statusEl.textContent = "✓ Claude AI active — …" + claudeKey.slice(-4);
+    statusEl.style.color = "var(--ok)";
+    sideEl.textContent = "✓ Claude AI active";
+    sideEl.style.color = "var(--ok)";
+  } else {
+    statusEl.textContent = "No API key set — using local analysis";
+    statusEl.style.color = "";
+    sideEl.textContent = "No Claude key — using local analysis";
+    sideEl.style.color = "";
+  }
+  $("summaryHint").textContent = hasKey ? "Claude AI summarizes your transcript." : "Picks out the key points from your transcript.";
+  $("actionsHint").textContent = hasKey ? "Claude AI finds tasks, commitments, and deadlines." : "Looks for tasks, commitments, and deadlines.";
+  $("cardsHint").textContent = hasKey ? "Claude AI builds fill-in-the-blank flashcards. Click to flip." : "Fill-in-the-blank cards from key sentences. Click a card to flip it.";
+}
+
+async function callClaude(system, user){
+  if (!claudeKey) return null;
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": claudeKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-allow-browser": "true"
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: 1024,
+      system,
+      messages: [{ role: "user", content: user }]
+    })
+  });
+  if (!res.ok){
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err.error && err.error.message) || "Claude API error " + res.status);
+  }
+  const data = await res.json();
+  return data.content[0].text.trim();
+}
+
+/* ============================== settings modal ============================== */
+
+function showSettings(){
+  $("aiKeyInput").value = claudeKey ? "••••••••" + claudeKey.slice(-4) : "";
+  updateAiUi();
+  $("settingsModal").classList.add("open");
+}
+function closeSettings(){
+  $("settingsModal").classList.remove("open");
+}
+
+$("btnSettings").onclick = showSettings;
+$("btnCloseSettings").onclick = closeSettings;
+$("settingsModal").onclick = e => { if (e.target === $("settingsModal")) closeSettings(); };
+
+$("btnSaveKey").onclick = () => {
+  const val = $("aiKeyInput").value.trim();
+  if (!val || val.startsWith("•")) { showNotice("Paste your full Claude API key first."); return; }
+  saveClaudeKey(val);
+  showNotice("✓ Claude API key saved.");
+};
+$("btnClearKey").onclick = () => {
+  saveClaudeKey("");
+  $("aiKeyInput").value = "";
+  showNotice("API key removed — back to local analysis.");
+};
+
+/* ============================== sidebar ============================== */
+
+function noteLabel(n){
+  return n.title.trim() || firstWords(n.transcript, 5) || "Untitled note";
+}
+function firstWords(text, k){
+  const w = text.replace(/\[\d+:\d+\]/g, "").trim().split(/\s+/).filter(Boolean);
+  return w.slice(0, k).join(" ") + (w.length > k ? "…" : "");
+}
+function fmtDate(ts){
+  return new Date(ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function renderList(){
+  const q = $("search").value.trim().toLowerCase();
+  const list = $("noteList");
+  list.innerHTML = "";
+  if (!notes.length) {
+    const li = document.createElement("li");
+    li.innerHTML = '<div class="nt">👂 No notes yet</div><div class="nm">Tap here to create your first note</div>';
+    li.onclick = createNote;
+    list.append(li);
+    return;
+  }
+  notes
+    .filter(n => !q || (n.title + " " + n.transcript).toLowerCase().includes(q))
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .forEach(n => {
+      const li = document.createElement("li");
+      if (current && n.id === current.id) li.className = "active";
+      const t = document.createElement("div"); t.className = "nt"; t.textContent = (n.audio ? "🎙 " : "") + noteLabel(n);
+      const m = document.createElement("div"); m.className = "nm"; m.textContent = fmtDate(n.updatedAt) + " · " + firstWords(n.transcript, 6);
+      li.append(t, m);
+      li.onclick = () => openNote(n.id);
+      list.append(li);
+    });
+}
+
+/* ============================== editor ============================== */
+
+function openNote(id){
+  if (recording && (!current || current.id !== id)) stopRecording();
+  current = notes.find(n => n.id === id) || null;
+  if (!current) return;
+  if (!current.chat) current.chat = [];
+  $("app").classList.add("note-open");
+  $("empty").hidden = true;
+  $("editor").hidden = false;
+  $("title").value = current.title;
+  $("transcript").value = current.transcript;
+  $("lang").value = current.lang || "en-US";
+  renderSummary(); renderActions(); renderCards(); renderChat(); renderAudio(); renderList();
+  maybeFetchAudio(current); // pull this note's recording from Drive if we don't have it locally
+}
+
+function renderAudio(){
+  const p = $("player");
+  if (p.src) { URL.revokeObjectURL(p.src); p.removeAttribute("src"); }
+  const has = current && current.audio instanceof Blob && current.audio.size > 0;
+  p.hidden = !has;
+  $("btnAudio").hidden = !has;
+  if (has) p.src = URL.createObjectURL(current.audio);
+}
+
+async function createNote(){
+  const n = newNote();
+  notes.push(n);
+  await dbPut(n);
+  openNote(n.id);
+  $("title").focus();
+}
+
+async function deleteCurrent(){
+  if (!current) return;
+  if (!confirm(`Delete "${noteLabel(current)}"? This cannot be undone.`)) return;
+  if (recording) stopRecording();
+  await dbDelete(current.id);
+  notes = notes.filter(n => n.id !== current.id);
+  noteDeleted(current); // tombstone so the delete syncs to other devices
+  current = null;
+  $("app").classList.remove("note-open");
+  $("editor").hidden = true;
+  $("empty").hidden = false;
+  renderList();
+}
+
+/* ============================== tabs ============================== */
+
+document.querySelectorAll(".tabs button").forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("active", x === b));
+    ["transcript", "summary", "actions", "cards", "chat"].forEach(t => $("tab-" + t).hidden = (t !== b.dataset.tab));
+  };
+});
+// hide non-default panes initially
+$("tab-actions").hidden = true;
+$("tab-cards").hidden = true;
+$("tab-chat").hidden = true;
+
+/* ============================== recording ============================== */
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const IS_ANDROID = /Android/i.test(navigator.userAgent);
+let recording = false;
+let recognition = null;
+let mediaRecorder = null;
+let mediaStream = null;
+let chunks = [];
+let recStartedAt = 0;
+let timerInt = null;
+
+function elapsedStamp(){
+  const s = Math.floor((Date.now() - recStartedAt) / 1000);
+  return `[${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}]`;
+}
+
+function showNotice(msg){
+  const n = $("notice");
+  n.textContent = msg;
+  n.hidden = false;
+  setTimeout(() => { n.hidden = true; }, 8000);
+}
+
+async function startRecording(){
+  if (!current) return;
+  chunks = [];
+  recStartedAt = Date.now();
+
+  // 1) audio capture — skipped on Android when live transcription is available,
+  // because Android gives the microphone to only one listener at a time
+  if (IS_ANDROID && SR) {
+    mediaRecorder = null;
+    if (!localStorage.getItem("hearsay-phonemode")) {
+      localStorage.setItem("hearsay-phonemode", "1");
+      showNotice("📱 Phone mode: live transcription is on. Audio files aren't saved while transcribing (phones allow only one mic listener) — transcripts still sync.");
+    }
+  } else {
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(mediaStream);
+      mediaRecorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+      mediaRecorder.onstop = () => {
+        current.audio = new Blob(chunks, { type: mediaRecorder.mimeType || "audio/webm" });
+        current.audioUpdatedAt = Date.now();
+        renderAudio();
+        persist();
+      };
+      mediaRecorder.start(1000);
+    } catch (err) {
+      mediaRecorder = null;
+      showNotice("Microphone not available (" + err.name + "). You can still type notes by hand.");
+    }
+  }
+
+  // 2) live transcription
+  if (SR) {
+    recognition = new SR();
+    recognition.lang = $("lang").value;
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 3;
+    recognition.onresult = e => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) {
+          // Pick the alternative with highest confidence
+          let bestIdx = 0;
+          for (let j = 1; j < r.length; j++) {
+            if (r[j].confidence > r[bestIdx].confidence) bestIdx = j;
+          }
+          appendTranscript(elapsedStamp() + " " + r[bestIdx].transcript.trim());
+        } else interim += r[0].transcript;
+      }
+      $("interim").textContent = interim;
+    };
+    recognition.onerror = e => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        showNotice("⚠ The microphone is blocked for HearSay. Long-press the app icon → App info → Permissions → Microphone → Allow.");
+        recognition = null;
+      } else if (e.error === "network") {
+        showNotice("⚠ Live transcription needs an internet connection right now.");
+      } else if (e.error === "audio-capture") {
+        showNotice("⚠ Couldn't reach the microphone for transcription. Close other apps that may be using the mic and try again.");
+      }
+      // "no-speech" and "aborted" are routine pauses — the auto-restart handles them
+    };
+    recognition.onend = () => {
+      // Chrome/Edge stop after pauses — restart while we're still recording
+      if (recording && recognition) { try { recognition.start(); } catch (_) {} }
+    };
+    try { recognition.start(); } catch (_) {}
+  } else {
+    showNotice("This browser has no live transcription — audio recording only. Open this file in Microsoft Edge or Google Chrome for live transcripts.");
+  }
+
+  if (!mediaRecorder && !SR) return; // nothing started
+
+  acquireWakeLock(); // keep the phone screen on so the mic isn't cut off
+  recording = true;
+  $("btnRec").textContent = "■ Stop";
+  $("btnRec").classList.add("recording");
+  $("liveBar").hidden = !SR;
+  $("timer").textContent = "0:00";
+  timerInt = setInterval(() => { $("timer").textContent = elapsedStamp().slice(1, -1); }, 1000);
+}
+
+let wakeLock = null;
+async function acquireWakeLock(){
+  try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch (_) {}
+}
+document.addEventListener("visibilitychange", () => {
+  if (recording && document.visibilityState === "visible") acquireWakeLock();
+});
+
+function stopRecording(){
+  recording = false;
+  clearInterval(timerInt);
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  if (recognition) { const r = recognition; recognition = null; try { r.stop(); } catch (_) {} }
+  if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  $("btnRec").textContent = "🎙 Record";
+  $("btnRec").classList.remove("recording");
+  $("liveBar").hidden = true;
+  $("interim").textContent = "";
+  persist();
+}
+
+function appendTranscript(line){
+  const ta = $("transcript");
+  ta.value = (ta.value.trimEnd() ? ta.value.trimEnd() + "\n" : "") + line;
+  ta.scrollTop = ta.scrollHeight;
+  current.transcript = ta.value;
+  persistSoon();
+}
+
+/* ============================== text analysis (local fallback) ==============================
+   Used when no Claude API key is configured. Extractive TextRank engine. */
+
+const STOPWORDS = new Set(("a an the and or but if then else when while at by for with about against into through during " +
+  "before after above below of to from up down in out on off over under again further once here there why how all any " +
+  "both each few more most other some such no nor not only own same so than too very s t can cannot will would could " +
+  "should just don now is are was were be been being have has had having do does did doing i you he she it we they them " +
+  "him her his its our their this that these those as what which who whom me my your yours um uh okay ok yeah like " +
+  "gonna really actually basically right know think going get got lot kind sort thing things well mean stuff guys " +
+  "maybe probably definitely literally honestly anyway also too kinda sorta hmm oh yep nope alright")
+  .split(/\s+/));
+
+const FILLER_START = /^(so|and|but|well|okay|ok|um|uh|like|you know|i mean|basically|actually|right|anyway|now|yeah)[,\s]+/i;
+
+function cleanText(text){
+  return text.replace(/\[\d+:\d+\]/g, " ");
+}
+function splitSentences(text){
+  return cleanText(text)
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map(s => s.trim())
+    .filter(s => s.split(/\s+/).filter(Boolean).length >= 4);
+}
+function words(s){
+  return s.toLowerCase().match(/[\p{L}\p{N}']+/gu) || [];
+}
+function stem(w){
+  return w
+    .replace(/('s|s')$/, "")
+    .replace(/(ies)$/, "y")
+    .replace(/(ied)$/, "y")
+    .replace(/(ing|ings)$/, "")
+    .replace(/(edly|ed)$/, "")
+    .replace(/(ly)$/, "")
+    .replace(/(es)$/, "")
+    .replace(/(s)$/, "");
+}
+function contentTokens(s){
+  return [...new Set(words(s).filter(w => !STOPWORDS.has(w) && w.length > 2).map(stem))];
+}
+function jaccard(a, b){
+  if (!a.length || !b.length) return 0;
+  const setB = new Set(b);
+  let common = 0;
+  for (const w of a) if (setB.has(w)) common++;
+  return common / (a.length + b.length - common);
+}
+function tidy(s){
+  let out = s.replace(FILLER_START, "").trim();
+  out = out.charAt(0).toUpperCase() + out.slice(1);
+  if (!/[.!?]$/.test(out)) out += ".";
+  return out;
+}
+
+function textRank(sents){
+  const toks = sents.map(contentTokens);
+  const n = Math.min(sents.length, 400);
+  const W = Array.from({ length: n }, () => new Float64Array(n));
+  const rowSum = new Float64Array(n);
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++) {
+      const a = toks[i], b = toks[j];
+      if (!a.length || !b.length) continue;
+      const setB = new Set(b);
+      let common = 0;
+      for (const w of a) if (setB.has(w)) common++;
+      if (!common) continue;
+      const s = common / (Math.log(a.length + 1) + Math.log(b.length + 1));
+      W[i][j] = W[j][i] = s;
+      rowSum[i] += s; rowSum[j] += s;
+    }
+  let score = new Float64Array(n).fill(1 / n);
+  const d = 0.85;
+  for (let it = 0; it < 40; it++) {
+    const next = new Float64Array(n).fill((1 - d) / n);
+    for (let i = 0; i < n; i++)
+      if (rowSum[i] > 0)
+        for (let j = 0; j < n; j++)
+          if (W[i][j]) next[j] += d * score[i] * W[i][j] / rowSum[i];
+    score = next;
+  }
+  return { score, toks, n };
+}
+
+function summarize(text){
+  const sents = splitSentences(text);
+  if (!sents.length) return [];
+  if (sents.length <= 3) return sents.map(tidy);
+  const { score, toks, n } = textRank(sents);
+  const k = Math.min(7, Math.max(3, Math.round(n * 0.25)));
+  const ranked = [];
+  for (let i = 0; i < n; i++) {
+    const posBoost = i === 0 ? 1.18 : i === n - 1 ? 1.08 : 1;
+    ranked.push({ i, s: sents[i], t: toks[i], score: score[i] * posBoost });
+  }
+  ranked.sort((a, b) => b.score - a.score);
+  const chosen = [];
+  for (const cand of ranked) {
+    if (chosen.length >= k) break;
+    if (chosen.some(c => jaccard(c.t, cand.t) > 0.5)) continue;
+    chosen.push(cand);
+  }
+  return chosen.sort((a, b) => a.i - b.i).map(c => tidy(c.s));
+}
+
+const OWNER_RE = /\b([A-Z][a-z]+|I|We|You|They|He|She)\b\s+(?:is going to|are going to|will|'ll|need(?:s)? to|have to|has to|should|must|plan(?:s)? to|want(?:s)? to|gonna)\b/;
+const IMPERATIVE_RE = /^(send|make|get|set up|set|call|email|review|update|fix|share|check|book|schedule|prepare|finish|write|create|add|remove|confirm|draft|order|buy|pick up|follow up|remember to|ping|assign|test|deploy|publish|sign|submit)\b/i;
+const DEADLINE_RE = /\b(by (monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|tonight|noon|end of (the )?(day|week|month)|next week|the \d+(st|nd|rd|th)?)|deadline|due (on|by|date)|before (the )?\w+)\b/i;
+const COMMIT_RE = /\b(need(s)? to|have to|has to|must|i'?ll|we'?ll|let'?s|to-?do|action item|don'?t forget|make sure)\b/i;
+
+function extractActions(text){
+  const seen = new Set();
+  const scored = [];
+  for (const raw of splitSentences(text)) {
+    const s = raw.replace(/\[\d+:\d+\]/g, "").trim();
+    const len = words(s).length;
+    if (len < 3 || len > 45) continue;
+    if (/\?$/.test(s)) continue;
+    const hasOwner = OWNER_RE.test(s);
+    const hasImper = IMPERATIVE_RE.test(s);
+    const hasCommit = COMMIT_RE.test(s);
+    const hasDeadline = DEADLINE_RE.test(s);
+    if (!(hasOwner || hasImper || hasCommit || hasDeadline)) continue;
+    const key = contentTokens(s).sort().join(" ");
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const priority = (hasDeadline ? 2 : 0) + (hasOwner ? 1 : 0);
+    scored.push({ text: tidy(s), priority });
+  }
+  return scored.sort((a, b) => b.priority - a.priority).slice(0, 15).map(x => x.text);
+}
+
+function makeFlashcards(text){
+  const sents = splitSentences(text);
+  if (!sents.length) return [];
+  const { score, n } = textRank(sents);
+  const ranked = [];
+  for (let i = 0; i < n; i++) ranked.push({ s: sents[i], score: score[i] });
+  ranked.sort((a, b) => b.score - a.score);
+  const cards = [];
+  const usedAnswers = new Set();
+  for (const { s: raw } of ranked) {
+    if (cards.length >= 10) break;
+    const s = raw.replace(/\[\d+:\d+\]/g, "").trim();
+    const answer = pickAnswer(s, usedAnswers);
+    if (!answer) continue;
+    const re = new RegExp("\\b" + answer.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b");
+    const front = tidy(s).replace(re, "_____");
+    if (!front.includes("_____")) continue;
+    usedAnswers.add(answer.toLowerCase());
+    cards.push({ front, back: answer });
+  }
+  return cards;
+}
+
+function pickAnswer(s, used){
+  const tokens = s.split(/\s+/);
+  const proper = s.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b/g);
+  if (proper) {
+    for (const p of proper) {
+      const firstWord = tokens[0] && p.startsWith(tokens[0]);
+      if (!firstWord && !used.has(p.toLowerCase())) return p;
+    }
+  }
+  const num = s.match(/\b(\$?\d[\d,.]*%?|\d+(?:st|nd|rd|th))\b/);
+  if (num && !used.has(num[0].toLowerCase())) return num[0];
+  let best = null;
+  for (let i = 1; i < tokens.length; i++) {
+    const w = tokens[i].replace(/[^\p{L}\p{N}'-]/gu, "");
+    const lw = w.toLowerCase();
+    if (STOPWORDS.has(lw) || w.length < 5 || used.has(lw)) continue;
+    if (!best || w.length > best.length) best = w;
+  }
+  return best;
+}
+
+/* ============================== rendering: summary/actions/cards ============================== */
+
+function renderSummary(){
+  const ul = $("summaryList");
+  ul.innerHTML = "";
+  (current.summary || []).forEach(s => {
+    const li = document.createElement("li");
+    li.textContent = s;
+    ul.append(li);
+  });
+  $("summaryEmpty").hidden = (current.summary || []).length > 0;
+}
+
+function renderActions(){
+  const ul = $("actionList");
+  ul.innerHTML = "";
+  (current.actions || []).forEach((a, idx) => {
+    const li = document.createElement("li");
+    if (a.done) li.className = "done";
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = a.done;
+    cb.onchange = () => { a.done = cb.checked; renderActions(); persist(); };
+    const span = document.createElement("span");
+    span.className = "atext"; span.textContent = a.text;
+    const x = document.createElement("button");
+    x.className = "ax"; x.textContent = "✕"; x.title = "Remove";
+    x.onclick = () => { current.actions.splice(idx, 1); renderActions(); persist(); };
+    li.append(cb, span, x);
+    ul.append(li);
+  });
+  $("actionsEmpty").hidden = (current.actions || []).length > 0;
+}
+
+let cardIdx = 0, cardFlipped = false;
+function renderCards(){
+  const cards = current.cards || [];
+  const has = cards.length > 0;
+  $("cardsEmpty").hidden = has;
+  $("card").hidden = !has;
+  $("cardNav").hidden = !has;
+  if (!has) return;
+  if (cardIdx >= cards.length) cardIdx = 0;
+  const c = cards[cardIdx];
+  const card = $("card");
+  card.classList.toggle("back", cardFlipped);
+  card.innerHTML = "";
+  const side = document.createElement("div");
+  side.className = "side";
+  side.textContent = cardFlipped ? "Answer — click to flip back" : "Question — click to reveal";
+  const body = document.createElement("div");
+  if (cardFlipped) { body.className = "answer"; body.textContent = c.back; }
+  else body.textContent = c.front;
+  card.append(side, body);
+  $("cardCount").textContent = (cardIdx + 1) + " / " + cards.length;
+}
+
+/* ============================== chat ============================== */
+
+function renderChat(){
+  const box = $("chatMessages");
+  box.innerHTML = "";
+  const msgs = current.chat || [];
+  if (!msgs.length) {
+    const p = document.createElement("p");
+    p.className = "chat-empty";
+    p.textContent = claudeKey
+      ? "Ask anything about your notes — Claude will answer based on your transcript."
+      : "Add a Claude API key in ⚙ AI Settings to enable chat.";
+    box.append(p);
+    return;
+  }
+  msgs.forEach(({ q, a }) => {
+    const qDiv = document.createElement("div");
+    qDiv.className = "chat-q";
+    qDiv.textContent = q;
+    const aDiv = document.createElement("div");
+    aDiv.className = "chat-a";
+    aDiv.textContent = a;
+    box.append(qDiv, aDiv);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendChat(){
+  if (!current) return;
+  if (!claudeKey) {
+    showNotice("Add a Claude API key in ⚙ AI Settings to use the chat.");
+    return;
+  }
+  const input = $("chatInput");
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = "";
+  input.style.height = "";
+  const btn = $("btnChatSend");
+  btn.disabled = true;
+  btn.textContent = "…";
+
+  const transcript = (current.transcript || "").trim();
+  let a;
+  try {
+    a = await callClaude(
+      "You are a helpful assistant analyzing meeting notes or recordings. Answer questions concisely based on the provided transcript. If the transcript is empty or doesn't contain relevant information, say so.",
+      transcript
+        ? "Transcript:\n" + transcript + "\n\nQuestion: " + q
+        : "The transcript is empty. Question: " + q
+    );
+    if (!a) a = "No response received.";
+  } catch (err) {
+    a = "⚠ " + err.message;
+  }
+
+  if (!current.chat) current.chat = [];
+  current.chat.push({ q, a, ts: Date.now() });
+  renderChat();
+  persist();
+  btn.disabled = false;
+  btn.textContent = "Ask";
+}
+
+$("btnChatSend").onclick = sendChat;
+$("chatInput").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
+});
+
+/* ============================== export ============================== */
+
+function download(name, blob){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+function safeName(s){ return (s || "note").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 60); }
+
+function exportMarkdown(){
+  if (!current) return;
+  let md = "# " + noteLabel(current) + "\n\n";
+  md += "*" + new Date(current.createdAt).toLocaleString() + " — made with HearSay*\n\n";
+  if ((current.summary || []).length) {
+    md += "## Summary\n\n" + current.summary.map(s => "- " + s).join("\n") + "\n\n";
+  }
+  if ((current.actions || []).length) {
+    md += "## Action items\n\n" + current.actions.map(a => "- [" + (a.done ? "x" : " ") + "] " + a.text).join("\n") + "\n\n";
+  }
+  if (current.transcript.trim()) {
+    md += "## Transcript\n\n" + current.transcript + "\n";
+  }
+  download(safeName(noteLabel(current)) + ".md", new Blob([md], { type: "text/markdown" }));
+}
+
+/* ============================== Google Drive sync ============================== */
+
+const GOOGLE_CLIENT_ID = "139838823596-c1i12j4ltiask4pbg55s4k8jjspt4pd9.apps.googleusercontent.com";
+const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+
+let syncMeta = {};
+try { syncMeta = JSON.parse(localStorage.getItem("hearsay-sync") || "{}"); } catch (_) {}
+let gToken = null, gTokenExp = 0, tokenClient = null, tokenReject = null;
+let syncing = false, syncTimer = null, syncQueued = false;
+
+function saveSyncMeta(){ localStorage.setItem("hearsay-sync", JSON.stringify(syncMeta)); }
+function syncEligible(){ return !!GOOGLE_CLIENT_ID && location.protocol === "https:"; }
+function canSync(){ return syncEligible() && syncMeta.connected; }
+
+function setSyncStatus(state, msg){
+  const el = $("syncStatus");
+  el.className = state === "err" ? "err" : "";
+  if (state === "busy") el.textContent = msg || "☁ Syncing…";
+  else if (state === "err") el.textContent = "⚠ " + (msg || "Sync problem — tap Sync now");
+  else if (state === "ok") el.textContent = "✓ Synced " + new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  else el.textContent = "";
+}
+
+function updateSyncUi(){
+  const btn = $("btnSync");
+  btn.hidden = !syncEligible();
+  $("syncDisconnect").hidden = !canSync();
+  if (!syncEligible()) return;
+  if (syncMeta.connected) {
+    btn.textContent = "☁ Sync now";
+    $("privacyLine").textContent = "☁ Notes sync to your Google Drive";
+  } else {
+    btn.textContent = "☁ Connect Google Drive";
+    $("privacyLine").textContent = "🔒 Everything stays on this device";
+  }
+}
+
+function loadGis(){
+  return new Promise((res, rej) => {
+    if (window.google && google.accounts && google.accounts.oauth2) return res();
+    const s = document.createElement("script");
+    s.src = "https://accounts.google.com/gsi/client";
+    s.onload = res;
+    s.onerror = () => rej(new Error("couldn't load Google sign-in"));
+    document.head.append(s);
+  });
+}
+
+async function getToken(interactive){
+  if (gToken && Date.now() < gTokenExp - 60000) return gToken;
+  await loadGis();
+  if (!tokenClient) {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: DRIVE_SCOPE,
+      callback: () => {},
+      error_callback: e => { if (tokenReject) tokenReject(new Error(e.type || "sign-in failed")); }
+    });
+  }
+  return new Promise((res, rej) => {
+    tokenReject = rej;
+    tokenClient.callback = t => {
+      if (t.error) return rej(new Error(t.error));
+      gToken = t.access_token;
+      gTokenExp = Date.now() + (t.expires_in * 1000);
+      res(gToken);
+    };
+    tokenClient.requestAccessToken({ prompt: "" });
+  });
+}
+
+async function drive(pathPart, opts = {}, retry = true){
+  const tok = await getToken(false);
+  const r = await fetch("https://www.googleapis.com/" + pathPart, {
+    ...opts,
+    headers: { ...(opts.headers || {}), Authorization: "Bearer " + tok }
+  });
+  if (r.status === 401 && retry) { gToken = null; return drive(pathPart, opts, false); }
+  if (!r.ok) throw new Error("Drive error " + r.status);
+  return r;
+}
+
+function buildMultipart(meta, content, type){
+  const b = "hearsay" + Math.random().toString(36).slice(2);
+  const blob = new Blob([
+    `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n`,
+    `--${b}\r\nContent-Type: ${type}\r\n\r\n`, content, `\r\n--${b}--`
+  ]);
+  return { headers: { "Content-Type": "multipart/related; boundary=" + b }, body: blob };
+}
+
+async function ensureFolder(){
+  if (syncMeta.folderId) return syncMeta.folderId;
+  const q = encodeURIComponent("name='HearSay' and mimeType='application/vnd.google-apps.folder' and trashed=false");
+  const found = await (await drive(`drive/v3/files?q=${q}&fields=files(id)`)).json();
+  if (found.files.length) syncMeta.folderId = found.files[0].id;
+  else {
+    const made = await (await drive("drive/v3/files?fields=id", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "HearSay", mimeType: "application/vnd.google-apps.folder" })
+    })).json();
+    syncMeta.folderId = made.id;
+  }
+  saveSyncMeta();
+  return syncMeta.folderId;
+}
+
+async function ensureNotesFile(){
+  if (syncMeta.fileId) return syncMeta.fileId;
+  const folder = await ensureFolder();
+  const q = encodeURIComponent(`name='notes.json' and '${folder}' in parents and trashed=false`);
+  const found = await (await drive(`drive/v3/files?q=${q}&fields=files(id)`)).json();
+  if (found.files.length) syncMeta.fileId = found.files[0].id;
+  else {
+    const mp = buildMultipart({ name: "notes.json", parents: [folder] }, JSON.stringify({ notes: [], tombstones: {} }), "application/json");
+    const made = await (await drive("upload/drive/v3/files?uploadType=multipart&fields=id", { method: "POST", ...mp })).json();
+    syncMeta.fileId = made.id;
+  }
+  saveSyncMeta();
+  return syncMeta.fileId;
+}
+
+function serializeNote(n){
+  const { audio, audioSyncedAt, ...rest } = n;
+  return rest;
+}
+
+async function uploadAudio(n){
+  if (n.driveAudioId) {
+    await drive(`upload/drive/v3/files/${n.driveAudioId}?uploadType=media`, {
+      method: "PATCH", headers: { "Content-Type": n.audio.type || "audio/webm" }, body: n.audio
+    });
+    return n.driveAudioId;
+  }
+  const folder = await ensureFolder();
+  const mp = buildMultipart({ name: `audio-${n.id}.webm`, parents: [folder] }, n.audio, n.audio.type || "audio/webm");
+  const made = await (await drive("upload/drive/v3/files?uploadType=multipart&fields=id", { method: "POST", ...mp })).json();
+  return made.id;
+}
+
+async function maybeFetchAudio(n){
+  if (!n || n.audio || !n.driveAudioId || !canSync()) return;
+  try {
+    setSyncStatus("busy", "☁ Downloading recording…");
+    const blob = await (await drive(`drive/v3/files/${n.driveAudioId}?alt=media`)).blob();
+    n.audio = blob;
+    n.audioSyncedAt = n.audioUpdatedAt = n.audioUpdatedAt || Date.now();
+    await dbPut(n);
+    if (current === n) renderAudio();
+    setSyncStatus("ok");
+  } catch (err) {
+    console.error("audio download failed", err);
+    setSyncStatus("err", "Couldn't download recording");
+  }
+}
+
+function scheduleSync(){
+  if (!canSync()) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => syncNow(), 4000);
+}
+
+function noteDeleted(n){
+  if (!syncMeta.tombstones) syncMeta.tombstones = {};
+  syncMeta.tombstones[n.id] = Date.now();
+  saveSyncMeta();
+  if (canSync() && n.driveAudioId) drive(`drive/v3/files/${n.driveAudioId}`, { method: "DELETE" }).catch(() => {});
+  scheduleSync();
+}
+
+async function syncNow(interactive){
+  if (!canSync()) return;
+  if (recording || syncing) { syncQueued = true; return; }
+  syncing = true;
+  setSyncStatus("busy");
+  try {
+    if (interactive) await getToken(true);
+    const fileId = await ensureNotesFile();
+
+    let remote = { notes: [], tombstones: {} };
+    try { remote = await (await drive(`drive/v3/files/${fileId}?alt=media`)).json(); } catch (_) {}
+    if (!remote || typeof remote !== "object") remote = {};
+    const remoteNotes = remote.notes || [];
+    const tombs = { ...(remote.tombstones || {}), ...(syncMeta.tombstones || {}) };
+    for (const k of Object.keys(tombs)) if (tombs[k] < Date.now() - 90 * 864e5) delete tombs[k];
+
+    const byId = new Map(notes.map(n => [n.id, n]));
+    let changedLocal = false;
+
+    for (const rn of remoteNotes) {
+      if (tombs[rn.id] && tombs[rn.id] >= rn.updatedAt) continue;
+      const ln = byId.get(rn.id);
+      if (!ln) {
+        const n = { ...rn, audio: null };
+        notes.push(n); byId.set(n.id, n);
+        await dbPut(n);
+        changedLocal = true;
+      } else if (rn.updatedAt > ln.updatedAt) {
+        if ((rn.audioUpdatedAt || 0) > Math.max(ln.audioSyncedAt || 0, ln.audioUpdatedAt || 0)) ln.audio = null;
+        Object.assign(ln, serializeNote(rn));
+        await dbPut(ln);
+        changedLocal = true;
+      }
+    }
+
+    for (const id of Object.keys(tombs)) {
+      const ln = byId.get(id);
+      if (ln && tombs[id] >= ln.updatedAt) {
+        notes = notes.filter(n => n.id !== id);
+        await dbDelete(id);
+        if (current && current.id === id) {
+          current = null;
+          $("editor").hidden = true; $("empty").hidden = false;
+          $("app").classList.remove("note-open");
+        }
+        changedLocal = true;
+      }
+    }
+
+    for (const n of notes) {
+      if (n.audio instanceof Blob && n.audio.size && (n.audioUpdatedAt || 0) > (n.audioSyncedAt || 0)) {
+        n.driveAudioId = await uploadAudio(n);
+        n.audioSyncedAt = Date.now();
+        await dbPut(n);
+      }
+    }
+
+    const merged = { notes: notes.map(serializeNote), tombstones: tombs, savedAt: Date.now() };
+    await drive(`upload/drive/v3/files/${fileId}?uploadType=media`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(merged)
+    });
+
+    syncMeta.tombstones = tombs;
+    syncMeta.lastSync = Date.now();
+    saveSyncMeta();
+
+    if (changedLocal) {
+      renderList();
+      if (current) openNote(current.id);
+    }
+    setSyncStatus("ok");
+  } catch (err) {
+    console.error("sync failed", err);
+    setSyncStatus("err");
+  }
+  syncing = false;
+  if (syncQueued) { syncQueued = false; scheduleSync(); }
+}
+
+async function connectDrive(){
+  try {
+    setSyncStatus("busy", "☁ Connecting…");
+    await getToken(true);
+    syncMeta.connected = true;
+    saveSyncMeta();
+    updateSyncUi();
+    await syncNow();
+  } catch (err) {
+    console.error(err);
+    setSyncStatus("err", "Couldn't connect Google Drive");
+  }
+}
+
+function disconnectDrive(){
+  if (!confirm("Disconnect Google Drive? Notes stay on this device and in your Drive, but stop syncing.")) return;
+  if (gToken && window.google) try { google.accounts.oauth2.revoke(gToken, () => {}); } catch (_) {}
+  gToken = null;
+  syncMeta = { tombstones: syncMeta.tombstones || {} };
+  saveSyncMeta();
+  updateSyncUi();
+  setSyncStatus("");
+}
+
+$("btnSync").onclick = () => { syncMeta.connected ? syncNow(true) : connectDrive(); };
+$("syncDisconnect").onclick = disconnectDrive;
+window.addEventListener("online", scheduleSync);
+
+/* ============================== wire up ============================== */
+
+$("btnNew").onclick = createNote;
+$("btnStart").onclick = createNote;
+$("btnBack").onclick = () => {
+  if (recording) stopRecording();
+  $("app").classList.remove("note-open");
+  renderList();
+};
+$("btnDelete").onclick = deleteCurrent;
+$("btnExport").onclick = exportMarkdown;
+$("btnAudio").onclick = () => {
+  if (current && current.audio) download(safeName(noteLabel(current)) + ".webm", current.audio);
+};
+$("btnRec").onclick = () => { recording ? stopRecording() : startRecording(); };
+$("search").oninput = renderList;
+
+$("title").oninput = () => { if (current) { current.title = $("title").value; persistSoon(); } };
+$("transcript").oninput = () => { if (current) { current.transcript = $("transcript").value; persistSoon(); } };
+$("lang").onchange = () => {
+  if (current) { current.lang = $("lang").value; persistSoon(); }
+  if (recording && recognition) { recognition.lang = $("lang").value; }
+};
+
+$("btnSummarize").onclick = async () => {
+  if (!current) return;
+  const btn = $("btnSummarize");
+  btn.disabled = true;
+  btn.textContent = claudeKey ? "⏳ Thinking…" : "⏳ Analyzing…";
+  try {
+    if (claudeKey) {
+      const result = await callClaude(
+        "You are a meeting notes assistant. Extract the 5-7 most important points from this transcript as concise bullet points. Return only the bullet points, one per line, each starting with '- '. Be specific and useful.",
+        current.transcript || "(empty transcript)"
+      );
+      current.summary = result
+        .split("\n")
+        .map(l => l.trim())
+        .filter(l => l.startsWith("- "))
+        .map(l => l.slice(2).trim());
+      if (!current.summary.length) {
+        current.summary = result.split("\n").filter(l => l.trim()).map(l => l.replace(/^[-*•]\s*/, "").trim()).filter(Boolean);
+      }
+    } else {
+      current.summary = summarize(current.transcript);
+    }
+  } catch (err) {
+    showNotice("AI error: " + err.message);
+    current.summary = summarize(current.transcript);
+  }
+  if (!current.summary.length) showNotice("Nothing to summarize yet — record or type a few sentences first.");
+  renderSummary();
+  persist();
+  btn.disabled = false;
+  btn.textContent = "✨ Generate summary";
+};
+
+$("btnExtract").onclick = async () => {
+  if (!current) return;
+  const btn = $("btnExtract");
+  btn.disabled = true;
+  btn.textContent = claudeKey ? "⏳ Thinking…" : "⏳ Analyzing…";
+  try {
+    let found = [];
+    if (claudeKey) {
+      const result = await callClaude(
+        "You are a meeting assistant. Extract all action items, tasks, commitments, and deadlines from this transcript. Return only the action items, one per line, each starting with '- '. Be specific about who does what and when. If there are no action items, return an empty response.",
+        current.transcript || "(empty transcript)"
+      );
+      found = result
+        .split("\n")
+        .map(l => l.trim())
+        .filter(l => l.startsWith("- "))
+        .map(l => l.slice(2).trim())
+        .filter(Boolean);
+    } else {
+      found = extractActions(current.transcript);
+    }
+    const existing = new Set((current.actions || []).map(a => a.text.toLowerCase()));
+    for (const t of found) if (!existing.has(t.toLowerCase())) current.actions.push({ text: t, done: false });
+    if (!found.length) showNotice("No action items found. You can add one manually.");
+  } catch (err) {
+    showNotice("AI error: " + err.message);
+    const found = extractActions(current.transcript);
+    const existing = new Set((current.actions || []).map(a => a.text.toLowerCase()));
+    for (const t of found) if (!existing.has(t.toLowerCase())) current.actions.push({ text: t, done: false });
+  }
+  renderActions();
+  persist();
+  btn.disabled = false;
+  btn.textContent = "✨ Find action items";
+};
+
+$("btnAddAction").onclick = () => {
+  const t = prompt("Action item:");
+  if (t && t.trim()) { current.actions.push({ text: t.trim(), done: false }); renderActions(); persist(); }
+};
+
+$("btnCards").onclick = async () => {
+  if (!current) return;
+  const btn = $("btnCards");
+  btn.disabled = true;
+  btn.textContent = claudeKey ? "⏳ Thinking…" : "⏳ Analyzing…";
+  try {
+    if (claudeKey) {
+      const result = await callClaude(
+        'Create up to 10 fill-in-the-blank flashcards to help someone study this content. Each card should test a specific fact. Return a JSON array only, no other text: [{"front": "The _____ is responsible for X.", "back": "answer"}]',
+        current.transcript || "(empty transcript)"
+      );
+      try {
+        const jsonStr = result.replace(/^```json\s*/i, "").replace(/\s*```$/, "");
+        const parsed = JSON.parse(jsonStr);
+        current.cards = parsed.filter(c => c.front && c.back && c.front.includes("_____"));
+      } catch {
+        current.cards = makeFlashcards(current.transcript);
+      }
+    } else {
+      current.cards = makeFlashcards(current.transcript);
+    }
+  } catch (err) {
+    showNotice("AI error: " + err.message);
+    current.cards = makeFlashcards(current.transcript);
+  }
+  cardIdx = 0; cardFlipped = false;
+  if (!current.cards.length) showNotice("Not enough content for flashcards yet — record or type a few sentences first.");
+  renderCards();
+  persist();
+  btn.disabled = false;
+  btn.textContent = "✨ Generate flashcards";
+};
+
+$("card").onclick = () => { cardFlipped = !cardFlipped; renderCards(); };
+$("cardPrev").onclick = () => { cardIdx = (cardIdx - 1 + current.cards.length) % current.cards.length; cardFlipped = false; renderCards(); };
+$("cardNext").onclick = () => { cardIdx = (cardIdx + 1) % current.cards.length; cardFlipped = false; renderCards(); };
+
+window.addEventListener("beforeunload", () => { if (recording) stopRecording(); });
+
+/* ============================== boot ============================== */
+
+(async function init(){
+  if (location.protocol === "https:") {
+    const link = document.createElement("link");
+    link.rel = "manifest";
+    link.href = "hearsay.webmanifest";
+    document.head.append(link);
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("hearsay-sw.js").catch(() => {});
+  }
+  try {
+    db = await openDB();
+    notes = await dbAll();
+  } catch (err) {
+    console.error(err);
+    alert("Could not open local storage (" + err + "). Notes will not be saved.");
+    notes = [];
+  }
+  renderList();
+  updateSyncUi();
+  updateAiUi();
+  if (canSync()) syncNow();
+})();
+</script>
+</body>
+</html>

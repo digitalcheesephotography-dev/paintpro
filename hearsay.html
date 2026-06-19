@@ -201,6 +201,10 @@
       <div id="aiStatusLine">No Claude key — using local analysis</div>
       <div id="privacyLine">🔒 Everything stays on this device</div>
       <div id="syncDisconnect" hidden>Disconnect Google Drive</div>
+      <button id="btnInstall" hidden onclick="installApp()"
+              style="background:#f5b942;color:#1a1304;font-weight:700;padding:8px 10px;font-size:13px;border:none;border-radius:8px;cursor:pointer">
+        📲 Install HearSay App
+      </button>
     </footer>
   </aside>
 
@@ -1468,6 +1472,23 @@ window.addEventListener("beforeunload", () => { if (recording) stopRecording(); 
   updateAiUi();
   if (canSync()) syncNow();
 })();
+
+/* ============================== install prompt ============================== */
+let _installPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _installPrompt = e;
+  $('btnInstall').hidden = false;
+});
+window.addEventListener('appinstalled', () => {
+  $('btnInstall').hidden = true;
+  _installPrompt = null;
+});
+function installApp(){
+  if (!_installPrompt) return;
+  _installPrompt.prompt();
+  _installPrompt.userChoice.then(() => { _installPrompt = null; $('btnInstall').hidden = true; });
+}
 </script>
 </body>
 </html>

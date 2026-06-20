@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>FieldNotes — Ingersoll Painting</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:   #2baae1;
+      --green:  #2e8b1e;
+      --red:    #c0392b;
+      --amber:  #f59e0b;
+      --dark:   #0d1117;
+      --panel:  #161b22;
+      --card:   #1a2030;
+      --border: #252c3a;
+      --text:   #e2e8f0;
+      --muted:  #6b7a8d;
+      --tap:    54px;
+      --r:      12px;
+      --gap:    12px;
+      --head:   'Bebas Neue', sans-serif;
+      --font:   'Barlow Condensed', 'Arial Narrow', sans-serif;
+      --safe-t: env(safe-area-inset-top, 0px);
+      --safe-b: env(safe-area-inset-bottom, 0px);
+    }
+
+    html, body { height: 100%; background: var(--dark); color: var(--text); font-family: var(--font); font-size: 16px; overflow: hidden; }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding-top: var(--safe-t);
+      padding-bottom: var(--safe-b);
+    }
+
+    /* ── Header ── */
+    #hdr {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    #hdr h1 { font-family: var(--head); font-size: 30px; color: var(--blue); letter-spacing: 1px; line-height: 1; }
+    #hdr .sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+    #hdr-right { margin-left: auto; display: flex; gap: 8px; }
+    .hdr-btn {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--r);
+      padding: 0 14px;
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      height: 38px;
+      white-space: nowrap;
+    }
+    .hdr-btn:active { opacity: 0.7; }
+
+    /* ── Main ── */
+    #main {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: var(--gap);
+      gap: var(--gap);
+    }
+
+    /* Title + date row */
+    #title-row { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+    #session-title {
+      flex: 1;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 16px;
+      font-weight: 600;
+      padding: 0 14px;
+      height: var(--tap);
+    }
+    #session-title::placeholder { color: var(--muted); font-weight: 400; }
+    #session-title:focus { outline: none; border-color: var(--blue); }
+    #date-lbl { font-size: 13px; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+
+    /* Status bar */
+    #status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 14px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      font-size: 13px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    #sdot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+    #sdot.live { background: var(--red); animation: blink 1s step-end infinite; }
+    #sdot.ok   { background: var(--green); }
+    #scnt { margin-left: auto; font-size: 12px; }
+
+    /* Transcript */
+    #tx-wrap {
+      flex: 1;
+      min-height: 0;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Filter bar */
+    #filter-bar {
+      display: flex;
+      gap: 6px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .filter-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      color: var(--muted);
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 12px;
+      cursor: pointer;
+    }
+    .filter-btn.active { border-color: var(--amber); color: var(--amber); background: rgba(245,158,11,.08); }
+
+    #tx-scroll { flex: 1; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+
+    #tx-empty {
+      position: absolute;
+      inset: 50px 0 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 15px;
+      text-align: center;
+      padding: 24px;
+      pointer-events: none;
+      line-height: 1.6;
+    }
+
+    .seg {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      animation: fadeIn .2s ease;
+    }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+
+    .seg-t { font-size: 12px; color: var(--muted); min-width: 40px; padding-top: 3px; flex-shrink: 0; }
+    .seg-txt { flex: 1; font-size: 16px; line-height: 1.5; }
+    .seg.starred .seg-txt { color: #fff; }
+    .seg-star {
+      background: none;
+      border: none;
+      font-size: 17px;
+      cursor: pointer;
+      padding: 0 2px;
+      color: var(--border);
+      flex-shrink: 0;
+      line-height: 1.5;
+    }
+    .seg-star.on { color: var(--amber); }
+
+    #interim-row { padding: 4px 14px 8px; }
+    #interim-txt { font-size: 16px; color: var(--muted); font-style: italic; }
+
+    /* Controls */
+    #controls { display: flex; gap: var(--gap); flex-shrink: 0; }
+    #rec-btn {
+      flex: 1;
+      height: 72px;
+      border-radius: var(--r);
+      border: none;
+      font-family: var(--head);
+      font-size: 26px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: var(--red);
+      color: white;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #rec-btn:active { opacity: .85; }
+    #rec-btn.on { background: #7b241c; animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{background:#7b241c} 50%{background:#c0392b} }
+    #rdot { width: 14px; height: 14px; border-radius: 50%; background: white; flex-shrink: 0; }
+    #rec-btn.on #rdot { animation: blink 1s step-end infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+    #timer {
+      font-family: var(--head);
+      font-size: 22px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 70px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 0 12px;
+    }
+
+    #action-row { display: flex; gap: var(--gap); flex-shrink: 0; }
+    .act-btn {
+      flex: 1;
+      height: var(--tap);
+      border-radius: var(--r);
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .act-btn:active { opacity: .7; }
+    .act-btn.green { border-color: var(--green); color: var(--green); }
+    .act-btn.blue  { border-color: var(--blue);  color: var(--blue); }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: calc(20px + var(--safe-b));
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #2d333b;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 15px;
+      padding: 10px 22px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      white-space: nowrap;
+      transition: transform .25s ease;
+      z-index: 1000;
+      pointer-events: none;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── Sessions modal ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.75);
+      z-index: 100;
+      display: none;
+      flex-direction: column;
+      padding-top: var(--safe-t);
+    }
+    .modal-overlay.open { display: flex; }
+
+    .modal-sheet {
+      background: var(--panel);
+      flex: 1;
+      overflow-y: auto;
+      border-bottom-left-radius: var(--r);
+      border-bottom-right-radius: var(--r);
+    }
+    .modal-hdr {
+      display: flex;
+      align-items: center;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--panel);
+      z-index: 1;
+    }
+    .modal-hdr h2 { font-family: var(--head); font-size: 24px; color: var(--blue); }
+    .modal-close {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 30px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 4px;
+    }
+    #sessions-list { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+    .sitem {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 14px;
+    }
+    .sitem-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+    .sitem-meta  { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+    .sitem-actions { display: flex; gap: 8px; }
+    .sitem-actions button {
+      flex: 1;
+      height: 38px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .sitem-actions .del-btn { flex: 0; padding: 0 14px; border-color: var(--red); color: var(--red); }
+    .no-sessions { text-align: center; color: var(--muted); font-size: 15px; padding: 40px 24px; }
+
+    /* ── View modal (full-screen) ── */
+    #view-modal {
+      position: fixed;
+      inset: 0;
+      background: var(--dark);
+      z-index: 200;
+      display: none;
+      flex-direction: column;
+      padding-top: var(--safe-t);
+      padding-bottom: var(--safe-b);
+    }
+    #view-modal.open { display: flex; }
+    #view-hdr {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    #view-title { font-family: var(--head); font-size: 22px; color: var(--blue); flex: 1; }
+    #view-meta  { font-size: 13px; color: var(--muted); padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--panel); flex-shrink: 0; }
+    #view-filter { display: flex; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    #view-tx { flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+    #view-actions {
+      padding: 12px 16px;
+      display: flex;
+      gap: var(--gap);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #view-actions button {
+      flex: 1;
+      height: var(--tap);
+      border-radius: var(--r);
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #view-actions .copy-btn { border-color: var(--blue); color: var(--blue); }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <div id="hdr">
+    <div>
+      <h1>FIELDNOTES</h1>
+      <div class="sub">Ingersoll Painting LLC</div>
+    </div>
+    <div id="hdr-right">
+      <button class="hdr-btn" onclick="openSessions()">📋 Saved</button>
+    </div>
+  </div>
+
+  <div id="main">
+
+    <div id="title-row">
+      <input id="session-title" type="text" placeholder="Site visit / meeting name…" autocomplete="off" spellcheck="false">
+      <span id="date-lbl"></span>
+    </div>
+
+    <div id="status-bar">
+      <div id="sdot"></div>
+      <span id="stxt">Tap RECORD to start</span>
+      <span id="scnt"></span>
+    </div>
+
+    <div id="tx-wrap">
+      <div id="filter-bar">
+        <button class="filter-btn active" id="fb-all"      onclick="setFilter('all')">All</button>
+        <button class="filter-btn"        id="fb-starred"  onclick="setFilter('starred')">⭐ Starred</button>
+      </div>
+      <div id="tx-scroll"></div>
+      <div id="tx-empty">Transcript will appear here as you speak.<br>Tap ⭐ next to any line to flag it.</div>
+      <div id="interim-row" style="display:none">
+        <span id="interim-txt"></span>
+      </div>
+    </div>
+
+    <div id="controls">
+      <button id="rec-btn" onclick="toggleRecord()">
+        <div id="rdot"></div>
+        <span id="rec-lbl">RECORD</span>
+      </button>
+      <div id="timer">0:00</div>
+    </div>
+
+    <div id="action-row">
+      <button class="act-btn green" onclick="saveSession()">💾 Save</button>
+      <button class="act-btn blue"  onclick="copyTranscript()">📋 Copy</button>
+      <button class="act-btn"       onclick="newSession()">+ New</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Sessions modal -->
+<div id="sessions-modal" class="modal-overlay">
+  <div class="modal-sheet">
+    <div class="modal-hdr">
+      <h2>SAVED SESSIONS</h2>
+      <button class="modal-close" onclick="closeSessions()">×</button>
+    </div>
+    <div id="sessions-list"></div>
+  </div>
+</div>
+
+<!-- View session -->
+<div id="view-modal">
+  <div id="view-hdr">
+    <span id="view-title"></span>
+    <button class="modal-close" onclick="closeView()">×</button>
+  </div>
+  <div id="view-meta"></div>
+  <div id="view-filter">
+    <button class="filter-btn active" id="vfb-all"     onclick="setViewFilter('all')">All</button>
+    <button class="filter-btn"        id="vfb-starred" onclick="setViewFilter('starred')">⭐ Starred</button>
+  </div>
+  <div id="view-tx"></div>
+  <div id="view-actions">
+    <button class="copy-btn" onclick="copyViewTranscript()">📋 Copy All</button>
+    <button onclick="copyViewTranscript(true)">⭐ Copy Starred</button>
+    <button onclick="closeView()">Close</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ── Constants ───────────────────────────────────────────────────────────
+const STORE  = 'fieldnotes_sessions_v1';
+const ACTIVE = 'fieldnotes_active_v1';
+
+// ── State ───────────────────────────────────────────────────────────────
+let recog         = null;
+let isRecording   = false;
+let startEpoch    = null;   // Date.now() when current recording started
+let baseSeconds   = 0;      // seconds already elapsed before latest start
+let timerInterval = null;
+let segments      = [];     // { time, text, starred }
+let activeId      = null;
+let txFilter      = 'all';
+let viewId        = null;
+let viewFilter    = 'all';
+
+// ── Helpers ─────────────────────────────────────────────────────────────
+const fmt = s => Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+
+function elapsed() {
+  return baseSeconds + (startEpoch ? Math.floor((Date.now() - startEpoch) / 1000) : 0);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function setStatus(txt, state) {
+  document.getElementById('stxt').textContent = txt;
+  document.getElementById('sdot').className = state || '';
+}
+
+function updateCount() {
+  const n = segments.length;
+  const s = segments.filter(x => x.starred).length;
+  document.getElementById('scnt').textContent = n ? (n + ' lines' + (s ? ' · ⭐ ' + s : '')) : '';
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function safeSet(key, val) {
+  try { localStorage.setItem(key, val); }
+  catch(e) {
+    if (e.name === 'QuotaExceededError') showToast('Storage full — delete old sessions');
+  }
+}
+
+// ── Date label ──────────────────────────────────────────────────────────
+document.getElementById('date-lbl').textContent =
+  new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+
+// ── Session persistence ─────────────────────────────────────────────────
+function loadSessions() {
+  try { return JSON.parse(localStorage.getItem(STORE)) || []; }
+  catch { return []; }
+}
+function saveSessions(arr) { safeSet(STORE, JSON.stringify(arr)); }
+
+function autoSave() {
+  const title = document.getElementById('session-title').value.trim() || 'Untitled';
+  const snap = { id: activeId || Date.now(), title, date: new Date().toISOString(),
+                 duration: elapsed(), segments };
+  if (!activeId) activeId = snap.id;
+  safeSet(ACTIVE, JSON.stringify(snap));
+  updateCount();
+}
+
+function loadActive() {
+  try {
+    const d = JSON.parse(localStorage.getItem(ACTIVE));
+    if (!d) return;
+    activeId = d.id;
+    segments = d.segments || [];
+    baseSeconds = d.duration || 0;
+    document.getElementById('session-title').value = (d.title === 'Untitled') ? '' : d.title;
+    document.getElementById('timer').textContent = fmt(baseSeconds);
+    renderTx();
+    if (segments.length) setStatus('Resumed — ' + segments.length + ' lines', 'ok');
+  } catch {}
+}
+
+// ── Transcript render ───────────────────────────────────────────────────
+function makeSeg(seg, idx, clickable) {
+  const div = document.createElement('div');
+  div.className = 'seg' + (seg.starred ? ' starred' : '');
+  div.dataset.i = idx;
+
+  const t = document.createElement('span');
+  t.className = 'seg-t';
+  t.textContent = fmt(seg.time);
+
+  const tx = document.createElement('span');
+  tx.className = 'seg-txt';
+  tx.textContent = seg.text;
+
+  const star = document.createElement('button');
+  star.className = 'seg-star' + (seg.starred ? ' on' : '');
+  star.textContent = '⭐';
+  star.title = 'Flag important';
+  if (clickable) star.onclick = () => toggleStar(idx);
+
+  div.appendChild(t);
+  div.appendChild(tx);
+  div.appendChild(star);
+  return div;
+}
+
+function renderTx() {
+  const el = document.getElementById('tx-scroll');
+  const empty = document.getElementById('tx-empty');
+  el.innerHTML = '';
+  const list = txFilter === 'starred' ? segments.filter(s => s.starred) : segments;
+  empty.style.display = (segments.length === 0) ? '' : 'none';
+  list.forEach((seg, i) => {
+    const realIdx = txFilter === 'starred' ? segments.indexOf(seg) : i;
+    el.appendChild(makeSeg(seg, realIdx, true));
+  });
+  scrollDown();
+  updateCount();
+}
+
+function scrollDown() {
+  const el = document.getElementById('tx-scroll');
+  el.scrollTop = el.scrollHeight;
+}
+
+function toggleStar(idx) {
+  segments[idx].starred = !segments[idx].starred;
+  renderTx();
+  autoSave();
+}
+
+function setFilter(f) {
+  txFilter = f;
+  document.getElementById('fb-all').classList.toggle('active', f === 'all');
+  document.getElementById('fb-starred').classList.toggle('active', f === 'starred');
+  renderTx();
+}
+
+// ── Speech recognition ──────────────────────────────────────────────────
+function buildRecog() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return null;
+  const r = new SR();
+  r.continuous      = true;
+  r.interimResults  = true;
+  r.maxAlternatives = 1;
+  r.lang            = 'en-US';
+
+  r.onresult = evt => {
+    let interim = '';
+    for (let i = evt.resultIndex; i < evt.results.length; i++) {
+      const res = evt.results[i];
+      if (res.isFinal) {
+        const text = res[0].transcript.trim();
+        if (text) {
+          segments.push({ time: elapsed(), text, starred: false });
+          renderTx();
+          autoSave();
+        }
+      } else {
+        interim += res[0].transcript;
+      }
+    }
+    const row = document.getElementById('interim-row');
+    const itx = document.getElementById('interim-txt');
+    if (interim) {
+      row.style.display = '';
+      itx.textContent = interim;
+      scrollDown();
+    } else {
+      row.style.display = 'none';
+      itx.textContent = '';
+    }
+  };
+
+  r.onerror = evt => {
+    if (evt.error === 'not-allowed') {
+      setStatus('Microphone access denied', '');
+      stopRecord();
+    }
+    // 'no-speech' is normal — let onend restart
+  };
+
+  r.onend = () => {
+    document.getElementById('interim-row').style.display = 'none';
+    if (isRecording) { try { r.start(); } catch {} }
+  };
+
+  return r;
+}
+
+// ── Record controls ─────────────────────────────────────────────────────
+function toggleRecord() { isRecording ? stopRecord() : startRecord(); }
+
+function startRecord() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast('Speech recognition not available — use Chrome'); return; }
+
+  recog = buildRecog();
+  if (!recog) return;
+
+  isRecording  = true;
+  startEpoch   = Date.now();
+
+  timerInterval = setInterval(() => {
+    document.getElementById('timer').textContent = fmt(elapsed());
+  }, 1000);
+
+  try { recog.start(); } catch {}
+
+  document.getElementById('rec-btn').classList.add('on');
+  document.getElementById('rec-lbl').textContent = 'STOP';
+  document.getElementById('tx-empty').style.display = 'none';
+  setStatus('Recording — speak clearly', 'live');
+}
+
+function stopRecord() {
+  isRecording = false;
+  baseSeconds = elapsed();
+  startEpoch  = null;
+  clearInterval(timerInterval);
+
+  if (recog) { try { recog.stop(); } catch {} recog = null; }
+
+  document.getElementById('interim-row').style.display = 'none';
+  document.getElementById('interim-txt').textContent = '';
+  document.getElementById('rec-btn').classList.remove('on');
+  document.getElementById('rec-lbl').textContent = 'RECORD';
+
+  setStatus('Stopped · ' + fmt(baseSeconds) + ' recorded', 'ok');
+  if (segments.length) autoSave();
+}
+
+// ── Save / copy / new ──────────────────────────────────────────────────
+function saveSession() {
+  if (!segments.length) { showToast('Nothing to save yet'); return; }
+  const title = document.getElementById('session-title').value.trim() || 'Untitled';
+  const sessions = loadSessions();
+  const idx = sessions.findIndex(s => s.id === activeId);
+  const snap = { id: activeId || Date.now(), title, date: new Date().toISOString(),
+                 duration: elapsed(), segments: [...segments] };
+  if (!activeId) activeId = snap.id;
+  if (idx >= 0) sessions[idx] = snap; else sessions.unshift(snap);
+  saveSessions(sessions);
+  showToast('Saved: ' + title);
+}
+
+function txText(segs, title, date, starOnly) {
+  const rows = starOnly ? segs.filter(s => s.starred) : segs;
+  const lines = [];
+  if (title) lines.push(title);
+  if (date)  lines.push(new Date(date).toLocaleString());
+  if (starOnly) lines.push('(starred only)');
+  lines.push('');
+  rows.forEach(s => lines.push('[' + fmt(s.time) + '] ' + (s.starred ? '⭐ ' : '') + s.text));
+  return lines.join('\n');
+}
+
+function copyTranscript() {
+  if (!segments.length) { showToast('Nothing to copy'); return; }
+  const title = document.getElementById('session-title').value.trim() || 'FieldNotes';
+  navigator.clipboard.writeText(txText(segments, title, new Date().toISOString()))
+    .then(() => showToast('Copied!'));
+}
+
+function newSession() {
+  if (isRecording) stopRecord();
+  if (segments.length && !confirm('Start a new session? Save first if needed.')) return;
+  segments     = [];
+  activeId     = null;
+  baseSeconds  = 0;
+  startEpoch   = null;
+  document.getElementById('session-title').value = '';
+  document.getElementById('timer').textContent = '0:00';
+  renderTx();
+  setStatus('Tap RECORD to start', '');
+  localStorage.removeItem(ACTIVE);
+}
+
+// ── Sessions modal ──────────────────────────────────────────────────────
+function openSessions() {
+  renderSessionsList();
+  document.getElementById('sessions-modal').classList.add('open');
+}
+function closeSessions() { document.getElementById('sessions-modal').classList.remove('open'); }
+
+function renderSessionsList() {
+  const sessions = loadSessions();
+  const el = document.getElementById('sessions-list');
+  if (!sessions.length) {
+    el.innerHTML = '<div class="no-sessions">No saved sessions yet.<br>Hit Save after recording.</div>';
+    return;
+  }
+  el.innerHTML = '';
+  sessions.forEach(s => {
+    const starred = s.segments.filter(x => x.starred).length;
+    const div = document.createElement('div');
+    div.className = 'sitem';
+    div.innerHTML = `
+      <div class="sitem-title">${esc(s.title)}</div>
+      <div class="sitem-meta">${new Date(s.date).toLocaleString()} &middot; ${s.segments.length} lines${starred ? ' &middot; ⭐ ' + starred : ''} &middot; ${fmt(s.duration || 0)}</div>
+      <div class="sitem-actions">
+        <button onclick="openView(${s.id})">View</button>
+        <button onclick="loadToEditor(${s.id})">Load</button>
+        <button class="del-btn" onclick="deleteSession(${s.id})">Delete</button>
+      </div>`;
+    el.appendChild(div);
+  });
+}
+
+function deleteSession(id) {
+  if (!confirm('Delete this session?')) return;
+  saveSessions(loadSessions().filter(s => s.id !== id));
+  renderSessionsList();
+  showToast('Deleted');
+}
+
+function loadToEditor(id) {
+  if (isRecording) stopRecord();
+  const s = loadSessions().find(x => x.id === id);
+  if (!s) return;
+  if (segments.length && !confirm('Load this session? Current content will be replaced.')) return;
+  segments    = [...s.segments];
+  activeId    = s.id;
+  baseSeconds = s.duration || 0;
+  startEpoch  = null;
+  document.getElementById('session-title').value = s.title;
+  document.getElementById('timer').textContent = fmt(baseSeconds);
+  renderTx();
+  setStatus('Loaded: ' + s.title, 'ok');
+  closeSessions();
+}
+
+// ── View modal ──────────────────────────────────────────────────────────
+function openView(id) {
+  const s = loadSessions().find(x => x.id === id);
+  if (!s) return;
+  viewId = id;
+  viewFilter = 'all';
+  document.getElementById('view-title').textContent = s.title;
+  document.getElementById('view-meta').textContent =
+    new Date(s.date).toLocaleString() + ' · ' + fmt(s.duration || 0) + ' · ' + s.segments.length + ' lines';
+  renderViewTx(s);
+  document.getElementById('vfb-all').classList.add('active');
+  document.getElementById('vfb-starred').classList.remove('active');
+  document.getElementById('view-modal').classList.add('open');
+}
+
+function closeView() {
+  document.getElementById('view-modal').classList.remove('open');
+  viewId = null;
+}
+
+function renderViewTx(s) {
+  const el = document.getElementById('view-tx');
+  el.innerHTML = '';
+  const list = viewFilter === 'starred' ? s.segments.filter(x => x.starred) : s.segments;
+  list.forEach((seg, i) => el.appendChild(makeSeg(seg, i, false)));
+}
+
+function setViewFilter(f) {
+  viewFilter = f;
+  document.getElementById('vfb-all').classList.toggle('active', f === 'all');
+  document.getElementById('vfb-starred').classList.toggle('active', f === 'starred');
+  const s = loadSessions().find(x => x.id === viewId);
+  if (s) renderViewTx(s);
+}
+
+function copyViewTranscript(starOnly) {
+  const s = loadSessions().find(x => x.id === viewId);
+  if (!s) return;
+  const text = txText(s.segments, s.title, s.date, !!starOnly);
+  navigator.clipboard.writeText(text).then(() => showToast('Copied!'));
+}
+
+// ── Auto-save on title change ───────────────────────────────────────────
+document.getElementById('session-title').addEventListener('input', autoSave);
+
+// ── Init ────────────────────────────────────────────────────────────────
+loadActive();
+</script>
+</body>
+</html>

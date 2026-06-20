@@ -151,7 +151,7 @@
 
     #tx-empty {
       position: absolute;
-      inset: 50px 0 0;
+      inset: 42px 0 0;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -186,7 +186,7 @@
     }
     .seg-star.on { color: var(--amber); }
 
-    #interim-row { padding: 4px 14px 8px; }
+    #interim-row { padding: 4px 0 2px; }
     #interim-txt { font-size: 16px; color: var(--muted); font-style: italic; }
 
     /* Controls */
@@ -410,11 +410,12 @@
         <button class="filter-btn active" id="fb-all"      onclick="setFilter('all')">All</button>
         <button class="filter-btn"        id="fb-starred"  onclick="setFilter('starred')">⭐ Starred</button>
       </div>
-      <div id="tx-scroll"></div>
-      <div id="tx-empty">Transcript will appear here as you speak.<br>Tap ⭐ next to any line to flag it.</div>
-      <div id="interim-row" style="display:none">
-        <span id="interim-txt"></span>
+      <div id="tx-scroll">
+        <div id="interim-row" style="display:none">
+          <span id="interim-txt"></span>
+        </div>
       </div>
+      <div id="tx-empty">Transcript will appear here as you speak.<br>Tap ⭐ next to any line to flag it.</div>
     </div>
 
     <div id="controls">
@@ -585,6 +586,7 @@ function makeSeg(seg, idx, clickable) {
 function renderTx() {
   const el = document.getElementById('tx-scroll');
   const empty = document.getElementById('tx-empty');
+  const interimRow = document.getElementById('interim-row');
   el.innerHTML = '';
   const list = txFilter === 'starred' ? segments.filter(s => s.starred) : segments;
   empty.style.display = (segments.length === 0) ? '' : 'none';
@@ -592,6 +594,7 @@ function renderTx() {
     const realIdx = txFilter === 'starred' ? segments.indexOf(seg) : i;
     el.appendChild(makeSeg(seg, realIdx, true));
   });
+  el.appendChild(interimRow); // keep interim row pinned to bottom
   scrollDown();
   updateCount();
 }
@@ -653,7 +656,11 @@ function buildRecog() {
 
   r.onerror = evt => {
     if (evt.error === 'not-allowed') {
-      setStatus('Microphone access denied', '');
+      setStatus('Mic blocked — check browser permissions', '');
+      showToast('Mic access denied — tap the 🔒 icon in your browser');
+      stopRecord();
+    } else if (evt.error === 'network') {
+      setStatus('Network error — speech needs internet', '');
       stopRecord();
     }
     // 'no-speech' is normal — let onend restart
@@ -672,7 +679,12 @@ function toggleRecord() { isRecording ? stopRecord() : startRecord(); }
 
 function startRecord() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { showToast('Speech recognition not available — use Chrome'); return; }
+  if (!SR) { showToast('Speech recognition not available — use Chrome on Netlify'); return; }
+  if (!window.isSecureContext) {
+    showToast('Open via HTTPS (Netlify) — mic blocked on file://');
+    setStatus('Open via Netlify URL — HTTPS required', '');
+    return;
+  }
 
   recog = buildRecog();
   if (!recog) return;
@@ -734,11 +746,24 @@ function txText(segs, title, date, starOnly) {
   return lines.join('\n');
 }
 
+function clipCopy(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text).then(() => showToast('Copied!'));
+  }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); showToast('Copied!'); }
+  catch { showToast('Copy failed — select text manually'); }
+  document.body.removeChild(ta);
+}
+
 function copyTranscript() {
   if (!segments.length) { showToast('Nothing to copy'); return; }
   const title = document.getElementById('session-title').value.trim() || 'FieldNotes';
-  navigator.clipboard.writeText(txText(segments, title, new Date().toISOString()))
-    .then(() => showToast('Copied!'));
+  clipCopy(txText(segments, title, new Date().toISOString()));
 }
 
 function newSession() {
@@ -847,8 +872,7 @@ function setViewFilter(f) {
 function copyViewTranscript(starOnly) {
   const s = loadSessions().find(x => x.id === viewId);
   if (!s) return;
-  const text = txText(s.segments, s.title, s.date, !!starOnly);
-  navigator.clipboard.writeText(text).then(() => showToast('Copied!'));
+  clipCopy(txText(s.segments, s.title, s.date, !!starOnly));
 }
 
 // ── Auto-save on title change ───────────────────────────────────────────

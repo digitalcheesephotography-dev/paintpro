@@ -3090,10 +3090,16 @@ function syncRatesUI() {
   const isExt = estimatorMode === 'exterior';
   const r = isExt ? extRates : rates;
   const w = document.getElementById('rate-walls'); if (!w) return;
-  w.value = r.walls;
-  document.getElementById('rate-ceiling').value = r.ceiling;
-  document.getElementById('rate-floor').value   = r.floor;
-  document.getElementById('rate-trim').value    = r.trim;
+  // Skip writing to whichever input the user is currently typing in — otherwise
+  // parseFloat("3.") = 3 gets written back mid-keystroke, eating the decimal.
+  const focused = document.activeElement;
+  if (focused !== w)                                   w.value = r.walls;
+  const rc = document.getElementById('rate-ceiling');
+  if (focused !== rc)                                  rc.value = r.ceiling;
+  const rf = document.getElementById('rate-floor');
+  if (focused !== rf)                                  rf.value = r.floor;
+  const rt = document.getElementById('rate-trim');
+  if (focused !== rt)                                  rt.value = r.trim;
   // Update surface labels to match current mode
   const lw = document.getElementById('rate-label-walls');
   const lc = document.getElementById('rate-label-ceiling');

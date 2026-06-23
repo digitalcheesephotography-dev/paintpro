@@ -431,13 +431,13 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
         <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.4">Set your default $/sf here (trim is $/linear ft). These apply to every room unless you turn on custom rates inside a room.</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <label class="field"><span id="rate-label-walls">Walls $/sf</span>
-            <input type="number" id="rate-walls" min="0" step="any" inputmode="decimal" oninput="updateGlobalRate('walls',this.value)"/></label>
+            <input type="text" inputmode="decimal" id="rate-walls" oninput="updateGlobalRate('walls',this.value)"/></label>
           <label class="field"><span id="rate-label-ceiling">Ceiling $/sf</span>
-            <input type="number" id="rate-ceiling" min="0" step="any" inputmode="decimal" oninput="updateGlobalRate('ceiling',this.value)"/></label>
+            <input type="text" inputmode="decimal" id="rate-ceiling" oninput="updateGlobalRate('ceiling',this.value)"/></label>
           <label class="field"><span id="rate-label-floor">Floor $/sf</span>
-            <input type="number" id="rate-floor" min="0" step="any" inputmode="decimal" oninput="updateGlobalRate('floor',this.value)"/></label>
+            <input type="text" inputmode="decimal" id="rate-floor" oninput="updateGlobalRate('floor',this.value)"/></label>
           <label class="field"><span>Trim $/lf</span>
-            <input type="number" id="rate-trim" min="0" step="any" inputmode="decimal" oninput="updateGlobalRate('trim',this.value)"/></label>
+            <input type="text" inputmode="decimal" id="rate-trim" oninput="updateGlobalRate('trim',this.value)"/></label>
         </div>
       </div>
     </div>
@@ -2566,13 +2566,13 @@ function renderRoom(room, idx) {
         </label>
         <div id="${room.id}_rategrid" style="display:${room.rates?'grid':'none'};grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
           <label class="field"><span>${isExt ? 'Siding $/sf' : 'Walls $/sf'}</span>
-            <input type="number" id="${room.id}_rate_walls" value="${roomRates.walls}" min="0" step="any" inputmode="decimal" oninput="updateRoomRate('${room.id}','walls',this.value)"/></label>
+            <input type="text" inputmode="decimal" id="${room.id}_rate_walls" value="${roomRates.walls}" oninput="updateRoomRate('${room.id}','walls',this.value)"/></label>
           <label class="field"><span>${isExt ? 'Soffit $/sf' : 'Ceiling $/sf'}</span>
-            <input type="number" id="${room.id}_rate_ceiling" value="${roomRates.ceiling}" min="0" step="any" inputmode="decimal" oninput="updateRoomRate('${room.id}','ceiling',this.value)"/></label>
+            <input type="text" inputmode="decimal" id="${room.id}_rate_ceiling" value="${roomRates.ceiling}" oninput="updateRoomRate('${room.id}','ceiling',this.value)"/></label>
           <label class="field"><span>${isExt ? 'Deck $/sf' : 'Floor $/sf'}</span>
-            <input type="number" id="${room.id}_rate_floor" value="${roomRates.floor}" min="0" step="any" inputmode="decimal" oninput="updateRoomRate('${room.id}','floor',this.value)"/></label>
+            <input type="text" inputmode="decimal" id="${room.id}_rate_floor" value="${roomRates.floor}" oninput="updateRoomRate('${room.id}','floor',this.value)"/></label>
           <label class="field"><span>Trim $/lf</span>
-            <input type="number" id="${room.id}_rate_trim" value="${roomRates.trim}" min="0" step="any" inputmode="decimal" oninput="updateRoomRate('${room.id}','trim',this.value)"/></label>
+            <input type="text" inputmode="decimal" id="${room.id}_rate_trim" value="${roomRates.trim}" oninput="updateRoomRate('${room.id}','trim',this.value)"/></label>
         </div>
       </div>
 

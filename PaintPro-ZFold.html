@@ -2367,12 +2367,12 @@ function renderRoom(room, idx) {
     delete room.deckL; delete room.deckW; delete room.deck;
   }
 
-  // Dimension section: interior = floor L×W; exterior = soffit sqft + deck sections
+  // Dimension section: interior = floor L×W; exterior = soffit (always visible) + deck sections
   const dimSection = isExt ? `
-      <!-- Exterior: Soffit and Deck area inputs (shown when surface is toggled on) -->
-      <div id="${room.id}_soffit_row" style="display:${room.surfaces.ceiling?'':'none'};margin-bottom:12px">
+      <!-- Exterior: Soffit always visible; Deck shown when floor surface toggled on -->
+      <div id="${room.id}_soffit_row" style="margin-bottom:12px">
         <div class="walls-header">
-          <span class="walls-label">Porch Ceiling sections (L × W)</span>
+          <span class="walls-label">Soffit / Overhang (L × W)</span>
           <span class="walls-perimeter" id="${room.id}_soffit_total"></span>
         </div>
         <div id="${room.id}_soffit_sections"></div>
@@ -2439,7 +2439,7 @@ function renderRoom(room, idx) {
       <!-- Surface toggles -->
       <div class="surface-row">
         <button class="surf-btn${room.surfaces.walls?' on':''}" id="${room.id}_sw" onclick="toggleSurf('${room.id}','walls')" aria-label="Toggle ${s1}">${s1}</button>
-        <button class="surf-btn${room.surfaces.ceiling?' on':''}" id="${room.id}_sc" onclick="toggleSurf('${room.id}','ceiling')" aria-label="Toggle ${s2}">${s2}</button>
+        ${isExt ? '' : `<button class="surf-btn${room.surfaces.ceiling?' on':''}" id="${room.id}_sc" onclick="toggleSurf('${room.id}','ceiling')" aria-label="Toggle Ceiling">Ceiling</button>`}
         <button class="surf-btn${room.surfaces.floor?' on':''}" id="${room.id}_sf" onclick="toggleSurf('${room.id}','floor')" aria-label="Toggle ${s3}">${s3}</button>
         <button class="surf-btn${room.surfaces.trim?' on':''}" id="${room.id}_st" onclick="toggleSurf('${room.id}','trim')" aria-label="Toggle trim">${s4}</button>
       </div>
@@ -2890,11 +2890,8 @@ function toggleSurf(id, surf) {
   const btnId = surf==='floor' ? `${id}_sf` : `${id}_s${surf[0]}`;
   document.getElementById(btnId)?.classList.toggle('on', r.surfaces[surf]);
   if (r.mode === 'exterior') {
-    // Show/hide soffit and deck rows independently
-    if (surf === 'ceiling') {
-      const el = document.getElementById(`${id}_soffit_row`);
-      if (el) el.style.display = r.surfaces.ceiling ? '' : 'none';
-    } else if (surf === 'floor') {
+    // Soffit row is always visible — only deck row is toggled by the floor surface button
+    if (surf === 'floor') {
       const el = document.getElementById(`${id}_deck_row`);
       if (el) el.style.display = r.surfaces.floor ? '' : 'none';
     }
@@ -2928,20 +2925,20 @@ function calcExt(room) {
   const trimLF   = perimeter;
 
   const p     = PRODUCTS.find(x=>x.name===room.product) || PRODUCTS[4] || PRODUCTS[0];
-  const gSid  = room.surfaces.walls   ? Math.ceil(sidingSF*c/p.cov)  : 0;
-  const gSof  = room.surfaces.ceiling ? Math.ceil(soffitSF*c/p.cov)  : 0;
-  const gDck  = room.surfaces.floor   ? Math.ceil(deckSF*c/p.cov)    : 0;
-  const gTrim = room.surfaces.trim    ? Math.ceil(trimLF*c/p.cov)    : 0;
+  const gSid  = room.surfaces.walls ? Math.ceil(sidingSF*c/p.cov) : 0;
+  const gSof  = soffitSF > 0       ? Math.ceil(soffitSF*c/p.cov) : 0; // always included when measured
+  const gDck  = room.surfaces.floor ? Math.ceil(deckSF*c/p.cov)  : 0;
+  const gTrim = room.surfaces.trim  ? Math.ceil(trimLF*c/p.cov)  : 0;
   const gal   = gSid + gSof + gDck + gTrim;
 
   const r   = room.rates || extRates;
   const mat = gal * p.price * MARKUP;
-  const lab = (room.surfaces.walls   ? sidingSF*r.walls*c   : 0)
-            + (room.surfaces.ceiling ? soffitSF*r.ceiling*c : 0)
-            + (room.surfaces.floor   ? deckSF*r.floor*c     : 0)
-            + (room.surfaces.trim    ? trimLF*r.trim*c      : 0);
+  const lab = (room.surfaces.walls ? sidingSF*r.walls*c   : 0)
+            + (soffitSF > 0        ? soffitSF*r.ceiling*c : 0) // soffit always billed when measured
+            + (room.surfaces.floor ? deckSF*r.floor*c     : 0)
+            + (room.surfaces.trim  ? trimLF*r.trim*c      : 0);
 
-  const totalSF = (room.surfaces.walls?sidingSF:0)+(room.surfaces.ceiling?soffitSF:0)+(room.surfaces.floor?deckSF:0);
+  const totalSF = (room.surfaces.walls?sidingSF:0)+soffitSF+(room.surfaces.floor?deckSF:0);
   const valid   = sidingSF>0 || soffitSF>0 || deckSF>0;
   return {wallSF:sidingSF, floorSF:soffitSF+deckSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, valid};
 }

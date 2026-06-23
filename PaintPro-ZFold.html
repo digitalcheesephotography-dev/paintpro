@@ -4261,14 +4261,15 @@ function aiVideoPrompt(isExt, frameCount) {
   return isExt
     ? `You are a painting estimator. These ${frameCount} images are frames from a video of ONE SIDE of a house exterior. Measure ONLY what is visible in these frames. Do NOT estimate other sides of the house.
 Respond with ONLY valid JSON — no explanation, no markdown:
-{"walls":[w1,w2,...],"height":h,"ceiling_sections":[[l,w]],"deck_sections":[[l,w]],"doors":d,"windows":win,"surfaceNotes":""}
-Scale anchors: exterior door=6.8 ft tall/3 ft wide; window=4 ft tall/3 ft wide; one story ~9-10 ft; two story ~18-20 ft; vinyl siding lap=4 inches.
+{"walls":[w1,w2,...],"height":h,"ceiling_sections":[[l,w]],"deck_sections":[[l,w]],"doors":d,"windows":win,"shutters":n,"surfaceNotes":""}
+Scale anchors: exterior door=6.8 ft tall/3 ft wide; window=4 ft tall/3 ft wide; one story ~9-10 ft; two story ~18-20 ft; vinyl siding lap=4 inches; shutter panel ~1.5 ft wide/4 ft tall.
 - walls: widths of each visible wall section (usually 1 number; more if bump-outs or separate sections visible)
 - height: wall height in feet
-- ceiling_sections: each porch/soffit ceiling rectangle visible as [length, width] — use [] if none visible
-- deck_sections: each deck/porch floor rectangle visible as [length, width] — use [] if none visible
+- ceiling_sections: each porch/soffit/overhang ceiling rectangle visible as [length, width] in feet — use [] if none visible
+- deck_sections: each deck/porch floor rectangle visible as [length, width] in feet — use [] if none visible
 - doors: number of doors visible in these frames only
 - windows: number of windows visible in these frames only
+- shutters: number of individual shutter panels visible (2 per window that has shutters)
 - surfaceNotes: any surface issues spotted (peeling, rot, chalking, moisture) — empty string if none`
     : `You are a painting estimator. These ${frameCount} images are frames from a video walkthrough of an interior room. Analyze ALL frames together — each frame shows a different wall or angle.
 Respond with ONLY valid JSON — no explanation, no markdown:
@@ -4410,7 +4411,21 @@ function applyAIRoomResult(roomId, json, toastPrefix) {
     const noteEl = document.getElementById(`${roomId}_surface_note`);
     if (noteEl) { noteEl.textContent = json.surfaceNotes; noteEl.parentElement.style.display = ''; }
   }
+  // Accumulate doors, windows, shutters into job totals
+  const addJobCount = (field, inputId, n) => {
+    if (!(n > 0)) return;
+    const cur = parseInt(job[field]) || 0;
+    const next = cur + parseInt(n);
+    job[field] = String(next);
+    const el = document.getElementById(inputId);
+    if (el) el.value = next;
+    filled.push(`+${n} ${field.replace('Count','').replace('shutter','shutter').toLowerCase()}${n>1?'s':''}`);
+  };
+  addJobCount('doorCount',    'job-door-count',    json.doors);
+  addJobCount('winCount',     'job-win-count',     json.windows);
+  addJobCount('shutterCount', 'job-shutter-count', json.shutters);
   recalcRoom(roomId);
+  recalcAll();
   markDirty();
   const noteHint = json.surfaceNotes ? ' — ⚠️ surface issue noted' : '';
   showToast(`${toastPrefix} ${filled.join(', ')}${noteHint} — review and adjust`);
@@ -4481,14 +4496,15 @@ function aiMultiPhotoPrompt(isExt, count) {
   return isExt
     ? `You are a painting estimator. These ${count} photos show ONE SIDE of a house exterior — different angles or sections of the same side. Measure ONLY what is visible in these photos. Do NOT estimate other sides of the house.
 Respond with ONLY valid JSON — no explanation, no markdown:
-{"walls":[w1,w2,...],"height":h,"ceiling_sections":[[l,w]],"deck_sections":[[l,w]],"doors":d,"windows":win,"surfaceNotes":""}
-Scale anchors: exterior door=6.8 ft tall/3 ft wide; window=4 ft tall/3 ft wide; one story ~9-10 ft; vinyl siding lap=4 inches.
-- walls: widths of each visible wall section in these photos (usually 1 number for a plain side; more if there are bump-outs or separate sections)
+{"walls":[w1,w2,...],"height":h,"ceiling_sections":[[l,w]],"deck_sections":[[l,w]],"doors":d,"windows":win,"shutters":n,"surfaceNotes":""}
+Scale anchors: exterior door=6.8 ft tall/3 ft wide; window=4 ft tall/3 ft wide; one story ~9-10 ft; vinyl siding lap=4 inches; shutter panel ~1.5 ft wide/4 ft tall.
+- walls: widths of each visible wall section in these photos (usually 1 number for a plain side; more if bump-outs or separate sections)
 - height: wall height in feet
-- ceiling_sections: each porch/soffit ceiling rectangle visible as [length, width] — use [] if none visible
-- deck_sections: each deck/porch floor rectangle visible as [length, width] — use [] if none visible
+- ceiling_sections: each porch/soffit/overhang ceiling rectangle visible as [length, width] in feet — use [] if none visible
+- deck_sections: each deck/porch floor rectangle visible as [length, width] in feet — use [] if none visible
 - doors: number of doors visible in these photos only
 - windows: number of windows visible in these photos only
+- shutters: number of individual shutter panels visible (2 per window that has shutters)
 - surfaceNotes: any surface issues (peeling, rot, chalking, moisture) — empty string if none`
     : `You are a painting estimator. These ${count} photos show different walls and angles of the same interior room. Analyze ALL photos together to estimate dimensions in feet.
 Respond with ONLY valid JSON — no explanation, no markdown:
@@ -4673,8 +4689,9 @@ function aiResultSummary(json, isExt) {
     if (json.floorLength) parts.push(`length ${json.floorLength}'`);
     if (json.floorWidth)  parts.push(`width ${json.floorWidth}'`);
   }
-  if (json.doors)   parts.push(`${json.doors} door${json.doors>1?'s':''}`);
-  if (json.windows) parts.push(`${json.windows} window${json.windows>1?'s':''}`);
+  if (json.doors)    parts.push(`${json.doors} door${json.doors>1?'s':''}`);
+  if (json.windows)  parts.push(`${json.windows} window${json.windows>1?'s':''}`);
+  if (json.shutters) parts.push(`${json.shutters} shutter panel${json.shutters>1?'s':''}`);
   const surfNote = json.surfaceNotes ? ` ⚠️ Surface issue: ${json.surfaceNotes}` : '';
   return `I found: ${parts.join(', ')}.${surfNote} Ask me anything or correct any values.`;
 }
@@ -4744,7 +4761,7 @@ async function sendAIChat(roomId) {
 Current measurements: ${buildRoomSummary(room)}
 Help the user with corrections, questions, and details. Be concise and practical.
 If the user provides updated measurements or describes changes, apply them and end your response with this JSON on its own line (no markdown):
-{"update":{"walls":[w1,w2,...],"height":h,"floorLength":l,"floorWidth":w,"ceiling_sections":[[l,w]],"deck_sections":[[l,w]],"doors":n,"windows":n,"surfaceNotes":"note"}}
+{"update":{"walls":[w1,w2,...],"height":h,"floorLength":l,"floorWidth":w,"ceiling_sections":[[l,w]],"deck_sections":[[l,w]],"doors":n,"windows":n,"shutters":n,"surfaceNotes":"note"}}
 Only include fields that changed. Omit the update line entirely if nothing changed.`;
 
   // Build API conversation — Anthropic requires messages to start with user role

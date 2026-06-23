@@ -126,8 +126,8 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .deck-sec-num{font-size:12px;font-weight:700;color:var(--muted);min-width:20px}
 .deck-sec-input{width:62px;height:40px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:14px;text-align:center;outline:none;padding:0 4px}
 .deck-sec-sf{font-size:12px;color:var(--blue);font-weight:700;min-width:52px;text-align:right}
-.deck-shoot,.soffit-shoot{background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:14px;cursor:pointer;padding:0 6px;flex-shrink:0;height:36px;transition:all .15s}
-.deck-shoot.active,.soffit-shoot.active{border-color:var(--blue);color:var(--blue);background:#162535}
+.deck-shoot,.soffit-shoot,.porch-shoot{background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:14px;cursor:pointer;padding:0 6px;flex-shrink:0;height:36px;transition:all .15s}
+.deck-shoot.active,.soffit-shoot.active,.porch-shoot.active{border-color:var(--blue);color:var(--blue);background:#162535}
 .wall-remove{background:transparent;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:0 4px;flex-shrink:0;line-height:1}
 .next-room-btn{width:100%;height:54px;background:var(--green);border:none;border-radius:10px;color:#fff;font-family:var(--head);font-size:18px;font-weight:700;letter-spacing:2px;cursor:pointer;margin-top:10px;margin-bottom:4px;transition:filter .15s}
 .next-room-btn:hover{filter:brightness(1.1)}
@@ -2124,6 +2124,30 @@ function applyMeasurement(feet, disp) {
     return;
   }
 
+  // Armed porch ceiling shot
+  if (porchShotTarget) {
+    const proom = rooms.find(r=>r.id===porchShotTarget.roomId);
+    const sec   = proom?.porchCeilSections?.find(s=>s.id===porchShotTarget.sectionId);
+    if (sec) {
+      sec[porchShotTarget.field] = feet.toFixed(2);
+      const el = document.getElementById(`${sec.id}_${porchShotTarget.field}`);
+      if (el) { el.value = sec[porchShotTarget.field]; el.classList.remove('bt-flash'); void el.offsetWidth; el.classList.add('bt-flash'); setTimeout(()=>el.classList.remove('bt-flash'),900); }
+      renderPorchSections(proom.id);
+      recalcRoom(proom.id);
+      markDirty();
+      showToast(`${disp} → Porch Ceil ${porchShotTarget.field==='l'?'Length':'Width'} · ${proom.name}`);
+      if (porchShotTarget.field === 'l') {
+        porchShotTarget = {...porchShotTarget, field:'w'};
+        document.getElementById(`${sec.id}_w_shoot`)?.classList.add('active');
+        showToast('📐 Now shoot Porch Ceiling Width');
+      } else {
+        document.querySelectorAll('.porch-shoot.active').forEach(b=>b.classList.remove('active'));
+        porchShotTarget = null;
+      }
+    } else { porchShotTarget = null; }
+    return;
+  }
+
   // Armed soffit-section shot
   if (soffitShotTarget) {
     const sroom = rooms.find(r=>r.id===soffitShotTarget.roomId);
@@ -2290,7 +2314,7 @@ function addRoom() {
   const name  = isExt ? 'Side '+roomCount : 'Room '+roomCount;
   const extProduct = PRODUCTS.find(p => p.name.includes('Ext'))?.name || PRODUCTS[0].name;
   const room  = isExt
-    ? { id, name, walls:[], height:'9', soffitSections:[], deckSections:[],
+    ? { id, name, walls:[], height:'9', soffitSections:[], porchCeilSections:[], deckSections:[],
         surfaces:{walls:true, ceiling:false, trim:false, floor:false},
         product: extProduct, coats:'2', rates:null, open:true, mode:'exterior' }
     : { id, name, walls:[], height:'8', floorLength:'', floorWidth:'',
@@ -2299,6 +2323,7 @@ function addRoom() {
   rooms.push(room);
   renderRoom(room, rooms.length-1);
   renderSoffitSections(room.id);
+  renderPorchSections(room.id);
   renderDeckSections(room.id);
   renderAIPhotoStrip(room.id);
   refreshRoomSelect();
@@ -2378,6 +2403,14 @@ function renderRoom(room, idx) {
         <div id="${room.id}_soffit_sections"></div>
         <button class="add-wall-btn" onclick="addSoffitSection('${room.id}')">+ Add Section</button>
       </div>
+      <div id="${room.id}_porch_ceil_row" style="display:${room.surfaces.ceiling?'':'none'};margin-bottom:12px">
+        <div class="walls-header">
+          <span class="walls-label">Porch Ceiling (L × W)</span>
+          <span class="walls-perimeter" id="${room.id}_porch_ceil_total"></span>
+        </div>
+        <div id="${room.id}_porch_ceil_sections"></div>
+        <button class="add-wall-btn" onclick="addPorchSection('${room.id}')">+ Add Section</button>
+      </div>
       <div id="${room.id}_deck_row" style="display:${room.surfaces.floor?'':'none'};margin-bottom:12px">
         <div class="walls-header">
           <span class="walls-label">Deck / Porch sections (L × W)</span>
@@ -2439,7 +2472,7 @@ function renderRoom(room, idx) {
       <!-- Surface toggles -->
       <div class="surface-row">
         <button class="surf-btn${room.surfaces.walls?' on':''}" id="${room.id}_sw" onclick="toggleSurf('${room.id}','walls')" aria-label="Toggle ${s1}">${s1}</button>
-        ${isExt ? '' : `<button class="surf-btn${room.surfaces.ceiling?' on':''}" id="${room.id}_sc" onclick="toggleSurf('${room.id}','ceiling')" aria-label="Toggle Ceiling">Ceiling</button>`}
+        <button class="surf-btn${room.surfaces.ceiling?' on':''}" id="${room.id}_sc" onclick="toggleSurf('${room.id}','ceiling')" aria-label="Toggle ${isExt?'Porch Ceiling':'Ceiling'}">${isExt?'Porch Ceil':'Ceiling'}</button>
         <button class="surf-btn${room.surfaces.floor?' on':''}" id="${room.id}_sf" onclick="toggleSurf('${room.id}','floor')" aria-label="Toggle ${s3}">${s3}</button>
         <button class="surf-btn${room.surfaces.trim?' on':''}" id="${room.id}_st" onclick="toggleSurf('${room.id}','trim')" aria-label="Toggle trim">${s4}</button>
       </div>
@@ -2569,8 +2602,9 @@ function removeRoom(id) {
 let wallCount = 0;
 let reshootTarget = null; // {roomId, wallId} when rehooting a specific wall
 let wallHtTarget  = null; // {roomId, wallId} when the next laser shot is a wall's own height
-let deckShotTarget   = null; // {roomId, sectionId, field:'l'|'w'} for deck section shots
-let soffitShotTarget = null; // {roomId, sectionId, field:'l'|'w'} for soffit section shots
+let deckShotTarget   = null;
+let soffitShotTarget = null;
+let porchShotTarget  = null; // {roomId, sectionId, field:'l'|'w'} for porch ceiling section shots
 const aiPhotoBatch = {}; // roomId → [{data: base64, type: 'image/jpeg'}]
 
 function addWall(roomId, ft='', ht='') {
@@ -2595,7 +2629,8 @@ function setReshootTarget(roomId, wallId) {
   wallHtTarget = null;
   deckShotTarget = null;
   soffitShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active').forEach(b=>b.classList.remove('active'));
+  porchShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active').forEach(b=>b.classList.remove('active'));
   if(reshootTarget && reshootTarget.roomId===roomId && reshootTarget.wallId===wallId) {
     // Toggle off
     reshootTarget = null;
@@ -2619,7 +2654,8 @@ function armWallHt(roomId, wallId) {
   reshootTarget = null;
   deckShotTarget = null;
   soffitShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active').forEach(b=>b.classList.remove('active'));
+  porchShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active').forEach(b=>b.classList.remove('active'));
   if (wallHtTarget && wallHtTarget.roomId === roomId && wallHtTarget.wallId === wallId) {
     wallHtTarget = null; // toggle off
     showToast('Height shot cancelled — back to Next Wall', 'warn');
@@ -2638,7 +2674,8 @@ function armDimShot(roomId, field) {
   wallHtTarget = null;
   deckShotTarget = null;
   soffitShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active').forEach(b=>b.classList.remove('active'));
+  porchShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active').forEach(b=>b.classList.remove('active'));
   const idx = rooms.findIndex(r=>r.id===roomId);
   if (idx < 0) return;
   // Route the next shot to this room + field
@@ -2784,7 +2821,7 @@ function armSoffitShot(roomId, sectionId, field) {
   reshootTarget = null;
   wallHtTarget = null;
   deckShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active').forEach(b=>b.classList.remove('active'));
   if (soffitShotTarget && soffitShotTarget.sectionId===sectionId && soffitShotTarget.field===field) {
     soffitShotTarget = null;
     showToast('Ceiling shot cancelled', 'warn');
@@ -2795,11 +2832,70 @@ function armSoffitShot(roomId, sectionId, field) {
   showToast(`📐 Shoot ceiling ${field==='l'?'Length':'Width'}`);
 }
 
+// ── Porch Ceiling Sections ────────────────────────
+let _porchSecCount = 0;
+function addPorchSection(roomId, l='', w='') {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  if (!room.porchCeilSections) room.porchCeilSections = [];
+  room.porchCeilSections.push({id:'pcs_'+(++_porchSecCount), l:l.toString(), w:w.toString()});
+  renderPorchSections(roomId); recalcRoom(roomId); markDirty();
+}
+function removePorchSection(roomId, sectionId) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  room.porchCeilSections = (room.porchCeilSections||[]).filter(s=>s.id!==sectionId);
+  renderPorchSections(roomId); recalcRoom(roomId); markDirty();
+}
+function updatePorchSection(roomId, sectionId, field, val) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  const sec = (room.porchCeilSections||[]).find(s=>s.id===sectionId); if(!sec) return;
+  sec[field] = val;
+  renderPorchSections(roomId); recalcRoom(roomId); markDirty();
+}
+function renderPorchSections(roomId) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  const container = document.getElementById(`${roomId}_porch_ceil_sections`); if(!container) return;
+  const sections = room.porchCeilSections||[];
+  container.innerHTML = '';
+  let total = 0;
+  sections.forEach((sec, i) => {
+    const l = parseFloat(sec.l)||0, w = parseFloat(sec.w)||0;
+    const sf = l*w; total += sf;
+    const row = document.createElement('div');
+    row.className = 'deck-sec-row';
+    row.innerHTML = `
+      <span class="deck-sec-num">#${i+1}</span>
+      <div style="display:flex;align-items:center;gap:4px;flex:1">
+        <input type="number" id="${sec.id}_l" value="${sec.l||''}" min="0" step="0.01" inputmode="decimal"
+          placeholder="L ft" oninput="updatePorchSection('${roomId}','${sec.id}','l',this.value)" class="deck-sec-input"/>
+        <button class="porch-shoot" id="${sec.id}_l_shoot" onclick="armPorchShot('${roomId}','${sec.id}','l')" aria-label="Shoot length">📐</button>
+        <span style="color:var(--muted);font-size:12px">×</span>
+        <input type="number" id="${sec.id}_w" value="${sec.w||''}" min="0" step="0.01" inputmode="decimal"
+          placeholder="W ft" oninput="updatePorchSection('${roomId}','${sec.id}','w',this.value)" class="deck-sec-input"/>
+        <button class="porch-shoot" id="${sec.id}_w_shoot" onclick="armPorchShot('${roomId}','${sec.id}','w')" aria-label="Shoot width">📐</button>
+        <span class="deck-sec-sf">${sf>0?sf.toFixed(1)+' sf':''}</span>
+      </div>
+      <button class="wall-remove" onclick="removePorchSection('${roomId}','${sec.id}')" aria-label="Remove section">✕</button>`;
+    container.appendChild(row);
+  });
+  const totEl = document.getElementById(`${roomId}_porch_ceil_total`);
+  if (totEl) totEl.textContent = total>0 ? `${total.toFixed(0)} sf total` : '';
+}
+function armPorchShot(roomId, sectionId, field) {
+  reshootTarget = null; wallHtTarget = null; deckShotTarget = null; soffitShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active').forEach(b=>b.classList.remove('active'));
+  if (porchShotTarget && porchShotTarget.sectionId===sectionId && porchShotTarget.field===field) {
+    porchShotTarget = null; showToast('Porch ceiling shot cancelled', 'warn'); return;
+  }
+  porchShotTarget = {roomId, sectionId, field};
+  document.getElementById(`${sectionId}_${field}_shoot`)?.classList.add('active');
+  showToast(`📐 Shoot porch ceiling ${field==='l'?'Length':'Width'}`);
+}
+
 function armDeckShot(roomId, sectionId, field) {
   reshootTarget = null;
   wallHtTarget = null;
   soffitShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active').forEach(b=>b.classList.remove('active'));
   if (deckShotTarget && deckShotTarget.sectionId===sectionId && deckShotTarget.field===field) {
     deckShotTarget = null;
     showToast('Deck shot cancelled', 'warn');
@@ -2890,8 +2986,10 @@ function toggleSurf(id, surf) {
   const btnId = surf==='floor' ? `${id}_sf` : `${id}_s${surf[0]}`;
   document.getElementById(btnId)?.classList.toggle('on', r.surfaces[surf]);
   if (r.mode === 'exterior') {
-    // Soffit row is always visible — only deck row is toggled by the floor surface button
-    if (surf === 'floor') {
+    if (surf === 'ceiling') {
+      const el = document.getElementById(`${id}_porch_ceil_row`);
+      if (el) el.style.display = r.surfaces.ceiling ? '' : 'none';
+    } else if (surf === 'floor') {
       const el = document.getElementById(`${id}_deck_row`);
       if (el) el.style.display = r.surfaces.floor ? '' : 'none';
     }
@@ -2917,8 +3015,9 @@ function refreshRoomSelect() {
 function calcExt(room) {
   const perimeter = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0), 0);
   const h        = parseFloat(room.height) || 0;
-  const soffitSF = (room.soffitSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
-  const deckSF   = (room.deckSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
+  const soffitSF    = (room.soffitSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
+  const porchCeilSF = (room.porchCeilSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
+  const deckSF      = (room.deckSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
   const c        = parseInt(room.coats)    || 1;
   // Each siding run can override the side height (gables, walk-out basements)
   const sidingSF = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0)*(parseFloat(w.ht)||h), 0);
@@ -2926,19 +3025,21 @@ function calcExt(room) {
 
   const p     = PRODUCTS.find(x=>x.name===room.product) || PRODUCTS[4] || PRODUCTS[0];
   const gSid  = room.surfaces.walls ? Math.ceil(sidingSF*c/p.cov) : 0;
-  const gSof  = soffitSF > 0       ? Math.ceil(soffitSF*c/p.cov) : 0; // always included when measured
+  const gSof  = soffitSF > 0                     ? Math.ceil(soffitSF*c/p.cov)    : 0;
+  const gPorch= room.surfaces.ceiling&&porchCeilSF>0 ? Math.ceil(porchCeilSF*c/p.cov) : 0;
   const gDck  = room.surfaces.floor ? Math.ceil(deckSF*c/p.cov)  : 0;
   const gTrim = room.surfaces.trim  ? Math.ceil(trimLF*c/p.cov)  : 0;
-  const gal   = gSid + gSof + gDck + gTrim;
+  const gal   = gSid + gSof + gPorch + gDck + gTrim;
 
   const r   = room.rates || extRates;
   const mat = gal * p.price * MARKUP;
-  const lab = (room.surfaces.walls ? sidingSF*r.walls*c   : 0)
-            + (soffitSF > 0        ? soffitSF*r.ceiling*c : 0) // soffit always billed when measured
-            + (room.surfaces.floor ? deckSF*r.floor*c     : 0)
-            + (room.surfaces.trim  ? trimLF*r.trim*c      : 0);
+  const lab = (room.surfaces.walls   ? sidingSF*r.walls*c                                           : 0)
+            + (soffitSF > 0          ? soffitSF*r.ceiling*c                                         : 0)
+            + (room.surfaces.ceiling ? porchCeilSF*r.ceiling*c                                      : 0)
+            + (room.surfaces.floor   ? deckSF*r.floor*c                                             : 0)
+            + (room.surfaces.trim    ? trimLF*r.trim*c                                              : 0);
 
-  const totalSF = (room.surfaces.walls?sidingSF:0)+soffitSF+(room.surfaces.floor?deckSF:0);
+  const totalSF = (room.surfaces.walls?sidingSF:0)+soffitSF+(room.surfaces.ceiling?porchCeilSF:0)+(room.surfaces.floor?deckSF:0);
   const valid   = sidingSF>0 || soffitSF>0 || deckSF>0;
   return {wallSF:sidingSF, floorSF:soffitSF+deckSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, valid};
 }
@@ -3135,7 +3236,7 @@ function applyJobData(data) {
   // Re-render rooms
   const wrap = document.getElementById('rooms-container');
   if (wrap) wrap.innerHTML = '';
-  rooms.forEach((r, i) => { renderRoom(r, i); renderWalls(r); renderSoffitSections(r.id); renderDeckSections(r.id); renderAIPhotoStrip(r.id); });
+  rooms.forEach((r, i) => { renderRoom(r, i); renderWalls(r); renderSoffitSections(r.id); renderPorchSections(r.id); renderDeckSections(r.id); renderAIPhotoStrip(r.id); });
   refreshRoomSelect();
   bidScopeText = data.bidScopeText || '';
   bidAgentChat = data.bidAgentChat || [];
@@ -6067,15 +6168,19 @@ function processVoiceCommand(transcript, measureOnly = false) {
   if      (/^wall\s+/i.test(t))    { target='wall';        numStr=t.replace(/^wall\s+/i,''); }
   else if (/^height\s+/i.test(t))  { target='height';      numStr=t.replace(/^height\s+/i,''); }
   else if (/^ceiling\s+/i.test(t)) { target='height';      numStr=t.replace(/^ceiling\s+/i,''); }
-  else if (/^soffit\s+/i.test(t) || /^(?:porch\s+)?ceiling\s+/i.test(t)) {
-    const sRest = t.replace(/^(?:soffit|(?:porch\s+)?ceiling)\s+/i,'');
+  else if (/^soffit\s+/i.test(t) || /^porch\s+ceiling\s+/i.test(t)) {
+    const isPorchCeil = /^porch\s+ceiling\s+/i.test(t);
+    const sRest = t.replace(/^(?:soffit|porch\s+ceiling)\s+/i,'');
     const sBy = sRest.match(/^(.+?)\s+(?:by|times|x|at)\s+(.+)$/i);
     if (sBy) {
       const sL = parseSpokenNumber(sBy[1].trim()), sW = parseSpokenNumber(sBy[2].trim());
       if (sL!==null && sW!==null && sL>0 && sW>0 && sL<500 && sW<500) {
         const openIdx = rooms.findIndex(r => r.open);
         const wr = rooms[openIdx >= 0 ? openIdx : 0];
-        if (wr) { addSoffitSection(wr.id, sL.toFixed(2), sW.toFixed(2)); showToast(`Ceiling ${sL}×${sW} = ${(sL*sW).toFixed(0)} sf · ${wr.name}`); }
+        if (wr) {
+          if (isPorchCeil) { addPorchSection(wr.id, sL.toFixed(2), sW.toFixed(2)); showToast(`Porch ceiling ${sL}×${sW} = ${(sL*sW).toFixed(0)} sf · ${wr.name}`); }
+          else              { addSoffitSection(wr.id, sL.toFixed(2), sW.toFixed(2)); showToast(`Soffit ${sL}×${sW} = ${(sL*sW).toFixed(0)} sf · ${wr.name}`); }
+        }
         return;
       }
     }
@@ -6083,7 +6188,10 @@ function processVoiceCommand(transcript, measureOnly = false) {
       if (sL!==null && sL>0 && sL<500) {
         const openIdx = rooms.findIndex(r => r.open);
         const wr = rooms[openIdx >= 0 ? openIdx : 0];
-        if (wr) { addSoffitSection(wr.id, sL.toFixed(2), ''); showToast(`Ceiling length ${sL} ft — now enter width · ${wr.name}`); }
+        if (wr) {
+          if (isPorchCeil) { addPorchSection(wr.id, sL.toFixed(2), ''); showToast(`Porch ceiling length ${sL} ft — now enter width · ${wr.name}`); }
+          else              { addSoffitSection(wr.id, sL.toFixed(2), ''); showToast(`Soffit length ${sL} ft — now enter width · ${wr.name}`); }
+        }
         return;
       }
     }

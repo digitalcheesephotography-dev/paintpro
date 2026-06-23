@@ -4259,17 +4259,17 @@ function showToast(msg, type='') {
 
 function aiVideoPrompt(isExt, frameCount) {
   return isExt
-    ? `You are a painting estimator. These ${frameCount} images are frames from a video walkthrough of an exterior. Analyze ALL frames together to estimate dimensions in feet.
+    ? `You are a painting estimator. These ${frameCount} images are frames from a video of ONE SIDE of a house exterior. Measure ONLY what is visible in these frames. Do NOT estimate other sides of the house.
 Respond with ONLY valid JSON — no explanation, no markdown:
-{"walls":[w1,w2,w3,...],"height":h,"soffit":sf,"deck":dk,"doors":d,"windows":win,"surfaceNotes":""}
+{"walls":[w1,w2,...],"height":h,"ceiling_sections":[[l,w]],"deck_sections":[[l,w]],"doors":d,"windows":win,"surfaceNotes":""}
 Scale anchors: exterior door=6.8 ft tall/3 ft wide; window=4 ft tall/3 ft wide; one story ~9-10 ft; two story ~18-20 ft; vinyl siding lap=4 inches.
-- walls: ALL unique wall widths you can identify across all frames (each wall once, even if seen multiple times)
+- walls: widths of each visible wall section (usually 1 number; more if bump-outs or separate sections visible)
 - height: wall height in feet
-- soffit: total soffit/eave area in sq ft across all visible sides (0 if none)
-- deck: total deck/porch area in sq ft (0 if none)
-- doors: total exterior doors visible across all frames
-- windows: total unique windows visible across all frames
-- surfaceNotes: note any surface issues spotted in any frame (peeling, rot, chalking, moisture) — empty string if fine`
+- ceiling_sections: each porch/soffit ceiling rectangle visible as [length, width] — use [] if none visible
+- deck_sections: each deck/porch floor rectangle visible as [length, width] — use [] if none visible
+- doors: number of doors visible in these frames only
+- windows: number of windows visible in these frames only
+- surfaceNotes: any surface issues spotted (peeling, rot, chalking, moisture) — empty string if none`
     : `You are a painting estimator. These ${frameCount} images are frames from a video walkthrough of an interior room. Analyze ALL frames together — each frame shows a different wall or angle.
 Respond with ONLY valid JSON — no explanation, no markdown:
 {"walls":[w1,w2,w3,w4],"height":h,"floorLength":l,"floorWidth":w,"doors":d,"windows":win,"surfaceNotes":""}
@@ -4365,17 +4365,31 @@ function applyAIRoomResult(roomId, json, toastPrefix) {
     filled.push(`height ${json.height}'`);
   }
   if (room.mode === 'exterior') {
-    if (json.soffit) {
-      room.soffit = Number(json.soffit).toFixed(1);
-      const el = document.getElementById(`${roomId}_soffit`);
-      if (el) el.value = room.soffit;
-      filled.push(`soffit ${json.soffit} sf`);
+    // Ceiling/soffit sections — new array format or legacy single number
+    const ceilingSecs = Array.isArray(json.ceiling_sections) ? json.ceiling_sections
+                      : (json.soffit > 0 ? [[json.soffit, 1]] : []);
+    if (ceilingSecs.length) {
+      ceilingSecs.forEach(sec => {
+        const [l, w] = Array.isArray(sec) ? sec : [sec, 1];
+        if ((parseFloat(l)||0) > 0) {
+          addSoffitSection(roomId, Number(l).toFixed(2), Number(w||1).toFixed(2));
+        }
+      });
+      const totalSF = ceilingSecs.reduce((a,[l,w])=>a+(parseFloat(l)||0)*(parseFloat(w)||1),0);
+      filled.push(`ceiling ${totalSF.toFixed(0)} sf`);
     }
-    if (json.deck) {
-      room.deck = Number(json.deck).toFixed(1);
-      const el = document.getElementById(`${roomId}_deck`);
-      if (el) el.value = room.deck;
-      filled.push(`deck ${json.deck} sf`);
+    // Deck sections — new array format or legacy single number
+    const deckSecs = Array.isArray(json.deck_sections) ? json.deck_sections
+                   : (json.deck > 0 ? [[json.deck, 1]] : []);
+    if (deckSecs.length) {
+      deckSecs.forEach(sec => {
+        const [l, w] = Array.isArray(sec) ? sec : [sec, 1];
+        if ((parseFloat(l)||0) > 0) {
+          addDeckSection(roomId, Number(l).toFixed(2), Number(w||1).toFixed(2));
+        }
+      });
+      const totalSF = deckSecs.reduce((a,[l,w])=>a+(parseFloat(l)||0)*(parseFloat(w)||1),0);
+      filled.push(`deck ${totalSF.toFixed(0)} sf`);
     }
   } else {
     if (json.floorLength) {
@@ -4450,17 +4464,17 @@ function renderAIPhotoStrip(roomId) {
 
 function aiMultiPhotoPrompt(isExt, count) {
   return isExt
-    ? `You are a painting estimator. These ${count} photos show different sides and angles of an exterior. Analyze ALL photos together to estimate dimensions in feet.
+    ? `You are a painting estimator. These ${count} photos show ONE SIDE of a house exterior — different angles or sections of the same side. Measure ONLY what is visible in these photos. Do NOT estimate other sides of the house.
 Respond with ONLY valid JSON — no explanation, no markdown:
-{"walls":[w1,w2,w3,...],"height":h,"soffit":sf,"deck":dk,"doors":d,"windows":win,"surfaceNotes":""}
+{"walls":[w1,w2,...],"height":h,"ceiling_sections":[[l,w]],"deck_sections":[[l,w]],"doors":d,"windows":win,"surfaceNotes":""}
 Scale anchors: exterior door=6.8 ft tall/3 ft wide; window=4 ft tall/3 ft wide; one story ~9-10 ft; vinyl siding lap=4 inches.
-- walls: ALL unique wall widths you can identify across all photos
+- walls: widths of each visible wall section in these photos (usually 1 number for a plain side; more if there are bump-outs or separate sections)
 - height: wall height in feet
-- soffit: total soffit/eave area in sq ft (0 if none)
-- deck: total deck/porch area in sq ft (0 if none)
-- doors: total exterior doors
-- windows: total unique windows
-- surfaceNotes: note any surface issues (peeling, rot, chalking, moisture) — empty string if fine`
+- ceiling_sections: each porch/soffit ceiling rectangle visible as [length, width] — use [] if none visible
+- deck_sections: each deck/porch floor rectangle visible as [length, width] — use [] if none visible
+- doors: number of doors visible in these photos only
+- windows: number of windows visible in these photos only
+- surfaceNotes: any surface issues (peeling, rot, chalking, moisture) — empty string if none`
     : `You are a painting estimator. These ${count} photos show different walls and angles of the same interior room. Analyze ALL photos together to estimate dimensions in feet.
 Respond with ONLY valid JSON — no explanation, no markdown:
 {"walls":[w1,w2,w3,w4],"height":h,"floorLength":l,"floorWidth":w,"doors":d,"windows":win,"surfaceNotes":""}
@@ -4632,8 +4646,14 @@ function aiResultSummary(json, isExt) {
   if (json.walls?.length) parts.push(`${json.walls.length} wall${json.walls.length>1?'s':''}: ${json.walls.map(w=>w+"'").join(', ')}`);
   if (json.height)       parts.push(`height ${json.height}'`);
   if (isExt) {
-    if (json.soffit) parts.push(`soffit ${json.soffit} sf`);
-    if (json.deck)   parts.push(`deck ${json.deck} sf`);
+    if (json.ceiling_sections?.length) {
+      const sf = json.ceiling_sections.reduce((a,[l,w])=>a+(parseFloat(l)||0)*(parseFloat(w)||1),0);
+      parts.push(`ceiling ${sf.toFixed(0)} sf`);
+    } else if (json.soffit) parts.push(`ceiling ${json.soffit} sf`);
+    if (json.deck_sections?.length) {
+      const sf = json.deck_sections.reduce((a,[l,w])=>a+(parseFloat(l)||0)*(parseFloat(w)||1),0);
+      parts.push(`deck ${sf.toFixed(0)} sf`);
+    } else if (json.deck) parts.push(`deck ${json.deck} sf`);
   } else {
     if (json.floorLength) parts.push(`length ${json.floorLength}'`);
     if (json.floorWidth)  parts.push(`width ${json.floorWidth}'`);
@@ -4649,8 +4669,10 @@ function buildRoomSummary(room) {
   const walls = room.walls?.map(w => `${w.ft}'`).join(', ') || 'none';
   const parts = [`walls: [${walls}]`, `height: ${room.height||'?'}'`];
   if (isExt) {
-    if (room.soffit) parts.push(`soffit: ${room.soffit} sf`);
-    if (room.deck)   parts.push(`deck: ${room.deck} sf`);
+    const soffitSF = (room.soffitSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0),0);
+    const deckSF   = (room.deckSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0),0);
+    if (soffitSF > 0) parts.push(`ceiling: ${soffitSF.toFixed(0)} sf`);
+    if (deckSF   > 0) parts.push(`deck: ${deckSF.toFixed(0)} sf`);
   } else {
     if (room.floorLength) parts.push(`length: ${room.floorLength}'`);
     if (room.floorWidth)  parts.push(`width: ${room.floorWidth}'`);
@@ -4707,7 +4729,7 @@ async function sendAIChat(roomId) {
 Current measurements: ${buildRoomSummary(room)}
 Help the user with corrections, questions, and details. Be concise and practical.
 If the user provides updated measurements or describes changes, apply them and end your response with this JSON on its own line (no markdown):
-{"update":{"walls":[w1,w2,w3,w4],"height":h,"floorLength":l,"floorWidth":w,"soffit":s,"deck":d,"doors":n,"windows":n,"surfaceNotes":"note"}}
+{"update":{"walls":[w1,w2,...],"height":h,"floorLength":l,"floorWidth":w,"ceiling_sections":[[l,w]],"deck_sections":[[l,w]],"doors":n,"windows":n,"surfaceNotes":"note"}}
 Only include fields that changed. Omit the update line entirely if nothing changed.`;
 
   // Build API conversation — Anthropic requires messages to start with user role

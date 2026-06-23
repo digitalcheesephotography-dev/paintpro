@@ -4423,6 +4423,21 @@ async function addAIPhotos(roomId, input) {
   if (!files.length) return;
   input.value = '';
   if (!aiPhotoBatch[roomId]) aiPhotoBatch[roomId] = [];
+
+  // Auto-name exterior sides sequentially when the first photo is added
+  const room = rooms.find(r => r.id === roomId);
+  if (room && room.mode === 'exterior' && aiPhotoBatch[roomId].length === 0) {
+    const extIdx = rooms.filter(r => r.mode === 'exterior').findIndex(r => r.id === roomId);
+    if (extIdx >= 0) {
+      const sideName = `Side ${extIdx + 1}`;
+      room.name = sideName;
+      const nameEl = document.getElementById(`${roomId}_name`);
+      if (nameEl) nameEl.value = sideName;
+      refreshRoomSelect();
+      markDirty();
+    }
+  }
+
   showToast(`📷 Loading ${files.length} photo${files.length > 1 ? 's' : ''}…`);
   let loaded = 0;
   for (const file of files) {

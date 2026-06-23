@@ -2821,6 +2821,7 @@ function armSoffitShot(roomId, sectionId, field) {
   reshootTarget = null;
   wallHtTarget = null;
   deckShotTarget = null;
+  porchShotTarget = null;
   document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active').forEach(b=>b.classList.remove('active'));
   if (soffitShotTarget && soffitShotTarget.sectionId===sectionId && soffitShotTarget.field===field) {
     soffitShotTarget = null;
@@ -2895,6 +2896,7 @@ function armDeckShot(roomId, sectionId, field) {
   reshootTarget = null;
   wallHtTarget = null;
   soffitShotTarget = null;
+  porchShotTarget = null;
   document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active').forEach(b=>b.classList.remove('active'));
   if (deckShotTarget && deckShotTarget.sectionId===sectionId && deckShotTarget.field===field) {
     deckShotTarget = null;
@@ -4474,7 +4476,7 @@ function applyAIRoomResult(roomId, json, toastPrefix) {
           addSoffitSection(roomId, Number(l).toFixed(2), Number(w||1).toFixed(2));
         }
       });
-      const totalSF = ceilingSecs.reduce((a,[l,w])=>a+(parseFloat(l)||0)*(parseFloat(w)||1),0);
+      const totalSF = ceilingSecs.reduce((a, sec) => { const [l,w] = Array.isArray(sec)?sec:[sec,1]; return a+(parseFloat(l)||0)*(parseFloat(w)||1); }, 0);
       filled.push(`ceiling ${totalSF.toFixed(0)} sf`);
     }
     // Deck sections — new array format or legacy single number
@@ -4487,7 +4489,7 @@ function applyAIRoomResult(roomId, json, toastPrefix) {
           addDeckSection(roomId, Number(l).toFixed(2), Number(w||1).toFixed(2));
         }
       });
-      const totalSF = deckSecs.reduce((a,[l,w])=>a+(parseFloat(l)||0)*(parseFloat(w)||1),0);
+      const totalSF = deckSecs.reduce((a, sec) => { const [l,w] = Array.isArray(sec)?sec:[sec,1]; return a+(parseFloat(l)||0)*(parseFloat(w)||1); }, 0);
       filled.push(`deck ${totalSF.toFixed(0)} sf`);
     }
   } else {
@@ -4517,13 +4519,13 @@ function applyAIRoomResult(roomId, json, toastPrefix) {
     job[field] = String(next);
     const el = document.getElementById(inputId);
     if (el) el.value = next;
-    filled.push(`+${n} ${field.replace('Count','').replace('shutter','shutter').toLowerCase()}${n>1?'s':''}`);
+    const labelMap = {doorCount:'door', winCount:'window', shutterCount:'shutter panel'};
+    filled.push(`+${n} ${labelMap[field]||field.replace('Count','')}${n>1?'s':''}`);
   };
   addJobCount('doorCount',    'job-door-count',    json.doors);
   addJobCount('winCount',     'job-win-count',     json.windows);
   addJobCount('shutterCount', 'job-shutter-count', json.shutters);
   recalcRoom(roomId);
-  recalcAll();
   markDirty();
   const noteHint = json.surfaceNotes ? ' — ⚠️ surface issue noted' : '';
   showToast(`${toastPrefix} ${filled.join(', ')}${noteHint} — review and adjust`);
@@ -4537,17 +4539,21 @@ async function addAIPhotos(roomId, input) {
   input.value = '';
   if (!aiPhotoBatch[roomId]) aiPhotoBatch[roomId] = [];
 
-  // Auto-name exterior sides sequentially when the first photo is added
+  // Auto-name exterior sides sequentially when the first photo is added,
+  // but only if the room still has a default "Side N" / "Room N" name (not user-customized).
   const room = rooms.find(r => r.id === roomId);
   if (room && room.mode === 'exterior' && aiPhotoBatch[roomId].length === 0) {
-    const extIdx = rooms.filter(r => r.mode === 'exterior').findIndex(r => r.id === roomId);
-    if (extIdx >= 0) {
-      const sideName = `Side ${extIdx + 1}`;
-      room.name = sideName;
-      const nameEl = document.getElementById(`${roomId}_name`);
-      if (nameEl) nameEl.value = sideName;
-      refreshRoomSelect();
-      markDirty();
+    const isDefaultName = !room.name || /^(Side|Room)\s+\d+$/i.test(room.name.trim());
+    if (isDefaultName) {
+      const extIdx = rooms.filter(r => r.mode === 'exterior').indexOf(room);
+      if (extIdx >= 0) {
+        const sideName = `Side ${extIdx + 1}`;
+        room.name = sideName;
+        const nameEl = document.getElementById(`${roomId}_name`);
+        if (nameEl) nameEl.value = sideName;
+        refreshRoomSelect();
+        markDirty();
+      }
     }
   }
 
@@ -4799,10 +4805,12 @@ function buildRoomSummary(room) {
   const walls = room.walls?.map(w => `${w.ft}'`).join(', ') || 'none';
   const parts = [`walls: [${walls}]`, `height: ${room.height||'?'}'`];
   if (isExt) {
-    const soffitSF = (room.soffitSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0),0);
-    const deckSF   = (room.deckSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0),0);
-    if (soffitSF > 0) parts.push(`ceiling: ${soffitSF.toFixed(0)} sf`);
-    if (deckSF   > 0) parts.push(`deck: ${deckSF.toFixed(0)} sf`);
+    const soffitSF    = (room.soffitSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0),0);
+    const porchCeilSF = (room.porchCeilSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0),0);
+    const deckSF      = (room.deckSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0),0);
+    if (soffitSF    > 0) parts.push(`soffit: ${soffitSF.toFixed(0)} sf`);
+    if (porchCeilSF > 0) parts.push(`porch ceiling: ${porchCeilSF.toFixed(0)} sf`);
+    if (deckSF      > 0) parts.push(`deck: ${deckSF.toFixed(0)} sf`);
   } else {
     if (room.floorLength) parts.push(`length: ${room.floorLength}'`);
     if (room.floorWidth)  parts.push(`width: ${room.floorWidth}'`);

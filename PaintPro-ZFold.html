@@ -394,14 +394,19 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 <main id="estimator-section">
   <div class="col-left">
     <!-- Jobs button (open the saved jobs modal) -->
-    <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:12px">
+    <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;margin-bottom:12px">
       <button id="current-job-badge" onclick="openJobsModal()" aria-label="Open jobs"
         style="height:42px;background:var(--panel);border:1.5px solid var(--border);border-radius:8px;color:var(--blue);font-family:var(--head);font-size:14px;font-weight:700;letter-spacing:1.5px;cursor:pointer">📁 Jobs</button>
+      <button onclick="document.getElementById('scan-notes-input').click()" aria-label="Scan handwritten notes"
+        style="height:42px;padding:0 14px;background:var(--panel);border:1.5px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--head);font-size:14px;font-weight:700;letter-spacing:1px;cursor:pointer;white-space:nowrap;transition:border-color .15s,color .15s"
+        onmouseenter="this.style.borderColor='var(--blue)';this.style.color='var(--blue)'"
+        onmouseleave="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📝 Scan</button>
       <button onclick="clearMeasurements()" aria-label="Clear measurements"
         style="height:42px;padding:0 14px;background:var(--panel);border:1.5px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--head);font-size:14px;font-weight:700;letter-spacing:1px;cursor:pointer;white-space:nowrap;transition:border-color .15s,color .15s"
         onmouseenter="this.style.borderColor='var(--red)';this.style.color='var(--red)'"
         onmouseleave="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">🗑️ Clear</button>
     </div>
+    <input type="file" id="scan-notes-input" accept="image/*" style="display:none" onchange="scanHandwrittenNotes(this)"/>
 
     <!-- INT / EXT mode toggle -->
     <div class="mode-toggle">
@@ -3429,6 +3434,77 @@ function clearMeasurements() {
   showToast('🗑️ Measurements cleared');
 }
 
+async function scanHandwrittenNotes(input) {
+  const file = input.files[0];
+  input.value = '';
+  if (!file) return;
+  const apiKey = localStorage.getItem('ingersoll_anthropic_key_v1') || '';
+  if (!apiKey) {
+    showToast('⚠️ Add your Anthropic API key in ⚙️ Settings first', 'warn');
+    return;
+  }
+  showToast('📝 Reading your notes…');
+  try {
+    const base64 = await compressToBase64(file, 1600, 0.85);
+    const isExt  = estimatorMode === 'exterior';
+    const prompt = `You are reading a handwritten job-site measurement note for a painting contractor. Extract numbers EXACTLY as written — do not estimate or infer anything not on the paper.
+
+These are measurements for ${isExt ? 'EXTERIOR sides of a building' : 'INTERIOR rooms'}.
+
+Return ONLY valid JSON (no explanation, no markdown, no code fences):
+[{"name":"...","walls":[w1,w2,...],"height":h,${isExt ? '"shutters":n,' : '"floorLength":l,"floorWidth":w,'}"doors":d,"windows":n}]
+
+Rules:
+- name: label written on the paper (e.g. "Kitchen", "Front", "Master Bed"). Use "Room 1" if unlabeled.
+- walls: widths in feet. "12x14" room → [12,14,12,14]. Individual walls listed → use those numbers.
+- height: wall/ceiling height in feet. Default ${isExt ? '9' : '8'} if not written.
+- ${isExt ? 'shutters: number of shutter PANELS (2 per shuttered window). Omit if not on paper.' : 'floorLength / floorWidth: floor dimensions in feet. Omit if not written.'}
+- doors / windows: counts written on paper. Omit or use 0 if not written.
+- Feet+inches: 12'6"=12.5, 9'4"=9.33. Fractions: 12½=12.5, 9¾=9.75.
+- If only one room/side is on the paper, return an array with one item.
+- Omit any field not written on the paper.`;
+
+    const content = [
+      { type:'image', source:{ type:'base64', media_type:'image/jpeg', data:base64 } },
+      { type:'text', text:prompt }
+    ];
+    const data = await callAI([{ role:'user', content }], 'claude-sonnet-4-6', 1024);
+    const json  = extractAIJson(data.content?.[0]?.text);
+    if (!Array.isArray(json) || !json.length) {
+      showToast('⚠️ Could not read the notes — try a clearer, brighter photo', 'warn');
+      return;
+    }
+    // If the only existing room is the blank starter room, replace it
+    const blankStart = rooms.length === 1 && !rooms[0].walls.length &&
+                       !rooms[0].floorLength && !rooms[0].soffitSections?.length;
+    if (blankStart) {
+      rooms.splice(0, 1);
+      roomCount = 0;
+      document.getElementById('rooms-container').innerHTML = '';
+    }
+    // Create a room card for each entry and apply the scanned data
+    let summary = [];
+    for (const entry of json) {
+      addRoom();
+      const newRoom = rooms[rooms.length - 1];
+      if (entry.name) {
+        newRoom.name = entry.name;
+        const nameEl = document.getElementById(`${newRoom.id}_name`);
+        if (nameEl) nameEl.value = entry.name;
+        refreshRoomSelect();
+      }
+      const filled = applyAIRoomResult(newRoom.id, entry, '', true); // quiet — no per-room toast
+      summary.push(`${entry.name || newRoom.name}${filled && filled.length ? ': '+filled.join(', ') : ''}`);
+    }
+    markDirty();
+    showToast(`📝 ${json.length} room${json.length !== 1 ? 's' : ''} loaded — review and adjust`);
+    console.log('[Scan Notes]', summary.join(' | '));
+  } catch(e) {
+    console.error('[Scan Notes]', e);
+    showToast('⚠️ Scan failed: ' + e.message, 'warn');
+  }
+}
+
 function recalcRoom(id) {
   const room=rooms.find(r=>r.id===id); if(!room) return;
   const c=calc(room), el=document.getElementById(`${id}_sum`);
@@ -4489,7 +4565,7 @@ function extractAIJson(text) {
   return {};
 }
 
-function applyAIRoomResult(roomId, json, toastPrefix) {
+function applyAIRoomResult(roomId, json, toastPrefix, quiet=false) {
   const room = rooms.find(r => r.id === roomId);
   if (!room) return;
   const filled = [];
@@ -4567,7 +4643,8 @@ function applyAIRoomResult(roomId, json, toastPrefix) {
   recalcRoom(roomId);
   markDirty();
   const noteHint = json.surfaceNotes ? ' — ⚠️ surface issue noted' : '';
-  showToast(`${toastPrefix} ${filled.join(', ')}${noteHint} — review and adjust`);
+  if (!quiet) showToast(`${toastPrefix} ${filled.join(', ')}${noteHint} — review and adjust`);
+  return filled;
 }
 
 // ── Multi-photo AI batch ────────────────────────────────────────────────────

@@ -1874,6 +1874,9 @@ function bootApp() {
   checkFollowupNotifications();
   checkNearbyClients();
 
+  // If a photo was shared in from the Android "Share" sheet, pick it up
+  checkSharedFile();
+
   if (location.protocol === 'file:') {
     document.getElementById('https-warn').classList.add('show');
     setStatus('warn', 'Upload to HTTPS to enable Bluetooth');
@@ -3453,9 +3456,60 @@ function clearMeasurements() {
   showToast('🗑️ Measurements cleared');
 }
 
+// ── Share Target: a photo shared into the app from the Android Share sheet ────
+// The service worker stashed the file in the 'paintpro-shared' cache and
+// redirected here with ?shared=1. Pick it up and ask what to do with it.
+async function checkSharedFile() {
+  if (!/[?&]shared=1\b/.test(location.search)) return;
+  // Clean the URL so a reload or back-nav doesn't re-trigger the pickup
+  try { history.replaceState(null, '', location.pathname); } catch(_) {}
+  try {
+    const cache = await caches.open('paintpro-shared');
+    const resp  = await cache.match('shared-file');
+    if (!resp) return;
+    const blob = await resp.blob();
+    await cache.delete('shared-file');
+    if (!blob || !blob.size) return;
+    const file = new File([blob], 'shared.jpg', { type: blob.type || 'image/jpeg' });
+    showSharedPhotoChoice(file);
+  } catch(e) { console.warn('[Share] pickup failed', e); }
+}
+
+// Ask whether the shared photo is a measurement note (→ AI scan) or a
+// reference photo to keep on the open room.
+function showSharedPhotoChoice(file) {
+  const url = URL.createObjectURL(file);
+  const old = document.getElementById('shared-photo-choice');
+  if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.id = 'shared-photo-choice';
+  ov.setAttribute('style', 'position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:16px;overflow-y:auto');
+  ov.innerHTML = `
+    <div style="font-family:var(--head);font-size:26px;letter-spacing:1.5px;color:var(--blue);text-align:center">PHOTO RECEIVED</div>
+    <img src="${url}" alt="Shared photo" style="max-width:82%;max-height:36vh;object-fit:contain;border-radius:12px;border:1.5px solid var(--border)"/>
+    <div style="color:var(--text);font-size:16px;text-align:center;max-width:340px;line-height:1.5">What should PaintPro do with it?</div>
+    <button id="shared-scan-btn" style="width:100%;max-width:340px;height:58px;background:#0a2b0a;border:1.5px solid var(--green);border-radius:12px;color:var(--green);font-family:var(--font);font-size:17px;font-weight:700;cursor:pointer">📝 Read Measurements From It</button>
+    <button id="shared-roomphoto-btn" style="width:100%;max-width:340px;height:58px;background:var(--panel);border:1.5px solid var(--blue);border-radius:12px;color:var(--blue);font-family:var(--font);font-size:17px;font-weight:700;cursor:pointer">📸 Save It To The Open Room</button>
+    <button id="shared-cancel-btn" style="background:none;border:none;color:var(--muted);font-size:15px;cursor:pointer;padding:8px;text-decoration:underline;font-family:var(--font)">Cancel</button>`;
+  document.body.appendChild(ov);
+  const close = () => { try { URL.revokeObjectURL(url); } catch(_) {} ov.remove(); };
+  document.getElementById('shared-scan-btn').onclick = () => { close(); scanNotesFile(file); };
+  document.getElementById('shared-roomphoto-btn').onclick = () => {
+    close();
+    let target = rooms.find(r => r.open) || rooms[rooms.length - 1];
+    if (!target) { addRoom(); target = rooms[rooms.length - 1]; }
+    if (target) { setOpen(target.id, true); addRoomPhotoFiles(target.id, [file]); }
+  };
+  document.getElementById('shared-cancel-btn').onclick = close;
+}
+
 async function scanHandwrittenNotes(input) {
   const file = input.files[0];
   input.value = '';
+  return scanNotesFile(file);
+}
+
+async function scanNotesFile(file) {
   if (!file) return;
   const apiKey = localStorage.getItem('ingersoll_anthropic_key_v1') || '';
   if (!apiKey) {
@@ -4736,7 +4790,11 @@ function renderAIPhotoStrip(roomId) {
 async function addRoomPhotos(roomId, input) {
   const files = Array.from(input.files || []);
   input.value = '';
-  if (!files.length) return;
+  return addRoomPhotoFiles(roomId, files);
+}
+
+async function addRoomPhotoFiles(roomId, files) {
+  if (!files || !files.length) return;
   const room = rooms.find(r => r.id === roomId);
   if (!room) return;
   if (!room.photos) room.photos = [];

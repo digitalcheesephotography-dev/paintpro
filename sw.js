@@ -4,7 +4,12 @@
 // Bump CACHE version only when the service worker logic itself changes — not for
 // routine HTML edits (those are handled by network-first already).
 
-const CACHE = 'paintpro-v6';
+const CACHE = 'paintpro-v7';
+
+// Cache that briefly holds a file shared in from the Android share sheet,
+// handed off to the app on the next page load. Kept separate so the app-shell
+// cache version bumps don't wipe an in-flight shared file.
+const SHARE_CACHE = 'paintpro-shared';
 
 const APP_SHELL = [
   './PaintPro-ZFold.html',
@@ -29,7 +34,7 @@ self.addEventListener('install', evt => {
 self.addEventListener('activate', evt => {
   evt.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+      Promise.all(keys.filter(k => k !== CACHE && k !== SHARE_CACHE).map(k => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -39,6 +44,26 @@ self.addEventListener('activate', evt => {
 self.addEventListener('fetch', evt => {
   const { request } = evt;
   const url = new URL(request.url);
+
+  // Share Target — a file shared from the Android "Share" sheet POSTs here.
+  // Stash it in a cache and redirect to the app, which picks it up on load.
+  if (request.method === 'POST' && url.pathname.endsWith('/share-target')) {
+    evt.respondWith((async () => {
+      try {
+        const form = await request.formData();
+        const file = form.get('shared_image');
+        if (file && file.size) {
+          const cache = await caches.open(SHARE_CACHE);
+          await cache.put('shared-file', new Response(file, {
+            headers: { 'content-type': file.type || 'image/jpeg' }
+          }));
+        }
+      } catch (e) { /* fall through to redirect either way */ }
+      // 303 forces the follow-up request to be a GET of the app itself
+      return Response.redirect('./PaintPro-ZFold.html?shared=1', 303);
+    })());
+    return;
+  }
 
   // Let external API calls (Anthropic, ntfy, Firebase, etc.) go straight to the
   // browser's network stack — service worker interception breaks their CORS headers.

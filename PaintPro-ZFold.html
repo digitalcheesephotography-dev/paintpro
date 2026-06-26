@@ -1586,7 +1586,10 @@ function jobExtras() {
 // ══════════════════════════════════════════════
 
 // Keys mirrored to Firestore. active_job is intentionally excluded — it's
-// per-session scratch state that would conflict between devices.
+// per-session scratch state that would conflict between devices. Saved jobs
+// (ingersoll_jobs_v1) ARE synced so a job saved on the phone appears in the
+// Jobs list on the computer (and vice-versa). Snapshots are measurement data
+// only (no photo blobs), so they stay well under Firestore's per-doc limit.
 const SYNC_KEYS = [
   'ingersoll_contacts_v1',
   'ingersoll_projects_v1',
@@ -1596,6 +1599,7 @@ const SYNC_KEYS = [
   'ingersoll_ext_rates_v1',
   'ingersoll_apt_pricing_v1',
   'ingersoll_rates_v1',
+  'ingersoll_jobs_v1',
 ];
 
 let _db = null;        // Firestore instance (null = local-only mode)
@@ -1827,6 +1831,7 @@ function reloadFromSync(key) {
       case 'ingersoll_apt_pricing_v1': aptLoad();        aptRender();       break;
       case 'ingersoll_rates_v1':       rates = loadRates();    syncRatesUI(); break;
       case 'ingersoll_ext_rates_v1':   extRates = loadExtRates(); syncRatesUI(); break;
+      case 'ingersoll_jobs_v1':        renderJobsList();  break;
     }
   } catch(e) { console.warn('[Sync] reloadFromSync', key, e); }
 }

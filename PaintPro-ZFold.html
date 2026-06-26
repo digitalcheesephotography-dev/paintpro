@@ -42,7 +42,7 @@
   --card:   #1a2030;
   --border: #252c3a;
   --text:   #e2e8f0;
-  --muted:  #6b7a8d;
+  --muted:  #8a9bb0;
   --font:   'Barlow Condensed','Arial Narrow',sans-serif;
   --head:   'Bebas Neue',sans-serif;
   --tap:    54px;
@@ -53,7 +53,9 @@
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{height:100%;-webkit-tap-highlight-color:transparent}
-body{background:var(--dark);color:var(--text);font-family:var(--font);font-size:16px;min-height:100%;padding-bottom:calc(148px + var(--safe-b))}
+body{background:var(--dark);color:var(--text);font-family:var(--font);font-size:16px;font-weight:600;min-height:100%;padding-bottom:calc(148px + var(--safe-b))}
+/* Bolder text everywhere for readability — lift default weight, catch a few thin spots */
+[style*="font-weight:normal"],[style*="font-weight:400"]{font-weight:600!important}
 
 /* HEADER */
 header{background:#0a0e14;border-bottom:2px solid var(--blue);padding:calc(10px + var(--safe-t)) 18px 10px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
@@ -79,7 +81,7 @@ main{padding:14px 14px 0;max-width:100%}
 /* FORM */
 .field{display:flex;flex-direction:column;gap:5px}
 .field>span{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
-input[type="text"],input[type="number"],select,textarea{background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:17px;padding:0 12px;height:var(--tap);width:100%;outline:none;-webkit-appearance:none;appearance:none;transition:border-color .2s}
+input[type="text"],input[type="number"],input[type="email"],input[type="password"],input[type="date"],select,textarea{background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-weight:600;font-size:17px;padding:0 12px;height:var(--tap);width:100%;outline:none;-webkit-appearance:none;appearance:none;transition:border-color .2s}
 select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7a8d' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px}
 textarea{height:auto;padding:12px;resize:none}
 input:focus,select:focus,textarea:focus{border-color:var(--blue)}

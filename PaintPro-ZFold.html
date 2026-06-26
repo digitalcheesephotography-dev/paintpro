@@ -2334,10 +2334,10 @@ function addRoom() {
   const room  = isExt
     ? { id, name, walls:[], height:'9', soffitSections:[], porchCeilSections:[], deckSections:[],
         surfaces:{walls:true, ceiling:false, trim:false, floor:false},
-        product: extProduct, coats:'2', rates:null, open:true, mode:'exterior' }
+        product: extProduct, coats:'2', rates:null, open:true, mode:'exterior', photos:[] }
     : { id, name, walls:[], height:'8', floorLength:'', floorWidth:'',
         surfaces:{walls:true, ceiling:false, trim:false, floor:false},
-        product: PRODUCTS[0].name, coats:'2', rates:null, open:true };
+        product: PRODUCTS[0].name, coats:'2', rates:null, open:true, photos:[] };
   rooms.push(room);
   renderRoom(room, rooms.length-1);
   renderSoffitSections(room.id);
@@ -2543,6 +2543,18 @@ function renderRoom(room, idx) {
         </button>
       </div>
       <div id="${room.id}_aiphotos_strip"></div>
+
+      <!-- Persistent room photos — saved with the job, sync to other devices -->
+      <input type="file" id="${room.id}_roomphoto_input" accept="image/*" multiple style="display:none"
+             onchange="addRoomPhotos('${room.id}',this)"/>
+      <button onclick="document.getElementById('${room.id}_roomphoto_input').click()"
+              style="width:100%;height:42px;background:var(--panel);border:1.5px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;margin-top:6px;margin-bottom:2px;transition:border-color .15s,color .15s"
+              onmouseenter="this.style.borderColor='var(--green)';this.style.color='var(--green)'"
+              onmouseleave="this.style.borderColor='var(--border)';this.style.color='var(--muted)'"
+              aria-label="Save a reference photo with this room">
+        📸 Save Room Photo
+      </button>
+      <div id="${room.id}_photos_strip"></div>
 
       <!-- AI Chat panel — opens after photo/video analysis, persists with room -->
       <div id="${room.id}_ai_chat_wrap" style="display:${(room.aiChat&&room.aiChat.length)?'':'none'};margin-top:8px;margin-bottom:8px;border:1px solid #1e3a4a;border-radius:8px;overflow:hidden">
@@ -3262,7 +3274,7 @@ function applyJobData(data) {
   // Re-render rooms
   const wrap = document.getElementById('rooms-container');
   if (wrap) wrap.innerHTML = '';
-  rooms.forEach((r, i) => { renderRoom(r, i); renderWalls(r); renderSoffitSections(r.id); renderPorchSections(r.id); renderDeckSections(r.id); renderAIPhotoStrip(r.id); });
+  rooms.forEach((r, i) => { renderRoom(r, i); renderWalls(r); renderSoffitSections(r.id); renderPorchSections(r.id); renderDeckSections(r.id); renderAIPhotoStrip(r.id); renderRoomPhotoStrip(r.id); });
   refreshRoomSelect();
   bidScopeText = data.bidScopeText || '';
   bidAgentChat = data.bidAgentChat || [];
@@ -4717,6 +4729,82 @@ function renderAIPhotoStrip(roomId) {
             style="width:100%;height:44px;background:#0a2b0a;border:1px solid #2e8b1e;border-radius:8px;color:#2e8b1e;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">
       🤖 Analyze ${photos.length} Photo${photos.length > 1 ? 's' : ''} →
     </button>`;
+}
+
+// ── Persistent room photos (saved with job, sync between devices) ────────────
+
+async function addRoomPhotos(roomId, input) {
+  const files = Array.from(input.files || []);
+  input.value = '';
+  if (!files.length) return;
+  const room = rooms.find(r => r.id === roomId);
+  if (!room) return;
+  if (!room.photos) room.photos = [];
+  showToast(`📸 Saving ${files.length} photo${files.length > 1 ? 's' : ''}…`);
+  let saved = 0;
+  for (const file of files) {
+    try {
+      const data = await compressToBase64(file, 550, 0.5);
+      const id = 'p' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+      room.photos.push({ id, data });
+      saved++;
+    } catch(e) {
+      console.error('[Room Photo]', e);
+      showToast(`⚠️ Photo ${saved + 1} failed — try again`, 'warn');
+    }
+  }
+  if (saved > 0) {
+    renderRoomPhotoStrip(roomId);
+    markDirty();
+    showToast(`📸 ${saved} photo${saved > 1 ? 's' : ''} saved — will sync to your other devices`);
+  }
+}
+
+function removeRoomPhoto(roomId, photoId) {
+  const room = rooms.find(r => r.id === roomId);
+  if (!room || !room.photos) return;
+  room.photos = room.photos.filter(p => p.id !== photoId);
+  renderRoomPhotoStrip(roomId);
+  markDirty();
+}
+
+function renderRoomPhotoStrip(roomId) {
+  const strip = document.getElementById(roomId + '_photos_strip');
+  if (!strip) return;
+  const room = rooms.find(r => r.id === roomId);
+  const photos = (room?.photos || []).filter(p => p && p.data);
+  if (!photos.length) { strip.innerHTML = ''; return; }
+  strip.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 0 4px">` +
+    photos.map(p => `
+      <div style="position:relative;width:76px;height:76px;flex-shrink:0">
+        <img src="data:image/jpeg;base64,${p.data}" alt="Room photo"
+             onclick="viewRoomPhoto('data:image/jpeg;base64,${p.data}')"
+             style="width:76px;height:76px;object-fit:cover;border-radius:7px;cursor:pointer;border:1.5px solid var(--border);display:block"/>
+        <button onclick="removeRoomPhoto('${roomId}','${p.id}')"
+                style="position:absolute;top:-5px;right:-5px;width:20px;height:20px;border-radius:50%;background:var(--red);border:none;color:#fff;font-size:11px;cursor:pointer;line-height:20px;padding:0;text-align:center;font-weight:700"
+                aria-label="Delete photo">✕</button>
+      </div>`).join('') +
+    `</div>`;
+}
+
+function viewRoomPhoto(src) {
+  let lb = document.getElementById('room-photo-lightbox');
+  if (!lb) {
+    lb = document.createElement('div');
+    lb.id = 'room-photo-lightbox';
+    lb.setAttribute('style', 'position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px');
+    lb.innerHTML = `<img id="room-photo-lb-img" style="max-width:100%;max-height:92vh;border-radius:10px;object-fit:contain;box-shadow:0 0 40px rgba(0,0,0,.8)"/>
+      <button onclick="closeRoomPhotoLightbox()" style="position:absolute;top:14px;right:14px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.18);border:none;color:#fff;font-size:22px;cursor:pointer;line-height:40px;text-align:center;padding:0">✕</button>`;
+    lb.addEventListener('click', e => { if (e.target === lb) closeRoomPhotoLightbox(); });
+    document.body.appendChild(lb);
+  }
+  document.getElementById('room-photo-lb-img').src = src;
+  lb.style.display = 'flex';
+}
+
+function closeRoomPhotoLightbox() {
+  const lb = document.getElementById('room-photo-lightbox');
+  if (lb) lb.style.display = 'none';
 }
 
 function aiMultiPhotoPrompt(isExt, count) {

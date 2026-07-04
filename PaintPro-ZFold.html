@@ -1605,6 +1605,7 @@ const SYNC_KEYS = [
 let _db = null;        // Firestore instance (null = local-only mode)
 let _uid = null;       // current user's UID — scopes all Firestore paths
 let _syncSkip = false; // prevents Storage intercept from re-writing Firestore on incoming changes
+let _syncSizeWarned = false; // true once we've warned that an oversized doc can't sync (avoids toast spam)
 const _syncMeta = {};  // key → updatedAt of the newest write we've made or applied (stale-write guard)
 
 // Returns the per-user Firestore doc reference for a given key.
@@ -1618,14 +1619,29 @@ function _userDoc(key) { return _db.collection('users').doc(_uid).collection('da
   Storage.prototype.setItem = function(key, value) {
     _orig.call(this, key, value);
     if (_db && _uid && !_syncSkip && SYNC_KEYS.includes(key)) {
+      const str = String(value);
+      // Firestore rejects any document over ~1 MB. Rather than fire a write that
+      // fails silently (leaving the phone and computer out of sync while the UI
+      // says "saved"), skip the cloud write and tell the user once. This mainly
+      // guards ingersoll_jobs_v1 once room photos are attached — see report.
+      if (str.length > 1000000) {
+        if (!_syncSizeWarned) {
+          _syncSizeWarned = true;
+          try { showToast('⚠ This job is too big to sync to the cloud (photos). It is saved on this device only.', 'warn'); } catch(_) {}
+        }
+        return; // do NOT advance _syncMeta — a skipped write must not block inbound sync
+      }
       const ts = Date.now();
       _syncMeta[key] = ts; // remember when WE last wrote, so stale cloud data can't clobber it
       _userDoc(key)
-        .set({ value: String(value), updatedAt: ts })
+        .set({ value: str, updatedAt: ts })
         .catch(e => {
           // 'unavailable' = offline; Firestore persistence replays it on reconnect.
-          // Anything else (auth revoked, permissions) means sync is broken — log it.
-          if (e && e.code && e.code !== 'unavailable') console.warn('[Sync] write failed:', key, e.code);
+          // Anything else (auth revoked, permissions, size) means sync is broken — surface it.
+          if (e && e.code && e.code !== 'unavailable') {
+            console.warn('[Sync] write failed:', key, e.code);
+            try { showToast('⚠ Cloud sync failed for one item — it is saved on this device.', 'warn'); } catch(_) {}
+          }
         });
     }
   };
@@ -1716,6 +1732,15 @@ async function signIn() {
 
 function signOut() {
   if (!FIREBASE_CONFIG.apiKey) return;
+  // Wipe every app-data key from this device before reloading, so the next
+  // account signed in on a shared or resold device can never see or absorb the
+  // previous user's clients, jobs, pricing, notes, or Anthropic API key. Each
+  // user's data re-hydrates from their own Firestore document on next sign-in.
+  try {
+    Object.keys(localStorage)
+      .filter(k => k.startsWith('ingersoll_'))
+      .forEach(k => localStorage.removeItem(k));
+  } catch(_) {}
   try { firebase.auth().signOut().then(() => location.reload()); }
   catch(e) { location.reload(); }
 }
@@ -2603,7 +2628,7 @@ function renderRoom(room, idx) {
         </div>
       </div>
 
-      <button class="room-remove" onclick="removeRoom('${room.id}')" aria-label="Remove ${room.name}">✕ Remove This ${isExt ? 'Side' : 'Room'}</button>
+      <button class="room-remove" onclick="removeRoom('${room.id}')" aria-label="Remove ${_esc(room.name)}">✕ Remove This ${isExt ? 'Side' : 'Room'}</button>
     </div>`;
   document.getElementById('rooms-container').appendChild(card);
   renderWalls(room);
@@ -3053,7 +3078,7 @@ function calcExt(room) {
   const soffitSF    = (room.soffitSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
   const porchCeilSF = (room.porchCeilSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
   const deckSF      = (room.deckSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
-  const c        = parseInt(room.coats)    || 1;
+  const c        = Number.isFinite(parseInt(room.coats)) ? parseInt(room.coats) : 1;
   // Each siding run can override the side height (gables, walk-out basements)
   const sidingSF = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0)*(parseFloat(w.ht)||h), 0);
   const trimLF   = perimeter;
@@ -3085,7 +3110,7 @@ function calc(room) {
   const h  = parseFloat(room.height)      || 0;
   const fL = parseFloat(room.floorLength) || 0;
   const fW = parseFloat(room.floorWidth)  || 0;
-  const c  = parseInt(room.coats)         || 1;
+  const c  = Number.isFinite(parseInt(room.coats)) ? parseInt(room.coats) : 1;
 
   // Walls: each wall can override the room height (knee walls, stairwells,
   // vaulted sections) — blank per-wall height falls back to the room height.
@@ -3153,6 +3178,12 @@ function switchMode(mode) {
   if (extCard) extCard.style.display = mode === 'exterior' ? 'block' : 'none';
   const addBtn = document.getElementById('add-room-btn');
   if (addBtn) addBtn.textContent = mode === 'exterior' ? '+ ADD SIDE' : '+ ADD ROOM / AREA';
+  // Leaving exterior clears exterior-only whole-job extras so they can't
+  // carry phantom shutter / power-wash charges onto an interior bid.
+  if (mode === 'interior') {
+    job.shutterCount = ''; job.washSF = '';
+    ['job-shutter-count','job-wash-sf'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  }
   rooms.length = 0; roomCount = 0;
   document.getElementById('rooms-container').innerHTML = '';
   document.getElementById('target-field').value = 'wall';
@@ -3337,8 +3368,8 @@ function renderJobsList() {
     const roomCount = (j.rooms||[]).length;
     return `
       <div class="job-row" style="background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
-        <div style="font-weight:700;font-size:14px;margin-bottom:2px">📁 ${j.name || 'Untitled'}</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${roomCount} room${roomCount===1?'':'s'} · ${dateStr}${j.client?' · '+j.client:''}</div>
+        <div style="font-weight:700;font-size:14px;margin-bottom:2px">📁 ${_esc(j.name || 'Untitled')}</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${roomCount} room${roomCount===1?'':'s'} · ${dateStr}${j.client?' · '+_esc(j.client):''}</div>
         <div style="display:grid;grid-template-columns:1fr auto;gap:6px">
           <button onclick="loadSnapshot('${j.id}')" style="height:38px;background:var(--blue);border:none;border-radius:6px;color:#fff;font-family:var(--font);font-weight:700;font-size:13px;cursor:pointer">Load</button>
           <button onclick="deleteSnapshot('${j.id}')" aria-label="Delete" style="height:38px;width:44px;background:transparent;border:1px solid var(--red);border-radius:6px;color:var(--red);font-size:14px;cursor:pointer">✕</button>
@@ -3656,6 +3687,7 @@ function renderBid() {
   // Room rows — one per room with surface breakdown
   const roomRows = rooms.map((r,i) => {
     const c     = cs[i];
+    if (!c.valid) return ''; // skip empty/unfilled rooms so the bid has no phantom $0.00 rows
     const surfs = Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>surfLabel(k,r.mode)).join(', ');
     const short = r.product.replace(/ \(Int\)| \(Ext\)| \(Cabinets\/Trim\)/g,'');
     const sf    = c.totalSF > 0 ? c.totalSF.toFixed(0)+' sf' : '—';
@@ -3663,7 +3695,7 @@ function renderBid() {
       <tr style="border-bottom:1px solid #e5e7eb">
         <td style="padding:8px 6px;font-weight:700;font-size:13px">${_esc(r.name)}</td>
         <td style="padding:8px 6px;font-size:12px;color:#555">${surfs||'—'}</td>
-        <td style="padding:8px 6px;font-size:12px">${short}</td>
+        <td style="padding:8px 6px;font-size:12px">${_esc(short)}</td>
         <td style="padding:8px 6px;font-size:12px;text-align:center">${r.coats}</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${sf}</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(c.total)}</td>
@@ -3782,7 +3814,7 @@ function renderBid() {
       ${notes ? `
       <div style="margin-bottom:14px;font-size:12px">
         <div style="font-weight:700;margin-bottom:4px">Project Notes</div>
-        <div style="color:#444">${notes}</div>
+        <div style="color:#444">${_esc(notes).replace(/\n/g,'<br>')}</div>
       </div>` : ''}
 
       <!-- WARRANTY + DISCLAIMER -->
@@ -5766,7 +5798,7 @@ function renderProjTasks() {
   document.getElementById('proj-tasks-list').innerHTML = projTasks.map((t,i)=>`
     <div class="task-row">
       <input type="checkbox" class="task-check" ${t.done?'checked':''} onchange="projTasks[${i}].done=this.checked"/>
-      <span class="task-label${t.done?' done':''}">${t.text}</span>
+      <span class="task-label${t.done?' done':''}">${_esc(t.text)}</span>
       <button onclick="projTasks.splice(${i},1);renderProjTasks()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px">✕</button>
     </div>`).join('');
 }
@@ -5919,11 +5951,11 @@ function renderMaterials() {
     div.className = 'note-card';
     div.onclick = () => openMaterialsModal(ml.id);
     const preview = items.slice(0,3).map(i =>
-      `<div style="font-size:12px;color:var(--muted);line-height:1.6">${i.bought?'☑':'☐'} ${i.name||''}${i.qty?' — '+i.qty:''}</div>`
+      `<div style="font-size:12px;color:var(--muted);line-height:1.6">${i.bought?'☑':'☐'} ${_esc(i.name||'')}${i.qty?' — '+_esc(i.qty):''}</div>`
     ).join('');
     div.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;gap:8px">
-        <div style="font-size:15px;font-weight:700;flex:1">🛒 ${ml.title||'Untitled List'}</div>
+        <div style="font-size:15px;font-weight:700;flex:1">🛒 ${_esc(ml.title||'Untitled List')}</div>
         <div style="font-size:11px;color:var(--blue);flex-shrink:0;font-weight:700">${bought}/${total} bought</div>
         <button onclick="mlCopyToClipboard('${ml.id}', event)" aria-label="Copy list to clipboard"
           style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--blue);font-size:14px;padding:2px 8px;cursor:pointer;flex-shrink:0">📋</button>
@@ -5988,8 +6020,8 @@ function renderMlItems() {
   document.getElementById('ml-items-list').innerHTML = mlItems.map((it,i) => `
     <div style="display:grid;grid-template-columns:22px 1fr 90px 28px;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
       <input type="checkbox" class="task-check" ${it.bought?'checked':''} onchange="mlItems[${i}].bought=this.checked;renderMlItems()"/>
-      <span class="task-label${it.bought?' done':''}" style="font-size:14px">${it.name||''}</span>
-      <span style="font-size:13px;color:var(--muted);text-align:right">${it.qty||''}</span>
+      <span class="task-label${it.bought?' done':''}" style="font-size:14px">${_esc(it.name||'')}</span>
+      <span style="font-size:13px;color:var(--muted);text-align:right">${_esc(it.qty||'')}</span>
       <button onclick="mlItems.splice(${i},1);renderMlItems()" aria-label="Remove item"
         style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0">✕</button>
     </div>`).join('');
@@ -6084,12 +6116,12 @@ function renderSupplies() {
     div.innerHTML = `
       <div style="flex:1">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-          <span class="supply-cat-badge">${s.cat}</span>
+          <span class="supply-cat-badge">${_esc(s.cat)}</span>
         </div>
-        <div style="font-size:15px;font-weight:700;margin-bottom:2px">${s.name}</div>
-        ${s.price?`<div style="font-size:14px;color:var(--green);font-weight:700">${s.price}</div>`:''}
-        ${s.coverage?`<div style="font-size:12px;color:var(--muted)">${s.coverage}</div>`:''}
-        ${s.notes?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${s.notes}</div>`:''}
+        <div style="font-size:15px;font-weight:700;margin-bottom:2px">${_esc(s.name)}</div>
+        ${s.price?`<div style="font-size:14px;color:var(--green);font-weight:700">${_esc(s.price)}</div>`:''}
+        ${s.coverage?`<div style="font-size:12px;color:var(--muted)">${_esc(s.coverage)}</div>`:''}
+        ${s.notes?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${_esc(s.notes)}</div>`:''}
       </div>
       <button onclick="openSupplyModal('${s.id}')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);padding:6px 10px;cursor:pointer;font-size:14px;flex-shrink:0">✏️</button>`;
     list.appendChild(div);
@@ -6715,10 +6747,10 @@ function aptRenderActive(data) {
     tableWrap.style.display = 'block';
     tbody.innerHTML = loc.units.map(u=>`
       <tr style="border-bottom:1px solid #f0ece6">
-        <td style="padding:11px 12px"><span style="background:#e8f4fb;color:#1c6a96;border-radius:5px;padding:3px 10px;font-size:12px;font-weight:700">${u.type}</span></td>
-        <td style="padding:11px 12px;color:#555;font-size:13px">${u.sqft?u.sqft+' sf':'—'}</td>
+        <td style="padding:11px 12px"><span style="background:#e8f4fb;color:#1c6a96;border-radius:5px;padding:3px 10px;font-size:12px;font-weight:700">${_esc(u.type)}</span></td>
+        <td style="padding:11px 12px;color:#555;font-size:13px">${u.sqft?_esc(u.sqft)+' sf':'—'}</td>
         <td style="padding:11px 12px;font-weight:700;color:#1c6a96;font-size:15px">$${parseFloat(u.price).toLocaleString()}</td>
-        <td style="padding:11px 12px;color:#888;font-size:12px">${u.notes||'—'}</td>
+        <td style="padding:11px 12px;color:#888;font-size:12px">${u.notes?_esc(u.notes):'—'}</td>
         <td style="padding:11px 8px"><button onclick="aptRemoveUnit('${u.id}')" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:16px;padding:2px 6px">✕</button></td>
       </tr>`).join('');
   } else { tableWrap.style.display = 'none'; }

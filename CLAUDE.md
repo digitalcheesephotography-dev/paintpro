@@ -185,8 +185,8 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 - `room.photos` on a job holds only `[{ id }]` references — NO base64. `getJobSnapshot()` strips any `.data` so localStorage never fills and the synced `ingersoll_jobs_v1` doc stays tiny (was the two critical data-loss bugs).
 - `addRoomPhotoFiles()` compresses (550px / 0.5) → `photoPut` → pushes `{id}`. `renderRoomPhotoStrip()` is async: loads each blob from IndexedDB; a reference with no local blob renders an "other device" placeholder. `viewRoomPhoto(id)` fetches from IndexedDB for the lightbox.
 - `migratePhotosToIDB()` runs once at boot: moves any legacy inline base64 (active job + saved snapshots) into IndexedDB, strips the blobs, re-saves. Best-effort, idempotent (blob removed only after a successful `photoPut`).
-- **Cross-device photo sync (Firebase Storage) is NOT built yet** — photos are local per device. Job measurements DO sync (the snapshot is IDs-only). Layer 2 = upload blobs to `users/{uid}/photos/{id}` and download on demand; needs Storage enabled in the Firebase console.
-- `deleteAllMyData()` also deletes the `paintpro-photos` DB.
+- **Cross-device photo sync (Firebase Storage) — Layer 2, built.** Blobs upload to `users/{uid}/photos/{id}.jpg` on add (`uploadPhoto`); `renderRoomPhotoStrip`/`viewRoomPhoto` pull a `getDownloadURL()` when the local IndexedDB blob is missing (`photoDownloadURL`). `backfillPhotos()` (run after `migratePhotosToIDB` at boot) pushes pre-existing local photos up. All guarded by `_storage` — if the Storage SDK didn't load or Storage is disabled, `_storage` is null and photos stay local-only with no error. Rules in `storage.rules` (must be published in the console). SDK: `firebase-storage-compat.js`; CSP adds `firebasestorage.googleapis.com` to img-src/connect-src.
+- `deleteAllMyData()` deletes the `paintpro-photos` IndexedDB and best-effort deletes all `users/{uid}/photos` in Storage.
 
 ### 7.5 Bluetooth (Leica DISTO D2)
 - Requires HTTPS — works on Netlify, not `file://`

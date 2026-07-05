@@ -13,12 +13,14 @@
   script-src 'self' 'unsafe-inline' https://www.gstatic.com;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src https://fonts.gstatic.com;
-  img-src 'self' data: blob:;
+  img-src 'self' data: blob: https://firebasestorage.googleapis.com;
   media-src 'self' blob:;
   connect-src 'self'
     https://*.workers.dev
     https://api.anthropic.com
     https://*.googleapis.com
+    https://firebasestorage.googleapis.com
+    https://*.firebasestorage.app
     https://*.firebaseapp.com
     https://*.firebaseio.com
     wss://*.firebaseio.com
@@ -329,6 +331,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 </head>
 <body>
 
@@ -1662,6 +1665,8 @@ const SYNC_KEYS = [
 ];
 
 let _db = null;        // Firestore instance (null = local-only mode)
+let _storage = null;   // Firebase Storage instance (null = photos stay local-only)
+const _uploadedPhotos = new Set(); // photo IDs already pushed to Storage this session
 let _uid = null;       // current user's UID — scopes all Firestore paths
 let _syncSkip = false; // prevents Storage intercept from re-writing Firestore on incoming changes
 let _syncSizeWarned = false; // true once we've warned that an oversized doc can't sync (avoids toast spam)
@@ -1729,6 +1734,9 @@ function initFirebase() {
         document.getElementById('auth-screen').style.display = 'none';
         _uid = user.uid;
         _db = firebase.firestore();
+        // Firebase Storage for cross-device photo blobs (null if the SDK didn't
+        // load or Storage isn't enabled — photos then stay local-only, no error).
+        try { if (firebase.storage) _storage = firebase.storage(); } catch(_) { _storage = null; }
         // Offline persistence: data cached locally, syncs automatically when back online
         _db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
         // Reveal sign-out button in debug panel
@@ -2127,8 +2135,9 @@ function _bootAppInner() {
   // Restore in-progress job from localStorage; only add a fresh blank room if nothing was saved
   const restored = loadActiveJob();
   if (!restored) addRoom();
-  // One-time: move any legacy inline photo blobs into IndexedDB (best-effort)
-  migratePhotosToIDB();
+  // Move any legacy inline photo blobs into IndexedDB, then push local photos
+  // up to Storage (covers photos taken before cross-device sync was enabled).
+  migratePhotosToIDB().then(backfillPhotos);
   syncRatesUI();
   syncJobBadge();
 
@@ -5111,6 +5120,44 @@ function photoDelete(id){ return photoDBOpen().then(db => new Promise((res, rej)
   const tx = db.transaction(PHOTO_STORE, 'readwrite'); tx.objectStore(PHOTO_STORE).delete(id);
   tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); })); }
 
+// ── Cross-device photo sync via Firebase Storage (Layer 2) ──
+// Blobs stored at users/{uid}/photos/{id}.jpg. Uploaded when a photo is added;
+// on another device renderRoomPhotoStrip pulls a download URL when the local
+// blob is missing. Everything is best-effort: if Storage is off or unreachable,
+// photos simply stay local (the Layer-1 behavior) with no error.
+function _photoRef(id){ return _storage.ref(`users/${_uid}/photos/${id}.jpg`); }
+function _b64ToBlob(b64, type){
+  const bin = atob(b64); const u = new Uint8Array(bin.length);
+  for (let i=0;i<bin.length;i++) u[i] = bin.charCodeAt(i);
+  return new Blob([u], { type: type || 'image/jpeg' });
+}
+async function uploadPhoto(id, base64){
+  if (!_storage || !_uid || _uploadedPhotos.has(id)) return;
+  try { await _photoRef(id).put(_b64ToBlob(base64)); _uploadedPhotos.add(id); }
+  catch(e){ console.warn('[Photo upload]', e.code || e.message); }
+}
+async function photoDownloadURL(id){
+  if (!_storage || !_uid) return null;
+  try { return await _photoRef(id).getDownloadURL(); } catch(_) { return null; }
+}
+async function deleteStoragePhoto(id){
+  _uploadedPhotos.delete(id);
+  if (!_storage || !_uid) return;
+  try { await _photoRef(id).delete(); } catch(_){}
+}
+// Push any local photos in the current job that aren't in Storage yet — covers
+// photos added before Storage was turned on. Runs once after the job loads.
+async function backfillPhotos(){
+  if (!_storage || !_uid) return;
+  try {
+    for (const r of rooms) for (const p of (r.photos || [])) {
+      if (_uploadedPhotos.has(p.id)) continue;
+      const data = p.data || await photoGet(p.id).catch(() => null);
+      if (data) await uploadPhoto(p.id, data);
+    }
+  } catch(e){ console.warn('[Photo backfill]', e); }
+}
+
 // One-time migration: move any legacy inline base64 (photos saved before this
 // change) out of the active job and saved-jobs into IndexedDB, then strip the
 // blobs so localStorage/Firestore shed the weight. Idempotent and best-effort —
@@ -5151,8 +5198,9 @@ async function addRoomPhotoFiles(roomId, files) {
     try {
       const data = await compressToBase64(file, 550, 0.5);
       const id = 'p' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-      await photoPut(id, data);       // blob to IndexedDB
+      await photoPut(id, data);       // blob to IndexedDB (local, always)
       room.photos.push({ id });       // only the reference on the job
+      uploadPhoto(id, data);          // push to Storage for other devices (best-effort)
       saved++;
     } catch(e) {
       console.error('[Room Photo]', e);
@@ -5162,7 +5210,7 @@ async function addRoomPhotoFiles(roomId, files) {
   if (saved > 0) {
     renderRoomPhotoStrip(roomId);
     markDirty();
-    showToast(`📸 ${saved} photo${saved > 1 ? 's' : ''} saved`);
+    showToast(`📸 ${saved} photo${saved > 1 ? 's' : ''} saved${_storage ? ' — syncing to your other devices' : ''}`);
   }
 }
 
@@ -5171,6 +5219,7 @@ async function removeRoomPhoto(roomId, photoId) {
   if (!room || !room.photos) return;
   room.photos = room.photos.filter(p => p.id !== photoId);
   try { await photoDelete(photoId); } catch(_){}
+  deleteStoragePhoto(photoId); // best-effort cloud delete so it doesn't re-sync
   renderRoomPhotoStrip(roomId);
   markDirty();
 }
@@ -5186,16 +5235,19 @@ async function renderRoomPhotoStrip(roomId) {
   const items = [];
   for (const p of photos) {
     let data = null;
-    if (p.data) { try { await photoPut(p.id, p.data); } catch(_){} data = p.data; delete p.data; migrated = true; }
+    if (p.data) { try { await photoPut(p.id, p.data); } catch(_){} data = p.data; delete p.data; migrated = true; uploadPhoto(p.id, data); }
     else { try { data = await photoGet(p.id); } catch(_){} }
-    items.push({ id:p.id, data });
+    // No local blob (e.g. taken on another device) — pull it from Storage.
+    let url = null;
+    if (!data) url = await photoDownloadURL(p.id);
+    items.push({ id:p.id, data, url });
   }
   if (migrated) markDirty(); // persist the now-slimmed snapshot
   strip.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 0 4px">` +
     items.map(it => `
       <div style="position:relative;width:76px;height:76px;flex-shrink:0">
-        ${it.data
-          ? `<img src="data:image/jpeg;base64,${it.data}" alt="Room photo"
+        ${(it.data || it.url)
+          ? `<img src="${it.data ? 'data:image/jpeg;base64,'+it.data : it.url}" alt="Room photo"
                onclick="viewRoomPhoto('${it.id}')"
                style="width:76px;height:76px;object-fit:cover;border-radius:7px;cursor:pointer;border:1.5px solid var(--border);display:block"/>`
           : `<div title="Saved on another device" style="width:76px;height:76px;border-radius:7px;border:1.5px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);font-size:10px;text-align:center;line-height:1.2">📷<span style="margin-top:2px">other<br>device</span></div>`}
@@ -5207,9 +5259,10 @@ async function renderRoomPhotoStrip(roomId) {
 }
 
 async function viewRoomPhoto(photoId) {
-  let data = null;
+  let data = null, url = null;
   try { data = await photoGet(photoId); } catch(_){}
-  if (!data) { showToast('That photo is saved on another device', 'warn'); return; }
+  if (!data) url = await photoDownloadURL(photoId); // pull from Storage if local blob is missing
+  if (!data && !url) { showToast('That photo is saved on another device', 'warn'); return; }
   let lb = document.getElementById('room-photo-lightbox');
   if (!lb) {
     lb = document.createElement('div');
@@ -5220,7 +5273,7 @@ async function viewRoomPhoto(photoId) {
     lb.addEventListener('click', e => { if (e.target === lb) closeRoomPhotoLightbox(); });
     document.body.appendChild(lb);
   }
-  document.getElementById('room-photo-lb-img').src = 'data:image/jpeg;base64,' + data;
+  document.getElementById('room-photo-lb-img').src = data ? ('data:image/jpeg;base64,' + data) : url;
   lb.style.display = 'flex';
 }
 
@@ -5606,8 +5659,17 @@ async function deleteAllMyData() {
     }
   } catch (_) {}
 
-  // 2. Delete the IndexedDB photo store if one exists.
+  // 2. Delete the local IndexedDB photo store and the cloud photo blobs.
   try { if (window.indexedDB) indexedDB.deleteDatabase('paintpro-photos'); } catch (_) {}
+  try {
+    if (_storage && _uid) {
+      await Promise.race([
+        _storage.ref(`users/${_uid}/photos`).listAll()
+          .then(res => Promise.all(res.items.map(it => it.delete().catch(() => {})))),
+        new Promise(r => setTimeout(r, 4000)),
+      ]);
+    }
+  } catch (_) {}
 
   // 3. Wipe every local app key (data, secrets, API key, and the app-lock PIN).
   try {

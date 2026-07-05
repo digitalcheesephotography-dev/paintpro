@@ -1,0 +1,29 @@
+rules_version = '2';
+
+// PaintPro Firebase Storage security rules.
+//
+// Publish in the Firebase console: Storage -> Rules -> paste -> Publish.
+// Kept in the repo so the rules are reviewable and version-controlled.
+//
+// Photos are stored at users/{uid}/photos/{photoId}.jpg. A signed-in user may
+// only read or write files under their OWN uid — no path lets one account reach
+// another account's photos. Uploads are capped at 15 MB and must be images.
+//
+// VERIFY AFTER PUBLISHING: signed in as user A, attempt to read
+// users/<user-B-uid>/photos/<id>.jpg — it must be denied.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    match /users/{uid}/photos/{photoId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && request.resource.size < 15 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Everything else denied by default.
+  }
+}

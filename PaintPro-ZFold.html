@@ -7265,11 +7265,34 @@ function aptRemoveUnit(unitId) {
 <!-- PWA service worker registration — gives the app offline support and home-screen installability -->
 <script>
 if ('serviceWorker' in navigator) {
+  // Was this page already controlled by a worker when it loaded? If so, a later
+  // controllerchange means a NEW version took over (an update) — prompt a
+  // refresh. If not (first-ever install), the initial claim is not an update.
+  const _hadController = !!navigator.serviceWorker.controller;
+  let _updateReloading = false;
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(err => {
       console.warn('Service worker registration failed:', err);
     });
   });
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!_hadController || _updateReloading) return;
+    showUpdateBanner();
+  });
+}
+
+// Small "update ready" banner shown when a newer app version has activated in
+// the background. Tapping Refresh reloads to pick up the new code.
+function showUpdateBanner() {
+  if (document.getElementById('update-banner')) return;
+  const bar = document.createElement('div');
+  bar.id = 'update-banner';
+  bar.setAttribute('style', 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + var(--safe-b));z-index:99999;display:flex;align-items:center;gap:12px;background:var(--panel);border:1.5px solid var(--blue);border-radius:12px;padding:10px 12px 10px 16px;box-shadow:0 6px 24px rgba(0,0,0,.45);max-width:calc(100% - 24px)');
+  bar.innerHTML = `
+    <span style="font-size:14px;color:var(--text);font-family:var(--font)">🔄 A new version is ready</span>
+    <button onclick="location.reload()" style="height:38px;padding:0 16px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap">Refresh</button>
+    <button onclick="this.parentNode.remove()" aria-label="Dismiss" style="height:38px;width:34px;background:transparent;border:none;color:var(--muted);font-size:18px;cursor:pointer;flex-shrink:0">✕</button>`;
+  document.body.appendChild(bar);
 }
 
 // Install prompt — when Chrome decides the app qualifies, capture the event

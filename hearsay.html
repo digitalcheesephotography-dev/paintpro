@@ -1457,7 +1457,10 @@ window.addEventListener("beforeunload", () => { if (recording) stopRecording(); 
     link.rel = "manifest";
     link.href = "hearsay.webmanifest";
     document.head.append(link);
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("hearsay-sw.js").catch(() => {});
+    // Share PaintPro's service worker (sw.js) so the origin has ONE worker.
+    // A separate hearsay worker used to hijack the scope and wipe PaintPro's
+    // offline cache — see the pre-launch audit. sw.js caches hearsay.html too.
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   }
   try {
     db = await openDB();

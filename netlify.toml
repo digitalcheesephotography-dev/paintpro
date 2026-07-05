@@ -1,5 +1,16 @@
 [build.environment]
   NODE_VERSION = "18"
 
-[functions]
-  directory = "netlify/functions"
+# Security headers applied to every response. The Content-Security-Policy stays
+# in the page's <meta> tag (it already governs script/connect/img sources);
+# these headers add the protections a meta CSP cannot: clickjacking defense,
+# forced HTTPS, MIME-sniffing lockdown, and referrer minimization.
+# NOTE: camera, microphone, and geolocation are intentionally NOT disabled here
+# because the app uses them (photos, voice, GPS).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"

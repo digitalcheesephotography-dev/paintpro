@@ -1804,9 +1804,20 @@ function saveProxyUrl() {
   const el = document.getElementById('settings-proxy-url');
   const st = document.getElementById('settings-proxy-status');
   const url = (el ? el.value : '').trim().replace(/\/$/, '');
-  if (!url) { if(st){st.textContent='Paste your workers.dev URL first.';st.style.color='var(--red)';} return; }
-  localStorage.setItem('ingersoll_proxy_url_v1', url);
-  if(st){st.textContent='✓ Proxy URL saved';st.style.color='var(--green)';}
+  const fail = m => { if(st){ st.textContent=m; st.style.color='var(--red)'; } };
+  if (!url) { fail('Paste your workers.dev URL first.'); return; }
+  // Validate before storing — the Anthropic key is POSTed to whatever URL is
+  // saved here, so a mistyped or malicious address would leak the key. Require
+  // HTTPS and a Cloudflare Workers host (the only proxy this app is built for).
+  let u;
+  try { u = new URL(url); } catch { fail('That does not look like a valid web address.'); return; }
+  if (u.protocol !== 'https:') { fail('Proxy URL must start with https://'); return; }
+  if (!/(^|\.)workers\.dev$/i.test(u.hostname)) {
+    fail('Proxy must be a *.workers.dev address (your Cloudflare Worker). Double-check it.');
+    return;
+  }
+  localStorage.setItem('ingersoll_proxy_url_v1', u.origin);
+  if(st){ st.textContent='✓ Proxy URL saved'; st.style.color='var(--green)'; }
   showToast('✓ Proxy URL saved');
 }
 
@@ -3906,7 +3917,9 @@ function renderBid() {
   const grand  = mat+lab;
 
   const surfLabel = (key, mode) => {
-    if (mode === 'exterior') return key==='walls'?'Siding':key==='ceiling'?'Soffit':key==='floor'?'Deck':'Trim';
+    // Exterior 'ceiling' toggle is the Porch Ceiling in the UI (not the soffit);
+    // the soffit is a separate always-measured section added below.
+    if (mode === 'exterior') return key==='walls'?'Siding':key==='ceiling'?'Porch Ceiling':key==='floor'?'Deck':'Trim';
     return key[0].toUpperCase()+key.slice(1);
   };
 
@@ -3914,7 +3927,12 @@ function renderBid() {
   const roomRows = rooms.map((r,i) => {
     const c     = cs[i];
     if (!c.valid) return ''; // skip empty/unfilled rooms so the bid has no phantom $0.00 rows
-    const surfs = Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>surfLabel(k,r.mode)).join(', ');
+    let surfs = Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>surfLabel(k,r.mode)).join(', ');
+    // Soffit is charged whenever it's measured (independent of the surface toggles),
+    // so list it on the exterior bid when the room actually has soffit area.
+    if (r.mode === 'exterior' && (r.soffitSections||[]).some(s => (parseFloat(s.l)||0)*(parseFloat(s.w)||0) > 0)) {
+      surfs = surfs ? surfs + ', Soffit' : 'Soffit';
+    }
     const short = r.product.replace(/ \(Int\)| \(Ext\)| \(Cabinets\/Trim\)/g,'');
     const sf    = c.totalSF > 0 ? c.totalSF.toFixed(0)+' sf' : '—';
     return `
@@ -6506,6 +6524,11 @@ function parseSpokenNumber(text) {
   const two = text.match(/^([\w-]+)\s+([\w-]+)$/i);
   if (two) {
     const a=wordToNum(two[1]), b=wordToNum(two[2]);
+    // Tens word + single digit spoken as two words ("twenty five", "forty two")
+    // is the compound number 25 / 42 — NOT feet-inches. Only fires when the first
+    // word is a bare tens value (20,30,…,90); "twelve five" / "nine four" and
+    // hyphenated "thirty-two five" stay as feet-inches (12'5", 9'4", 32'5").
+    if (a!==null&&b!==null && a>=20 && a%10===0 && b>=1 && b<=9) return a+b;
     if (a!==null&&b!==null&&b<12) return a+b/12;
     if (a!==null&&b!==null) return parseFloat(a+'.'+b);
   }

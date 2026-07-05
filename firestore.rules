@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// PaintPro Firestore security rules.
+//
+// These are the ACTUAL rules that must be published in the Firebase console
+// (Firestore Database -> Rules -> paste -> Publish). Keeping them here in the
+// repo makes them reviewable and version-controlled instead of living only in
+// the console where nobody can verify them.
+//
+// Tenant isolation: every user's data lives under users/{uid}/data/{document},
+// and a user may only read or write documents under their OWN uid. There is no
+// path that lets one signed-in account reach another account's data. The app
+// reads/writes exactly this path (see _userDoc() in PaintPro-ZFold.html).
+//
+// VERIFY AFTER PUBLISHING: sign in as user A, then attempt to read
+// users/<user-B-uid>/data/<key> — it must be denied. Anything created in
+// "test mode" (allow read, write: if true) exposes every tenant to each other,
+// so confirm this file is what is actually deployed.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // A user's own data — the only collection the app uses.
+    match /users/{uid}/data/{document} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Everything else is denied by default (no other rules = no access).
+  }
+}

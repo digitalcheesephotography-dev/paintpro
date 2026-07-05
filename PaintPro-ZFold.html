@@ -1081,6 +1081,23 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     </div>
   </div>
 
+  <!-- Privacy & Your Data -->
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
+    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🛡️ Privacy &amp; Your Data</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      Get a full copy of everything stored, or permanently erase it. Erasing removes your data from this device <strong>and</strong> the cloud — it cannot be undone.
+    </div>
+    <button onclick="backupToDrive()"
+            style="width:100%;height:50px;background:transparent;border:1.5px solid var(--blue);border-radius:8px;color:var(--blue);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px">
+      📤 Export All My Data
+    </button>
+    <button onclick="deleteAllMyData()"
+            style="width:100%;height:50px;background:transparent;border:1.5px solid var(--red);border-radius:8px;color:var(--red);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">
+      🗑️ Delete All My Data
+    </button>
+    <div id="delete-data-status" style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px"></div>
+  </div>
+
   <!-- HearSay link -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
     <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">👂 HearSay</div>
@@ -5492,6 +5509,43 @@ function backupToDrive() {
   a.click();
   URL.revokeObjectURL(url);
   showToast('💾 Backup downloaded');
+}
+
+// Permanently erase all of the user's data — local AND cloud — for privacy-law
+// "right to delete" requests. Double-confirmed. Deletes the Firestore copies
+// first so nothing re-syncs, then wipes every local key and the photo database.
+async function deleteAllMyData() {
+  const st = document.getElementById('delete-data-status');
+  const setStat = t => { if (st) st.textContent = t; };
+  if (!confirm('Delete ALL your data?\n\nThis permanently erases every client, job, project, note, material, photo, and setting from this device AND the cloud. It cannot be undone.\n\nTip: tap "Export All My Data" first if you want a copy.')) return;
+  const typed = prompt('This is permanent and cannot be undone.\n\nType DELETE to confirm.');
+  if ((typed || '').trim().toUpperCase() !== 'DELETE') { setStat('Deletion cancelled.'); showToast('Deletion cancelled'); return; }
+
+  setStat('Deleting your data…');
+  showToast('Deleting all data…');
+
+  // 1. Delete the cloud copies so they can't sync back. Race a timeout so an
+  //    offline device doesn't hang here — Firestore queues the deletes and
+  //    replays them on reconnect regardless.
+  try {
+    if (_db && _uid) {
+      await Promise.race([
+        Promise.all(SYNC_KEYS.map(k => _userDoc(k).delete().catch(() => {}))),
+        new Promise(r => setTimeout(r, 4000)),
+      ]);
+    }
+  } catch (_) {}
+
+  // 2. Delete the IndexedDB photo store if one exists.
+  try { if (window.indexedDB) indexedDB.deleteDatabase('paintpro-photos'); } catch (_) {}
+
+  // 3. Wipe every local app key (data, secrets, API key, and the app-lock PIN).
+  try {
+    Object.keys(localStorage).filter(k => k.startsWith('ingersoll_')).forEach(k => localStorage.removeItem(k));
+  } catch (_) {}
+
+  showToast('✅ All your data has been deleted');
+  setTimeout(() => location.reload(), 1000);
 }
 
 function restoreFromBackup(input) {

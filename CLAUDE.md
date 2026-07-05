@@ -318,7 +318,7 @@ IndexedDB: `paintpro-photos` database, object store `photos`, keyed by photo ID 
 `photoDBOpen`, `photoPut`, `photoGet`, `photoDeleteDB`, `photoGetAll`, `compressImage`, `addPhotos`, `deletePhoto`, `renderJobPhotos`, `renderRoomPhotos`, `viewPhoto`, `closeLightbox`, `toggleBidPhotos`, `hydratePhotos`
 
 ### Backup & restore
-`buildBackup`, `backupToDrive`, `restoreFromBackup`
+`buildBackup`, `backupToDrive`, `restoreFromBackup`, `deleteAllMyData` (privacy right-to-delete: wipes local + Firestore `SYNC_KEYS` docs + `paintpro-photos` IndexedDB, double-confirmed)
 
 ### Calculation & bid generation
 `calc`, `recalcAll`, `recalcRoom`, `jobExtras`, `renderBid`, `toggleBid`, `shareBid`, `saveClientFromBid`

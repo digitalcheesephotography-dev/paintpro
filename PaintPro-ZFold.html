@@ -907,6 +907,48 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 <!-- SETTINGS SECTION -->
 <div id="settings-section" style="display:none;padding:16px 14px;max-width:600px;margin:0 auto">
 
+  <!-- App Lock (PIN + fingerprint) -->
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
+    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🔒 App Lock</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      Require a PIN to open PaintPro — with an optional fingerprint for a faster unlock. Protects your clients and jobs if your phone is lost or borrowed, even with no signal.
+    </div>
+    <div id="lock-state" style="font-size:14px;font-weight:700;margin-bottom:12px"></div>
+
+    <div id="lock-current-wrap" style="display:none;margin-bottom:10px">
+      <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Current PIN</label>
+      <input type="password" id="lock-current" inputmode="numeric" autocomplete="off" placeholder="Enter current PIN"
+             style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:13px 14px;color:var(--text);font-family:var(--font);font-size:15px;letter-spacing:.2em"/>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div>
+        <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">New PIN <span style="color:var(--border)">(4–8 digits)</span></label>
+        <input type="password" id="lock-new" inputmode="numeric" autocomplete="off" placeholder="••••"
+               style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:13px 14px;color:var(--text);font-family:var(--font);font-size:15px;letter-spacing:.2em"/>
+      </div>
+      <div>
+        <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Confirm PIN</label>
+        <input type="password" id="lock-confirm" inputmode="numeric" autocomplete="off" placeholder="••••"
+               style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:13px 14px;color:var(--text);font-family:var(--font);font-size:15px;letter-spacing:.2em"/>
+      </div>
+    </div>
+    <button onclick="settingsSavePin()"
+            style="width:100%;height:50px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;margin-bottom:8px">
+      Save PIN
+    </button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <button id="lock-bio-btn" onclick="settingsToggleBio()"
+              style="display:none;height:46px;background:transparent;border:1px solid var(--blue);color:var(--blue);border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer">
+        👆 Enable Fingerprint
+      </button>
+      <button id="lock-off-btn" onclick="settingsRemovePin()"
+              style="display:none;height:46px;background:transparent;border:1px solid var(--red);color:var(--red);border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer">
+        Turn Off Lock
+      </button>
+    </div>
+    <div id="lock-status" style="font-size:13px;color:var(--muted);text-align:center;margin-top:10px"></div>
+  </div>
+
   <!-- AI Photo Estimator -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
     <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🤖 AI Photo Estimator</div>
@@ -1865,11 +1907,195 @@ function reloadFromSync(key) {
 // BOOT
 // ══════════════════════════════════════════════
 
+// ══════════════════════════════════════════════
+// APP LOCK  (opt-in PIN + optional fingerprint)
+// ══════════════════════════════════════════════
+// Device-local only — PIN_KEY/BIO_KEY are NOT in SYNC_KEYS, so each device sets
+// its own lock. Both are cleared on signOut() (a natural "forgot PIN" recovery:
+// sign in again and your synced data returns). The lock gates the whole app on
+// boot, online AND offline, which is the point — a lost phone in airplane mode
+// no longer opens straight into your data.
+const PIN_KEY = 'ingersoll_pin_v1';   // { salt, hash }  PBKDF2-SHA256(pin)
+const BIO_KEY = 'ingersoll_bio_v1';   // { credId }      WebAuthn platform credential id
+let _appUnlocked = false;
+let _lockAttempts = 0;
+
+function pinIsSet(){ try { return !!JSON.parse(localStorage.getItem(PIN_KEY)); } catch { return false; } }
+function bioIsSet(){ try { return !!JSON.parse(localStorage.getItem(BIO_KEY)); } catch { return false; } }
+
+function _u8b64(u8){ let s=''; u8.forEach(b=>s+=String.fromCharCode(b)); return btoa(s); }
+function _b64u8(b64){ const s=atob(b64); const u=new Uint8Array(s.length); for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i); return u; }
+
+async function _pinHash(pin, saltU8){
+  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name:'PBKDF2', salt:saltU8, iterations:200000, hash:'SHA-256' }, km, 256);
+  return _u8b64(new Uint8Array(bits));
+}
+async function _setPin(pin){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const hash = await _pinHash(pin, salt);
+  localStorage.setItem(PIN_KEY, JSON.stringify({ salt:_u8b64(salt), hash }));
+}
+async function _verifyPin(pin){
+  try { const r = JSON.parse(localStorage.getItem(PIN_KEY)); if(!r) return false;
+    return (await _pinHash(pin, _b64u8(r.salt))) === r.hash; } catch { return false; }
+}
+
+async function bioAvailable(){
+  try { return !!(window.PublicKeyCredential &&
+    await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); } catch { return false; }
+}
+async function _bioRegister(){
+  const cred = await navigator.credentials.create({ publicKey:{
+    challenge: crypto.getRandomValues(new Uint8Array(32)),
+    rp:   { name:'PaintPro', id:location.hostname },
+    user: { id:crypto.getRandomValues(new Uint8Array(16)), name:'paintpro', displayName:'PaintPro' },
+    pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+    authenticatorSelection:{ authenticatorAttachment:'platform', userVerification:'required', residentKey:'preferred' },
+    timeout:60000, attestation:'none'
+  }});
+  localStorage.setItem(BIO_KEY, JSON.stringify({ credId:_u8b64(new Uint8Array(cred.rawId)) }));
+}
+async function _bioUnlock(){
+  const r = JSON.parse(localStorage.getItem(BIO_KEY)); if(!r) return false;
+  // No server to verify the signature — the platform authenticator gating on the
+  // device (fingerprint) IS the check, same trust level as the local PIN.
+  const assertion = await navigator.credentials.get({ publicKey:{
+    challenge: crypto.getRandomValues(new Uint8Array(32)),
+    rpId: location.hostname, timeout:60000, userVerification:'required',
+    allowCredentials:[{ type:'public-key', id:_b64u8(r.credId), transports:['internal'] }]
+  }});
+  return !!assertion;
+}
+
+function _unlockAndBoot(){
+  _appUnlocked = true;
+  const ov = document.getElementById('lock-overlay'); if (ov) ov.remove();
+  document.body.style.overflow = '';
+  _bootAppInner();
+}
+
+function showLockScreen(){
+  document.body.style.overflow = 'hidden';
+  const hasBio = bioIsSet();
+  const ov = document.createElement('div');
+  ov.id = 'lock-overlay';
+  ov.setAttribute('style','position:fixed;inset:0;z-index:100000;background:var(--dark);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:18px');
+  ov.innerHTML = `
+    <div style="font-family:var(--head);font-size:30px;letter-spacing:2px;color:var(--blue)">PAINTPRO</div>
+    <div style="font-size:15px;color:var(--muted)">Enter your PIN to unlock</div>
+    <div id="lock-dots" style="display:flex;gap:12px;height:16px;margin:2px 0"></div>
+    ${hasBio ? `<button id="lock-bio" style="height:48px;padding:0 22px;background:var(--panel);border:1.5px solid var(--blue);border-radius:10px;color:var(--blue);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">👆 Use Fingerprint</button>` : ''}
+    <div id="lock-pad" style="display:grid;grid-template-columns:repeat(3,74px);gap:12px;margin-top:4px"></div>
+    <div id="lock-msg" style="font-size:13px;color:var(--red);height:16px"></div>
+    <button id="lock-forgot" style="background:none;border:none;color:var(--muted);font-size:14px;text-decoration:underline;cursor:pointer;margin-top:4px;font-family:var(--font)">Forgot PIN? Sign out to reset</button>`;
+  document.body.appendChild(ov);
+
+  let entry = '';
+  const dots = () => {
+    const d = document.getElementById('lock-dots');
+    d.innerHTML = Array.from({length:Math.max(4,entry.length)}, (_,i)=>
+      `<div style="width:14px;height:14px;border-radius:50%;background:${i<entry.length?'var(--blue)':'var(--border)'}"></div>`).join('');
+  };
+  const msg = t => { const m=document.getElementById('lock-msg'); if(m) m.textContent=t||''; };
+  const submit = async () => {
+    if (await _verifyPin(entry)) { _unlockAndBoot(); return; }
+    _lockAttempts++;
+    entry = ''; dots();
+    if (_lockAttempts >= 5) { msg('Too many tries — wait a moment'); pad(true);
+      setTimeout(()=>{ pad(false); msg(''); }, Math.min(30000, 2000*(_lockAttempts-4))); }
+    else msg('Wrong PIN');
+  };
+  const press = v => {
+    if (entry.length >= 8) return;
+    entry += v; dots();
+    if (entry.length >= 4) msg('');
+  };
+  const back = () => { entry = entry.slice(0,-1); dots(); };
+  const keys = ['1','2','3','4','5','6','7','8','9','⌫','0','✓'];
+  const padEl = document.getElementById('lock-pad');
+  function pad(disabled){
+    padEl.innerHTML = keys.map(k=>`<button data-k="${k}" ${disabled?'disabled':''}
+      style="height:64px;border-radius:12px;border:1px solid var(--border);background:${k==='✓'?'var(--blue)':'var(--panel)'};color:${k==='✓'?'#fff':'var(--text)'};font-size:22px;font-weight:700;cursor:pointer;font-family:var(--font);opacity:${disabled?'.4':'1'}">${k}</button>`).join('');
+    padEl.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      const k=b.dataset.k;
+      if(k==='⌫') back(); else if(k==='✓') submit(); else press(k);
+    });
+  }
+  pad(false); dots();
+
+  const forgot = document.getElementById('lock-forgot');
+  if (forgot) forgot.onclick = () => { if (confirm('Sign out and reset your PIN? Your saved data will come back when you sign in again.')) signOut(); };
+  const bioBtn = document.getElementById('lock-bio');
+  const tryBio = async () => {
+    try { if (await _bioUnlock()) _unlockAndBoot(); else msg('Fingerprint not recognized'); }
+    catch(_) { msg('Fingerprint canceled — use your PIN'); }
+  };
+  if (bioBtn) { bioBtn.onclick = tryBio; setTimeout(tryBio, 350); } // auto-prompt fingerprint on open
+}
+
+// ── App Lock settings UI ──
+async function renderLockSettings(){
+  const state = document.getElementById('lock-state');
+  const curWrap = document.getElementById('lock-current-wrap');
+  const offBtn = document.getElementById('lock-off-btn');
+  const bioBtn = document.getElementById('lock-bio-btn');
+  if (!state) return;
+  const set = pinIsSet();
+  state.textContent = set ? '✓ App Lock is ON' : 'App Lock is off';
+  state.style.color = set ? 'var(--green)' : 'var(--muted)';
+  curWrap.style.display = set ? 'block' : 'none';
+  offBtn.style.display  = set ? 'block' : 'none';
+  if (set && await bioAvailable()) {
+    bioBtn.style.display = 'block';
+    bioBtn.textContent = bioIsSet() ? '👆 Disable Fingerprint' : '👆 Enable Fingerprint';
+  } else {
+    bioBtn.style.display = 'none';
+  }
+}
+function _lockStatus(t, ok){ const s=document.getElementById('lock-status'); if(s){ s.textContent=t; s.style.color = ok?'var(--green)':'var(--red)'; } }
+async function settingsSavePin(){
+  const cur = document.getElementById('lock-current').value.trim();
+  const nw  = document.getElementById('lock-new').value.trim();
+  const cf  = document.getElementById('lock-confirm').value.trim();
+  if (pinIsSet() && !(await _verifyPin(cur))) { _lockStatus('Current PIN is incorrect'); return; }
+  if (!/^\d{4,8}$/.test(nw)) { _lockStatus('PIN must be 4–8 digits'); return; }
+  if (nw !== cf) { _lockStatus('New PIN and confirmation do not match'); return; }
+  await _setPin(nw);
+  ['lock-current','lock-new','lock-confirm'].forEach(id=>document.getElementById(id).value='');
+  _lockStatus('✓ PIN saved — App Lock is on', true);
+  showToast('🔒 App Lock enabled');
+  renderLockSettings();
+}
+async function settingsRemovePin(){
+  const cur = document.getElementById('lock-current').value.trim();
+  if (!(await _verifyPin(cur))) { _lockStatus('Enter your current PIN to turn off the lock'); return; }
+  localStorage.removeItem(PIN_KEY);
+  localStorage.removeItem(BIO_KEY);
+  document.getElementById('lock-current').value='';
+  _lockStatus('App Lock turned off', true);
+  showToast('🔓 App Lock disabled');
+  renderLockSettings();
+}
+async function settingsToggleBio(){
+  if (!pinIsSet()) { _lockStatus('Set a PIN first, then add a fingerprint'); return; }
+  if (bioIsSet()) { localStorage.removeItem(BIO_KEY); _lockStatus('Fingerprint disabled', true); renderLockSettings(); return; }
+  try { await _bioRegister(); _lockStatus('✓ Fingerprint enabled', true); showToast('👆 Fingerprint unlock enabled'); }
+  catch(e){ _lockStatus('Could not set up fingerprint — you can still use your PIN'); }
+  renderLockSettings();
+}
+
 function bootApp() {
   // Clear loading screen
   const loader = document.getElementById('js-loading');
   if (loader) loader.remove();
+  // App Lock gate — if a PIN is set, block the whole app (online or offline)
+  // until it's entered. _bootAppInner runs only after a successful unlock.
+  if (pinIsSet() && !_appUnlocked) { showLockScreen(); return; }
+  _bootAppInner();
+}
 
+function _bootAppInner() {
   // Restore in-progress job from localStorage; only add a fresh blank room if nothing was saved
   const restored = loadActiveJob();
   if (!restored) addRoom();
@@ -4300,6 +4526,7 @@ function switchTab(tab) {
   if(tab==='contacts') { renderContacts(); switchSubnav('clients'); showFollowupAlert(updateFollowupBadge()); }
   if(tab==='apt') { aptRender(); renderSupplies(); }
   if(tab==='settings') {
+    renderLockSettings();
     const k = localStorage.getItem('ingersoll_anthropic_key_v1') || '';
     const el = document.getElementById('settings-anthropic-key');
     if (el) el.value = k;

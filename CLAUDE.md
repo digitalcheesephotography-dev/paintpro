@@ -294,6 +294,10 @@ Exterior: `front side` / `left side` / `name it garage` / `call it back`
 | `ingersoll_materials_v1` | Materials lists array |
 | `ingersoll_apt_pricing_v1` | Apt pricing locations/units |
 | `ingersoll_supplies_v1` | Supplies (apt sub-section) |
+| `ingersoll_pin_v1` | App Lock PIN (PBKDF2-SHA256 salt+hash; device-local, NOT synced) |
+| `ingersoll_bio_v1` | App Lock WebAuthn credential id for fingerprint unlock (device-local) |
+
+**App Lock (opt-in):** `bootApp()` gates `_bootAppInner()` behind `showLockScreen()` when `pinIsSet()`. Enforced online AND offline (a lost phone in airplane mode no longer opens into data). Fingerprint via WebAuthn platform authenticator when `bioAvailable()`; PIN is the always-available fallback/recovery. `signOut()` clears both keys, so "forgot PIN" recovery = sign in again (synced data returns). Configured in ⚙ Settings → App Lock.
 
 IndexedDB: `paintpro-photos` database, object store `photos`, keyed by photo ID string.
 

@@ -2127,6 +2127,8 @@ function _bootAppInner() {
   // Restore in-progress job from localStorage; only add a fresh blank room if nothing was saved
   const restored = loadActiveJob();
   if (!restored) addRoom();
+  // One-time: move any legacy inline photo blobs into IndexedDB (best-effort)
+  migratePhotosToIDB();
   syncRatesUI();
   syncJobBadge();
 
@@ -3497,7 +3499,9 @@ function getJobSnapshot() {
     client:        document.getElementById('client-name')?.value || '',
     address:       document.getElementById('job-address')?.value || '',
     notes:         document.getElementById('notes')?.value || '',
-    rooms:         JSON.parse(JSON.stringify(rooms)),
+    // Photos live in IndexedDB (see photoDBOpen); snapshots keep only the photo
+    // IDs so localStorage never fills and the synced jobs doc stays tiny.
+    rooms:         rooms.map(r => { const c = JSON.parse(JSON.stringify(r)); c.photos = (r.photos||[]).map(p => ({ id:p.id })); return c; }),
     roomCount:     roomCount,
     job:           { ...job },
     estimatorMode: estimatorMode,
@@ -5079,7 +5083,56 @@ function renderAIPhotoStrip(roomId) {
     </button>`;
 }
 
-// ── Persistent room photos (saved with job, sync between devices) ────────────
+// ── Room photos — blobs in IndexedDB, only IDs in the job snapshot ───────────
+// Storing base64 in localStorage used to (1) fill the ~5MB quota and break
+// auto-save, and (2) push the synced ingersoll_jobs_v1 doc past Firestore's 1MB
+// limit so the whole job silently stopped syncing. Photos now live in an
+// IndexedDB store keyed by photo ID; snapshots carry only { id }. Cross-device
+// photo sync (Firebase Storage) layers on top of this — see the report.
+const PHOTO_DB = 'paintpro-photos', PHOTO_STORE = 'photos';
+let _photoDB = null;
+function photoDBOpen(){
+  return new Promise((res, rej) => {
+    if (_photoDB) return res(_photoDB);
+    let req;
+    try { req = indexedDB.open(PHOTO_DB, 1); } catch(e){ return rej(e); }
+    req.onupgradeneeded = () => { const db = req.result; if (!db.objectStoreNames.contains(PHOTO_STORE)) db.createObjectStore(PHOTO_STORE); };
+    req.onsuccess = () => { _photoDB = req.result; res(_photoDB); };
+    req.onerror   = () => rej(req.error);
+  });
+}
+function photoPut(id, data){ return photoDBOpen().then(db => new Promise((res, rej) => {
+  const tx = db.transaction(PHOTO_STORE, 'readwrite'); tx.objectStore(PHOTO_STORE).put(data, id);
+  tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); })); }
+function photoGet(id){ return photoDBOpen().then(db => new Promise((res, rej) => {
+  const tx = db.transaction(PHOTO_STORE, 'readonly'); const r = tx.objectStore(PHOTO_STORE).get(id);
+  r.onsuccess = () => res(r.result || null); r.onerror = () => rej(r.error); })); }
+function photoDelete(id){ return photoDBOpen().then(db => new Promise((res, rej) => {
+  const tx = db.transaction(PHOTO_STORE, 'readwrite'); tx.objectStore(PHOTO_STORE).delete(id);
+  tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); })); }
+
+// One-time migration: move any legacy inline base64 (photos saved before this
+// change) out of the active job and saved-jobs into IndexedDB, then strip the
+// blobs so localStorage/Firestore shed the weight. Idempotent and best-effort —
+// a photo's blob is only removed AFTER it's safely written to IndexedDB.
+async function migratePhotosToIDB(){
+  try {
+    // Active in-memory rooms
+    for (const r of rooms) for (const p of (r.photos||[])) {
+      if (p && p.data) { try { await photoPut(p.id, p.data); delete p.data; } catch(_){} }
+    }
+    // Saved snapshots array
+    let list, changed = false;
+    try { list = JSON.parse(localStorage.getItem(SAVED_JOBS_KEY)) || []; } catch { list = []; }
+    for (const job of list) for (const r of (job.rooms||[])) {
+      const ph = r.photos || [];
+      for (let i=0;i<ph.length;i++){ const p = ph[i];
+        if (p && p.data) { try { await photoPut(p.id, p.data); ph[i] = { id:p.id }; changed = true; } catch(_){} }
+      }
+    }
+    if (changed) jobsSave(list);
+  } catch(e){ console.warn('[Photos] migration', e); }
+}
 
 async function addRoomPhotos(roomId, input) {
   const files = Array.from(input.files || []);
@@ -5098,7 +5151,8 @@ async function addRoomPhotoFiles(roomId, files) {
     try {
       const data = await compressToBase64(file, 550, 0.5);
       const id = 'p' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-      room.photos.push({ id, data });
+      await photoPut(id, data);       // blob to IndexedDB
+      room.photos.push({ id });       // only the reference on the job
       saved++;
     } catch(e) {
       console.error('[Room Photo]', e);
@@ -5108,38 +5162,54 @@ async function addRoomPhotoFiles(roomId, files) {
   if (saved > 0) {
     renderRoomPhotoStrip(roomId);
     markDirty();
-    showToast(`📸 ${saved} photo${saved > 1 ? 's' : ''} saved — will sync to your other devices`);
+    showToast(`📸 ${saved} photo${saved > 1 ? 's' : ''} saved`);
   }
 }
 
-function removeRoomPhoto(roomId, photoId) {
+async function removeRoomPhoto(roomId, photoId) {
   const room = rooms.find(r => r.id === roomId);
   if (!room || !room.photos) return;
   room.photos = room.photos.filter(p => p.id !== photoId);
+  try { await photoDelete(photoId); } catch(_){}
   renderRoomPhotoStrip(roomId);
   markDirty();
 }
 
-function renderRoomPhotoStrip(roomId) {
+async function renderRoomPhotoStrip(roomId) {
   const strip = document.getElementById(roomId + '_photos_strip');
   if (!strip) return;
   const room = rooms.find(r => r.id === roomId);
-  const photos = (room?.photos || []).filter(p => p && p.data);
+  const photos = (room?.photos || []);
   if (!photos.length) { strip.innerHTML = ''; return; }
+  // Resolve each photo's image: prefer IndexedDB; migrate any legacy inline blob.
+  let migrated = false;
+  const items = [];
+  for (const p of photos) {
+    let data = null;
+    if (p.data) { try { await photoPut(p.id, p.data); } catch(_){} data = p.data; delete p.data; migrated = true; }
+    else { try { data = await photoGet(p.id); } catch(_){} }
+    items.push({ id:p.id, data });
+  }
+  if (migrated) markDirty(); // persist the now-slimmed snapshot
   strip.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 0 4px">` +
-    photos.map(p => `
+    items.map(it => `
       <div style="position:relative;width:76px;height:76px;flex-shrink:0">
-        <img src="data:image/jpeg;base64,${p.data}" alt="Room photo"
-             onclick="viewRoomPhoto('data:image/jpeg;base64,${p.data}')"
-             style="width:76px;height:76px;object-fit:cover;border-radius:7px;cursor:pointer;border:1.5px solid var(--border);display:block"/>
-        <button onclick="removeRoomPhoto('${roomId}','${p.id}')"
+        ${it.data
+          ? `<img src="data:image/jpeg;base64,${it.data}" alt="Room photo"
+               onclick="viewRoomPhoto('${it.id}')"
+               style="width:76px;height:76px;object-fit:cover;border-radius:7px;cursor:pointer;border:1.5px solid var(--border);display:block"/>`
+          : `<div title="Saved on another device" style="width:76px;height:76px;border-radius:7px;border:1.5px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);font-size:10px;text-align:center;line-height:1.2">📷<span style="margin-top:2px">other<br>device</span></div>`}
+        <button onclick="removeRoomPhoto('${roomId}','${it.id}')"
                 style="position:absolute;top:-5px;right:-5px;width:20px;height:20px;border-radius:50%;background:var(--red);border:none;color:#fff;font-size:11px;cursor:pointer;line-height:20px;padding:0;text-align:center;font-weight:700"
                 aria-label="Delete photo">✕</button>
       </div>`).join('') +
     `</div>`;
 }
 
-function viewRoomPhoto(src) {
+async function viewRoomPhoto(photoId) {
+  let data = null;
+  try { data = await photoGet(photoId); } catch(_){}
+  if (!data) { showToast('That photo is saved on another device', 'warn'); return; }
   let lb = document.getElementById('room-photo-lightbox');
   if (!lb) {
     lb = document.createElement('div');
@@ -5150,7 +5220,7 @@ function viewRoomPhoto(src) {
     lb.addEventListener('click', e => { if (e.target === lb) closeRoomPhotoLightbox(); });
     document.body.appendChild(lb);
   }
-  document.getElementById('room-photo-lb-img').src = src;
+  document.getElementById('room-photo-lb-img').src = 'data:image/jpeg;base64,' + data;
   lb.style.display = 'flex';
 }
 

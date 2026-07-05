@@ -180,15 +180,13 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 - Exterior rooms have siding/soffit/deck fields; interior rooms have walls/height/floor/ceiling
 - Voice commands and `applyMeasurement()` are mode-aware
 
-### 7.4 Photos
-- Stored in IndexedDB (not localStorage) — larger blob storage
-- `photoDBOpen()` → `photoPut()` / `photoGet()` / `photoDeleteDB()` / `photoGetAll()`
-- `compressImage()` resizes to max 1600px edge, 0.7 quality before storing
-- Photos attach to job scope (`'job'`) or per-room scope (room ID)
-- `renderJobPhotos()` / `renderRoomPhotos(roomId)` render the photo strips
-- `hydratePhotos()` re-attaches IndexedDB blobs to `<img>` tags after `applyJobData()`
-- `viewPhoto()` / `closeLightbox()` for full-screen preview
-- `toggleBidPhotos(on)` includes/excludes photos from bid output
+### 7.4 Room photos
+- Photo blobs (base64) live in **IndexedDB** (`paintpro-photos` DB, `photos` store), keyed by photo ID. Helpers: `photoDBOpen()` / `photoPut(id,data)` / `photoGet(id)` / `photoDelete(id)`.
+- `room.photos` on a job holds only `[{ id }]` references — NO base64. `getJobSnapshot()` strips any `.data` so localStorage never fills and the synced `ingersoll_jobs_v1` doc stays tiny (was the two critical data-loss bugs).
+- `addRoomPhotoFiles()` compresses (550px / 0.5) → `photoPut` → pushes `{id}`. `renderRoomPhotoStrip()` is async: loads each blob from IndexedDB; a reference with no local blob renders an "other device" placeholder. `viewRoomPhoto(id)` fetches from IndexedDB for the lightbox.
+- `migratePhotosToIDB()` runs once at boot: moves any legacy inline base64 (active job + saved snapshots) into IndexedDB, strips the blobs, re-saves. Best-effort, idempotent (blob removed only after a successful `photoPut`).
+- **Cross-device photo sync (Firebase Storage) is NOT built yet** — photos are local per device. Job measurements DO sync (the snapshot is IDs-only). Layer 2 = upload blobs to `users/{uid}/photos/{id}` and download on demand; needs Storage enabled in the Firebase console.
+- `deleteAllMyData()` also deletes the `paintpro-photos` DB.
 
 ### 7.5 Bluetooth (Leica DISTO D2)
 - Requires HTTPS — works on Netlify, not `file://`
@@ -315,7 +313,7 @@ IndexedDB: `paintpro-photos` database, object store `photos`, keyed by photo ID 
 `switchMode`, `renderAllRooms`, `modeRates` (+ `SURF_LABELS`, `RATE_LABELS`, `extRates`, `loadExtRates`, `saveExtRates`)
 
 ### Photos
-`photoDBOpen`, `photoPut`, `photoGet`, `photoDeleteDB`, `photoGetAll`, `compressImage`, `addPhotos`, `deletePhoto`, `renderJobPhotos`, `renderRoomPhotos`, `viewPhoto`, `closeLightbox`, `toggleBidPhotos`, `hydratePhotos`
+`photoDBOpen`, `photoPut`, `photoGet`, `photoDelete`, `migratePhotosToIDB`, `compressToBase64`, `addRoomPhotos`, `addRoomPhotoFiles`, `removeRoomPhoto`, `renderRoomPhotoStrip`, `viewRoomPhoto`, `closeRoomPhotoLightbox` (AI-batch photos: `addAIPhotos`, `renderAIPhotoStrip`, `analyzeAIPhotos`)
 
 ### Backup & restore
 `buildBackup`, `backupToDrive`, `restoreFromBackup`, `deleteAllMyData` (privacy right-to-delete: wipes local + Firestore `SYNC_KEYS` docs + `paintpro-photos` IndexedDB, double-confirmed)
@@ -408,7 +406,7 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
 - The active job auto-saves to `ingersoll_active_job_v1` on every change. **Anything the user enters in the field must survive a phone reboot, accidental tab close, or low-battery shutdown.**
 - When adding any new persistent field, extend `getJobSnapshot()` and `applyJobData()` together.
 - A visible save indicator is part of the contract — silently saving without confirmation isn't enough.
-- Photos go to IndexedDB, not localStorage. Always call `hydratePhotos()` after `applyJobData()`.
+- Room photos go to IndexedDB, not localStorage; job snapshots carry only photo IDs (`getJobSnapshot()` strips blobs). `renderRoomPhotoStrip()` reloads blobs from IndexedDB after `applyJobData()`.
 
 ### Mobile viewport quirks
 - The Z Fold 5's narrow-screen mode is ~380px wide.

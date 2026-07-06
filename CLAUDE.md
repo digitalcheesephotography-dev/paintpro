@@ -294,6 +294,9 @@ Exterior: `front side` / `left side` / `name it garage` / `call it back`
 | `ingersoll_supplies_v1` | Supplies (apt sub-section) |
 | `ingersoll_pin_v1` | App Lock PIN (PBKDF2-SHA256 salt+hash; device-local, NOT synced) |
 | `ingersoll_bio_v1` | App Lock WebAuthn credential id for fingerprint unlock (device-local) |
+| `ingersoll_proposals_v1` | Sent e-signature proposals (id, client, status, url, signer; device-local) |
+
+**Client e-signature proposals:** "✍️ Send for Signature" on a bid writes it to Firestore `proposals/{randomId}` (`createProposal`) and shows a shareable link. The homeowner opens `proposal.html?id=…` (standalone, no login — public read by unguessable capability ID), reviews, types their name + draws a signature, and accepts; the doc flips to `status:'accepted'` with the signature PNG. The app watches sent proposals (`proposalWatch` / `watchAllProposals` in `setupFirestoreSync`) and toasts when signed; `openProposalsModal` lists them. Rules for the `proposals` collection are in `firestore.rules` (public read, owner-only create/delete, one-time constrained client accept) — must be published in the console.
 
 **App Lock (opt-in):** `bootApp()` gates `_bootAppInner()` behind `showLockScreen()` when `pinIsSet()`. Enforced online AND offline (a lost phone in airplane mode no longer opens into data). Fingerprint via WebAuthn platform authenticator when `bioAvailable()`; PIN is the always-available fallback/recovery. `signOut()` clears both keys, so "forgot PIN" recovery = sign in again (synced data returns). Configured in ⚙ Settings → App Lock.
 

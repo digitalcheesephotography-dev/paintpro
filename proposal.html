@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' https://www.gstatic.com;
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data: blob: https://firebasestorage.googleapis.com;
+  connect-src 'self' https://*.googleapis.com https://firebasestorage.googleapis.com https://*.firebasestorage.app https://*.firebaseapp.com https://*.firebaseio.com wss://*.firebaseio.com;
+"/>
+<title>Your Painting Proposal</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:Georgia,'Times New Roman',serif;color:#141d27;background:#eef1f5;line-height:1.6;
+       padding:16px 14px calc(40px + env(safe-area-inset-bottom,0px));-webkit-text-size-adjust:100%}
+  .card{max-width:720px;margin:0 auto 16px;background:#fff;border:1px solid #dfe5ec;border-radius:12px;
+        box-shadow:0 2px 10px rgba(20,29,39,.06);padding:22px 20px}
+  .brand{font-size:20px;font-weight:700;color:#1786bd;letter-spacing:.3px}
+  .brand-sub{font-size:12px;color:#6b7a8d;margin-top:2px}
+  #paper{max-width:720px;margin:0 auto 16px}
+  #paper table{width:100%;border-collapse:collapse}
+  #paper img{max-width:100%}
+  h1{font-size:22px;margin-bottom:6px}
+  .muted{color:#6b7a8d;font-size:13px}
+  .accepted-banner{max-width:720px;margin:0 auto 16px;background:#e9f4e6;border:1.5px solid #2e7d24;color:#215c1a;
+       border-radius:12px;padding:14px 16px;font-size:15px;text-align:center;font-weight:700}
+  label{display:block;font-size:13px;color:#41505f;margin:0 0 6px;font-family:Arial,sans-serif}
+  input[type=text]{width:100%;height:50px;border:1.5px solid #cdd6e0;border-radius:8px;padding:0 14px;font-size:16px;
+       font-family:Georgia,serif;background:#fff;color:#141d27;outline:none}
+  input[type=text]:focus{border-color:#1786bd}
+  .sigwrap{border:1.5px dashed #cdd6e0;border-radius:8px;background:#fbfcfe;position:relative;margin-top:4px}
+  #sigpad{display:block;width:100%;height:170px;border-radius:8px;touch-action:none;cursor:crosshair}
+  .sighint{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#b6c0cc;font-size:14px;pointer-events:none}
+  .sigclear{position:absolute;right:8px;top:8px;background:#fff;border:1px solid #cdd6e0;border-radius:6px;
+       font-family:Arial,sans-serif;font-size:12px;color:#6b7a8d;padding:5px 10px;cursor:pointer}
+  .accept{width:100%;height:58px;margin-top:16px;background:#2e7d24;color:#fff;border:none;border-radius:10px;
+       font-family:Arial,sans-serif;font-size:17px;font-weight:700;cursor:pointer}
+  .accept:disabled{background:#a9c6a4;cursor:not-allowed}
+  .legal{font-size:12px;color:#6b7a8d;margin-top:12px;font-family:Arial,sans-serif;line-height:1.5}
+  .state{max-width:720px;margin:40px auto;text-align:center;color:#6b7a8d;font-size:15px}
+  .err{color:#c0392b}
+  .row{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:#41505f;margin-top:4px}
+  @media print{.no-print{display:none!important}body{background:#fff}}
+</style>
+</head>
+<body>
+
+<div id="loading" class="state">Loading your proposal…</div>
+
+<div id="content" style="display:none">
+  <div class="card" id="header-card">
+    <div class="brand" id="co-name">Ingersoll Painting LLC</div>
+    <div class="brand-sub" id="co-contact"></div>
+  </div>
+
+  <div id="accepted-banner" class="accepted-banner" style="display:none"></div>
+
+  <div id="paper" class="card"></div>
+
+  <!-- Signature section (hidden once accepted) -->
+  <div class="card no-print" id="sign-card">
+    <h1 style="font-size:19px">Accept &amp; Sign</h1>
+    <p class="muted" style="margin-bottom:16px">Review the proposal above. To accept, type your full name, sign below, and tap Accept.</p>
+
+    <label for="signer-name">Your full name</label>
+    <input type="text" id="signer-name" autocomplete="name" placeholder="e.g. Dave Reau"/>
+
+    <label for="sigpad" style="margin-top:16px">Signature</label>
+    <div class="sigwrap">
+      <canvas id="sigpad"></canvas>
+      <span class="sighint" id="sighint">✍️ Sign here with your finger</span>
+      <button class="sigclear" type="button" onclick="clearSig()">Clear</button>
+    </div>
+
+    <button class="accept" id="accept-btn" disabled onclick="acceptProposal()">Accept &amp; Sign</button>
+    <div class="legal" id="legal">
+      By typing my name, signing above, and tapping “Accept &amp; Sign,” I agree to this painting proposal and its total.
+    </div>
+  </div>
+</div>
+
+<div id="error" class="state err" style="display:none"></div>
+
+<!-- Firebase (same project as the PaintPro app) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+const FIREBASE_CONFIG = {
+  apiKey:            'AIzaSyCFY1yfVWgFX845-A73PC2EX0IuUOG1COM',
+  authDomain:        'paintpro-4267b.firebaseapp.com',
+  projectId:         'paintpro-4267b',
+  storageBucket:     'paintpro-4267b.firebasestorage.app',
+  messagingSenderId: '614443567698',
+  appId:             '1:614443567698:web:29083f2c588844143c2d8b',
+};
+
+const params = new URLSearchParams(location.search);
+const propId = params.get('id') || '';
+let _db = null, _docRef = null, _data = null;
+
+const $ = id => document.getElementById(id);
+function fail(msg){ $('loading').style.display='none'; $('content').style.display='none'; const e=$('error'); e.textContent=msg; e.style.display='block'; }
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function boot(){
+  if (!propId) { fail('This proposal link is missing its ID. Ask the sender for a new link.'); return; }
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    _db = firebase.firestore();
+  } catch(e){ fail('Could not connect. Please check your internet and reopen the link.'); return; }
+  try {
+    _docRef = _db.collection('proposals').doc(propId);
+    const snap = await _docRef.get();
+    if (!snap.exists) { fail('This proposal was not found. It may have been removed. Ask the sender for a new link.'); return; }
+    _data = snap.data();
+    render();
+  } catch(e){ fail('Could not load this proposal. Please reopen the link in a few minutes.'); return; }
+}
+
+function render(){
+  $('loading').style.display='none';
+  $('content').style.display='block';
+  if (_data.company && _data.company.name) $('co-name').textContent = _data.company.name;
+  const contact = [ _data.company && _data.company.phone, _data.company && _data.company.site ].filter(Boolean).join('  ·  ');
+  $('co-contact').textContent = contact;
+  // The bid body is the contractor's own generated HTML.
+  $('paper').innerHTML = _data.bodyHtml || '<p class="muted">This proposal has no content.</p>';
+
+  if (_data.status === 'accepted') {
+    showAccepted();
+  } else {
+    setupSignature();
+  }
+}
+
+function showAccepted(){
+  $('sign-card').style.display = 'none';
+  const b = $('accepted-banner');
+  const when = _data.acceptedAt ? new Date(_data.acceptedAt).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : '';
+  b.textContent = `✓ Accepted by ${_data.signerName || 'the client'}${when ? ' on ' + when : ''}. Thank you!`;
+  b.style.display = 'block';
+}
+
+// ── Signature pad ──
+let _sigCtx=null, _drawing=false, _hasInk=false, _last=null;
+function setupSignature(){
+  const cvs = $('sigpad');
+  const ratio = Math.min(window.devicePixelRatio || 1, 2);
+  const resize = () => {
+    const w = cvs.clientWidth, h = cvs.clientHeight;
+    cvs.width = w * ratio; cvs.height = h * ratio;
+    _sigCtx = cvs.getContext('2d');
+    _sigCtx.scale(ratio, ratio);
+    _sigCtx.lineWidth = 2.5; _sigCtx.lineCap = 'round'; _sigCtx.lineJoin = 'round'; _sigCtx.strokeStyle = '#10233a';
+  };
+  resize();
+  const pos = e => { const r = cvs.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return { x:t.clientX-r.left, y:t.clientY-r.top }; };
+  const start = e => { e.preventDefault(); _drawing=true; _last=pos(e); if(!_hasInk){ _hasInk=true; $('sighint').style.display='none'; refreshAccept(); } };
+  const move  = e => { if(!_drawing) return; e.preventDefault(); const p=pos(e); _sigCtx.beginPath(); _sigCtx.moveTo(_last.x,_last.y); _sigCtx.lineTo(p.x,p.y); _sigCtx.stroke(); _last=p; };
+  const end   = () => { _drawing=false; };
+  cvs.addEventListener('mousedown',start); cvs.addEventListener('mousemove',move); window.addEventListener('mouseup',end);
+  cvs.addEventListener('touchstart',start,{passive:false}); cvs.addEventListener('touchmove',move,{passive:false}); cvs.addEventListener('touchend',end);
+  $('signer-name').addEventListener('input', refreshAccept);
+}
+function clearSig(){
+  if(!_sigCtx) return;
+  const cvs=$('sigpad'); _sigCtx.clearRect(0,0,cvs.width,cvs.height);
+  _hasInk=false; $('sighint').style.display=''; refreshAccept();
+}
+function refreshAccept(){
+  const nameOK = ($('signer-name').value.trim().length >= 2);
+  $('accept-btn').disabled = !(nameOK && _hasInk);
+}
+
+async function acceptProposal(){
+  const name = $('signer-name').value.trim();
+  if (name.length < 2 || !_hasInk) return;
+  const btn = $('accept-btn'); btn.disabled = true; btn.textContent = 'Submitting…';
+  let sigData = '';
+  try { sigData = $('sigpad').toDataURL('image/png'); } catch(_){}
+  try {
+    await _docRef.update({
+      status: 'accepted',
+      signerName: name,
+      signatureDataUrl: sigData,
+      acceptedAt: Date.now(),
+      acceptedUA: navigator.userAgent.slice(0, 180),
+    });
+    _data.status='accepted'; _data.signerName=name; _data.acceptedAt=Date.now();
+    showAccepted();
+    window.scrollTo({ top:0, behavior:'smooth' });
+  } catch(e){
+    btn.disabled=false; btn.textContent='Accept & Sign';
+    const legal=$('legal'); legal.className='legal err';
+    legal.textContent = 'Sorry, we could not submit your acceptance. Please check your internet and try again. ('+(e.code||e.message||'error')+')';
+  }
+}
+
+boot();
+</script>
+</body>
+</html>

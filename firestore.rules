@@ -25,6 +25,28 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
+    // Client e-signature proposals. The document ID is a 128-bit random value
+    // that acts as a capability (the shareable link) — like a DocuSign link.
+    // - Anyone with the link can READ it (the homeowner has no account).
+    // - Only the signed-in owner can CREATE or DELETE their own proposals.
+    // - A client (unauthenticated) may accept exactly ONCE: the update is
+    //   allowed only while status is 'sent', flips it to 'accepted', supplies a
+    //   non-empty signer name, and cannot change the owner or the bid body.
+    match /proposals/{id} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.status == 'sent';
+      allow update: if resource.data.status == 'sent'
+                    && request.resource.data.status == 'accepted'
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.bodyHtml == resource.data.bodyHtml
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && request.resource.data.signerName is string
+                    && request.resource.data.signerName.size() > 0;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
+    }
+
     // Everything else is denied by default (no other rules = no access).
   }
 }

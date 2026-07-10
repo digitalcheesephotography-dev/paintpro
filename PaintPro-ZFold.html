@@ -4413,7 +4413,10 @@ async function createProposal(){
   showToast('Creating proposal…');
   try { await _db.collection('proposals').doc(id).set(doc); }
   catch(e){ showToast('Could not create proposal: ' + (e.code || e.message), 'err'); return; }
-  const url = location.origin + '/proposal.html?id=' + id;
+  // Resolve proposal.html relative to the current page so the link keeps any
+  // subfolder (e.g. GitHub Pages serves this app under /paintpro/). Using
+  // location.origin dropped that path and produced a broken link.
+  const url = new URL('proposal.html?id=' + id, location.href).href;
   const list = proposalsLoad();
   list.unshift({ id, client, address, createdAt:doc.createdAt, status:'sent', url, signerName:'', acceptedAt:0, signatureDataUrl:'' });
   proposalsSave(list);
@@ -4431,7 +4434,9 @@ function showProposalLinkModal(url, client){
   const copy = document.createElement('button'); copy.setAttribute('style','height:50px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer'); copy.textContent = '📋 Copy Link';
   copy.onclick = () => { (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => showToast('Link copied')).catch(() => showToast('Copy not available — long-press the link', 'warn')); };
   const share = document.createElement('button'); share.setAttribute('style','height:50px;background:var(--card);border:1.5px solid var(--blue);border-radius:8px;color:var(--blue);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer'); share.textContent = 'Share / Text';
-  share.onclick = () => { if (navigator.share) navigator.share({ title:'Your painting proposal', text:`Here's your painting proposal from Ingersoll Painting — review and accept: ${url}`, url }).catch(()=>{}); else { if (navigator.clipboard) navigator.clipboard.writeText(url); showToast('Link copied — paste into a text'); } };
+  // Pass the link ONLY as `url` (not also inside `text`) — messaging apps append
+  // the url after the text, which was pasting the link twice.
+  share.onclick = () => { if (navigator.share) navigator.share({ title:'Your painting proposal', text:"Here's your painting proposal from Ingersoll Painting — review and accept:", url }).catch(()=>{}); else { if (navigator.clipboard) navigator.clipboard.writeText(url); showToast('Link copied — paste into a text'); } };
   grid.append(copy, share);
   s.append(title, desc, link, grid);
 }

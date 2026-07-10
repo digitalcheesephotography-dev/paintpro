@@ -5151,20 +5151,34 @@ function applyAIRoomResult(roomId, json, toastPrefix, quiet=false) {
     const noteEl = document.getElementById(`${roomId}_surface_note`);
     if (noteEl) { noteEl.textContent = json.surfaceNotes; noteEl.parentElement.style.display = ''; }
   }
-  // Accumulate doors, windows, shutters into job totals
-  const addJobCount = (field, inputId, n) => {
-    if (!(n > 0)) return;
-    const cur = parseInt(job[field]) || 0;
-    const next = cur + parseInt(n);
-    job[field] = String(next);
-    const el = document.getElementById(inputId);
-    if (el) el.value = next;
-    const labelMap = {doorCount:'door', winCount:'window', shutterCount:'shutter panel'};
-    filled.push(`+${n} ${labelMap[field]||field.replace('Count','')}${n>1?'s':''}`);
+  // Doors/windows/shutters are whole-job totals. Track what THIS room's AI
+  // analysis last contributed, so re-analyzing the same room (e.g. photo then
+  // video) REPLACES that room's share via a delta instead of stacking a second
+  // copy on top — which was double-counting doors and windows and inflating the
+  // estimate. Different rooms still each add their own. A field the AI didn't
+  // report is left untouched (so a second pass that omits doors can't wipe them).
+  if (!room.aiCounts) room.aiCounts = {};
+  const setJobCount = (field, inputId, val) => {
+    if (val === undefined || val === null || val === '') return; // not reported this pass
+    const newN = parseInt(val) || 0;
+    const prev = room.aiCounts[field] || 0;
+    const delta = newN - prev;
+    if (delta !== 0) {
+      const cur  = parseInt(job[field]) || 0;
+      const next = Math.max(0, cur + delta);
+      job[field] = String(next);
+      const el = document.getElementById(inputId);
+      if (el) el.value = next;
+    }
+    room.aiCounts[field] = newN;
+    if (newN > 0) {
+      const labelMap = {doorCount:'door', winCount:'window', shutterCount:'shutter panel'};
+      filled.push(`${newN} ${labelMap[field]||field.replace('Count','')}${newN>1?'s':''}`);
+    }
   };
-  addJobCount('doorCount',    'job-door-count',    json.doors);
-  addJobCount('winCount',     'job-win-count',     json.windows);
-  addJobCount('shutterCount', 'job-shutter-count', json.shutters);
+  setJobCount('doorCount',    'job-door-count',    json.doors);
+  setJobCount('winCount',     'job-win-count',     json.windows);
+  setJobCount('shutterCount', 'job-shutter-count', json.shutters);
   recalcRoom(roomId);
   markDirty();
   const noteHint = json.surfaceNotes ? ' — ⚠️ surface issue noted' : '';

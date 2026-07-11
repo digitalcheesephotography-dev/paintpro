@@ -4400,7 +4400,10 @@ async function createProposal(){
   const bidEl = document.getElementById('bid-out');
   if (!bidEl || !bidEl.classList.contains('visible')) { showToast('Generate a bid first', 'warn'); return; }
   const tmp = document.createElement('div'); tmp.innerHTML = bidEl.innerHTML;
-  tmp.querySelectorAll('.no-print').forEach(el => el.remove());
+  // The client proposal is display-only paper — strip every interactive control.
+  // (The main action buttons are NOT marked .no-print, so remove all buttons +
+  // inputs explicitly; the Accept/sign UI lives in proposal.html.)
+  tmp.querySelectorAll('button, input, textarea, select, .no-print').forEach(el => el.remove());
   const bodyHtml = tmp.innerHTML;
   const client  = document.getElementById('client-name').value || 'Client';
   const address = document.getElementById('job-address').value || '';

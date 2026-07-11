@@ -38,6 +38,11 @@
   .accept{width:100%;height:58px;margin-top:16px;background:#2e7d24;color:#fff;border:none;border-radius:10px;
        font-family:Arial,sans-serif;font-size:17px;font-weight:700;cursor:pointer}
   .accept:disabled{background:#a9c6a4;cursor:not-allowed}
+  .form-err{color:#c0392b;font-size:14px;font-family:Arial,sans-serif;font-weight:700;min-height:0;margin-top:4px}
+  .form-err.show{min-height:20px;margin-bottom:2px}
+  .invalid{border-color:#c0392b !important;animation:ppshake .4s}
+  @keyframes ppshake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+  .copy-btn{width:100%;height:52px;margin-top:14px;background:#1786bd;color:#fff;border:none;border-radius:10px;font-family:Arial,sans-serif;font-size:16px;font-weight:700;cursor:pointer}
   .legal{font-size:12px;color:#6b7a8d;margin-top:12px;font-family:Arial,sans-serif;line-height:1.5}
   .state{max-width:720px;margin:40px auto;text-align:center;color:#6b7a8d;font-size:15px}
   .err{color:#c0392b}
@@ -74,7 +79,8 @@
       <button class="sigclear" type="button" onclick="clearSig()">Clear</button>
     </div>
 
-    <button class="accept" id="accept-btn" disabled onclick="acceptProposal()">Accept &amp; Sign</button>
+    <div class="form-err" id="form-err"></div>
+    <button class="accept" id="accept-btn" onclick="acceptProposal()">Accept &amp; Sign</button>
     <div class="legal" id="legal">
       By typing my name, signing above, and tapping “Accept &amp; Sign,” I agree to this painting proposal and its total.
     </div>
@@ -125,8 +131,12 @@ function render(){
   if (_data.company && _data.company.name) $('co-name').textContent = _data.company.name;
   const contact = [ _data.company && _data.company.phone, _data.company && _data.company.site ].filter(Boolean).join('  ·  ');
   $('co-contact').textContent = contact;
-  // The bid body is the contractor's own generated HTML.
-  $('paper').innerHTML = _data.bodyHtml || '<p class="muted">This proposal has no content.</p>';
+  // The bid body is the contractor's own generated HTML. Strip any interactive
+  // controls here too, so proposals sent before the app-side fix still render
+  // as clean, button-free paper for the client.
+  const bt = document.createElement('div'); bt.innerHTML = _data.bodyHtml || '';
+  bt.querySelectorAll('button, input, textarea, select').forEach(el => el.remove());
+  $('paper').innerHTML = bt.innerHTML || '<p class="muted">This proposal has no content.</p>';
 
   if (_data.status === 'accepted') {
     showAccepted();
@@ -141,6 +151,38 @@ function showAccepted(){
   const when = _data.acceptedAt ? new Date(_data.acceptedAt).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : '';
   b.textContent = `✓ Accepted by ${_data.signerName || 'the client'}${when ? ' on ' + when : ''}. Thank you!`;
   b.style.display = 'block';
+  // Give the client their own copy to keep. (Their signed link is also a
+  // permanent copy — reopening it always shows this accepted proposal.)
+  if (!document.getElementById('copy-btn')) {
+    const btn = document.createElement('button');
+    btn.id = 'copy-btn'; btn.className = 'copy-btn'; btn.textContent = '📄 Download / Print My Copy';
+    btn.onclick = downloadMyCopy;
+    b.insertAdjacentElement('afterend', btn);
+    const note = document.createElement('div');
+    note.setAttribute('style','max-width:720px;margin:8px auto 0;text-align:center;color:#6b7a8d;font-size:12px;font-family:Arial,sans-serif');
+    note.textContent = 'Tip: this link is your copy — reopen it anytime to see the signed proposal.';
+    btn.insertAdjacentElement('afterend', note);
+  }
+}
+
+function downloadMyCopy(){
+  const tmp = document.createElement('div'); tmp.innerHTML = _data.bodyHtml || '';
+  tmp.querySelectorAll('button, input, textarea, select').forEach(el => el.remove());
+  const co   = (_data.company && _data.company.name) || 'Ingersoll Painting LLC';
+  const when = _data.acceptedAt ? new Date(_data.acceptedAt).toLocaleString() : '';
+  const sig  = _data.signatureDataUrl ? `<div style="margin-top:16px"><div style="font-size:12px;color:#555">Signature</div><img src="${_data.signatureDataUrl}" style="max-width:280px;border:1px solid #ccc;border-radius:6px"/></div>` : '';
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Signed Proposal</title>` +
+    `<style>body{font-family:Georgia,serif;color:#111;max-width:720px;margin:0 auto;padding:24px 20px;font-size:13px;line-height:1.6}table{width:100%;border-collapse:collapse}img{max-width:100%}` +
+    `.acc{background:#e9f4e6;border:1px solid #2e7d24;border-radius:8px;padding:12px;margin-bottom:16px;color:#215c1a;font-weight:bold}</style>` +
+    `<scr`+`ipt>window.onload=function(){setTimeout(function(){window.print()},300)}</scr`+`ipt></head><body>` +
+    `<h2 style="color:#1786bd">${esc(co)}</h2>` +
+    `<div class="acc">✓ Accepted &amp; signed by ${esc(_data.signerName || '')}${when ? ' on ' + esc(when) : ''}</div>` +
+    tmp.innerHTML + sig + `</body></html>`;
+  const blob = new Blob([html], { type: 'text/html' });
+  const url  = URL.createObjectURL(blob);
+  const w = window.open(url, '_blank');
+  if (!w) location.href = url; // popup blocked — navigate to it instead
+  setTimeout(() => URL.revokeObjectURL(url), 20000);
 }
 
 // ── Signature pad ──
@@ -169,14 +211,31 @@ function clearSig(){
   const cvs=$('sigpad'); _sigCtx.clearRect(0,0,cvs.width,cvs.height);
   _hasInk=false; $('sighint').style.display=''; refreshAccept();
 }
+// Called as the client types / signs — clears any error highlight so the form
+// feels responsive as they fix what was missing.
 function refreshAccept(){
-  const nameOK = ($('signer-name').value.trim().length >= 2);
-  $('accept-btn').disabled = !(nameOK && _hasInk);
+  $('signer-name').classList.remove('invalid');
+  const sw = document.querySelector('.sigwrap'); if (sw) sw.classList.remove('invalid');
+  const fe = $('form-err'); fe.textContent = ''; fe.classList.remove('show');
 }
+function _flashInvalid(el){ if (!el) return; el.classList.remove('invalid'); void el.offsetWidth; el.classList.add('invalid'); }
+function _showFormErr(msg){ const fe = $('form-err'); fe.textContent = msg; fe.classList.add('show'); }
 
 async function acceptProposal(){
-  const name = $('signer-name').value.trim();
-  if (name.length < 2 || !_hasInk) return;
+  const name   = $('signer-name').value.trim();
+  const nameOK = name.length >= 2;
+  const sigOK  = _hasInk;
+  // Missing name or signature — buzz the phone and highlight what's wrong so the
+  // client knows why nothing happened (instead of a dead, greyed-out button).
+  if (!nameOK || !sigOK) {
+    if (navigator.vibrate) { try { navigator.vibrate([90, 60, 90]); } catch(_){} }
+    if (!nameOK) _flashInvalid($('signer-name'));
+    if (!sigOK)  _flashInvalid(document.querySelector('.sigwrap'));
+    _showFormErr(!nameOK && !sigOK ? 'Please type your full name and sign above.'
+               : !nameOK ? 'Please type your full name.'
+               : 'Please sign in the box above.');
+    return;
+  }
   const btn = $('accept-btn'); btn.disabled = true; btn.textContent = 'Submitting…';
   let sigData = '';
   try { sigData = $('sigpad').toDataURL('image/png'); } catch(_){}
@@ -188,13 +247,12 @@ async function acceptProposal(){
       acceptedAt: Date.now(),
       acceptedUA: navigator.userAgent.slice(0, 180),
     });
-    _data.status='accepted'; _data.signerName=name; _data.acceptedAt=Date.now();
+    _data.status='accepted'; _data.signerName=name; _data.acceptedAt=Date.now(); _data.signatureDataUrl=sigData;
     showAccepted();
     window.scrollTo({ top:0, behavior:'smooth' });
   } catch(e){
     btn.disabled=false; btn.textContent='Accept & Sign';
-    const legal=$('legal'); legal.className='legal err';
-    legal.textContent = 'Sorry, we could not submit your acceptance. Please check your internet and try again. ('+(e.code||e.message||'error')+')';
+    _showFormErr('Sorry, we could not submit your acceptance. Please check your internet and try again.');
   }
 }
 

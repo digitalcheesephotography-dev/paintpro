@@ -1101,6 +1101,20 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div id="delete-data-status" style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px"></div>
   </div>
 
+  <!-- Color Visualizer -->
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
+    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🎨 Color Visualizer</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.5">Let a homeowner take a photo of their room, pick a paint color, and tap the wall to see it repainted. Use it on a job to close the sale, or share the link so customers try it themselves and request a quote.</div>
+    <button onclick="window.open(new URL('visualizer.html',location.href).href,'_blank')"
+            style="width:100%;height:50px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;margin-bottom:8px">
+      🎨 Open Color Visualizer
+    </button>
+    <button onclick="var u=new URL('visualizer.html',location.href).href; if(navigator.share){navigator.share({title:'Try your paint color',text:'See your room in a new color:',url:u}).catch(function(){});}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){showToast('Link copied')});}"
+            style="width:100%;height:46px;background:transparent;border:1.5px solid var(--blue);border-radius:8px;color:var(--blue);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer">
+      🔗 Share Visualizer Link with a Customer
+    </button>
+  </div>
+
   <!-- HearSay link -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
     <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">👂 HearSay</div>

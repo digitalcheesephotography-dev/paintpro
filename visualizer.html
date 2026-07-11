@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="theme-color" content="#0d1117"/>
+<title>See Your Room in a New Color — Ingersoll Painting</title>
+<style>
+  :root{--blue:#2baae1;--green:#2e8b1e;--dark:#0d1117;--panel:#161b22;--card:#1a2030;--border:#252c3a;--text:#e2e8f0;--muted:#8a9bb0;
+        --font:'Barlow Condensed','Arial Narrow',sans-serif;--head:'Bebas Neue',sans-serif;--safe-b:env(safe-area-inset-bottom,0px)}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:var(--dark);color:var(--text);font-family:Arial,Helvetica,sans-serif;line-height:1.5;
+       padding:14px 12px calc(24px + var(--safe-b));max-width:760px;margin:0 auto}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .brand{font-size:20px;font-weight:800;color:var(--blue);letter-spacing:.3px}
+  .brand small{display:block;font-size:11px;color:var(--muted);font-weight:600;letter-spacing:1px;text-transform:uppercase}
+  h1{font-size:22px;margin:6px 0 4px;font-weight:800}
+  .sub{color:var(--muted);font-size:14px;margin-bottom:14px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+  .stage{position:relative;background:#0a0e14;border:1px solid var(--border);border-radius:10px;overflow:hidden;min-height:220px;display:flex;align-items:center;justify-content:center}
+  #canvas{max-width:100%;display:block;touch-action:none;cursor:crosshair}
+  .empty{color:var(--muted);text-align:center;padding:40px 16px;font-size:15px}
+  .btn{height:52px;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit}
+  .btn-blue{background:var(--blue);color:#fff}
+  .btn-ghost{background:transparent;border:1.5px solid var(--border);color:var(--text)}
+  .btn-green{background:var(--green);color:#fff}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .swatches{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+  .sw{width:52px;height:52px;border-radius:10px;border:2px solid var(--border);cursor:pointer;position:relative;flex-shrink:0}
+  .sw.on{border-color:#fff;box-shadow:0 0 0 2px var(--blue)}
+  .sw span{position:absolute;left:0;right:0;bottom:-16px;font-size:9px;color:var(--muted);text-align:center;white-space:nowrap}
+  .label{font-size:13px;color:var(--muted);margin:2px 0 8px;font-weight:600}
+  .toolbar{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+  .toolbar .btn{height:44px;font-size:14px;padding:0 14px;flex:1;min-width:120px}
+  input[type=range]{width:100%;accent-color:var(--blue)}
+  .tip{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .customwrap{display:flex;align-items:center;gap:8px;margin-top:14px}
+  .customwrap input[type=color]{width:52px;height:52px;border:none;border-radius:10px;background:none;cursor:pointer;padding:0}
+  #lead-form{display:none}
+  #lead-form input{width:100%;height:48px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);
+       font-size:16px;padding:0 12px;margin-bottom:8px;font-family:inherit}
+  .hide{display:none!important}
+  footer{text-align:center;color:var(--muted);font-size:12px;margin-top:8px}
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">Ingersoll Painting LLC<small>Color Visualizer</small></div>
+  </header>
+
+  <h1>See your room in a new color</h1>
+  <p class="sub">Take or upload a photo, pick a paint color, and tap your wall to preview it. No more guessing.</p>
+
+  <input type="file" id="file" accept="image/*" class="hide"/>
+
+  <div class="card">
+    <div class="stage" id="stage">
+      <canvas id="canvas" class="hide"></canvas>
+      <div class="empty" id="empty">📷 Add a photo of your room to start</div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn btn-blue" onclick="document.getElementById('file').click()">📷 Add / Change Photo</button>
+      <button class="btn btn-ghost" id="ba-btn" onclick="toggleBeforeAfter()" disabled>👁️ Before / After</button>
+    </div>
+  </div>
+
+  <div class="card" id="tools" style="display:none">
+    <div class="label">1. Pick a paint color</div>
+    <div class="swatches" id="swatches"></div>
+    <div class="customwrap">
+      <input type="color" id="custom" value="#8d8f92" oninput="pickCustom(this.value)"/>
+      <span style="font-size:13px;color:var(--muted)">…or choose any custom color</span>
+    </div>
+
+    <div class="label" style="margin-top:18px">2. Tap each wall in the photo to paint it</div>
+    <div style="font-size:12px;color:var(--muted)">Selection sensitivity</div>
+    <input type="range" id="tol" min="8" max="80" value="34" oninput="TOL=+this.value"/>
+    <div class="toolbar">
+      <button class="btn btn-ghost" onclick="clearPaint()">↺ Start Over</button>
+      <button class="btn btn-ghost" onclick="undoPaint()">⤺ Undo Last Wall</button>
+    </div>
+    <div class="tip">Tip: tap the middle of a wall. If it grabs too much or too little, nudge the sensitivity slider and tap again.</div>
+  </div>
+
+  <div class="card" id="cta" style="display:none">
+    <button class="btn btn-green" style="width:100%" onclick="startLead()">❤️ I like it — Get a Free Quote</button>
+    <div id="lead-form">
+      <div class="label" style="margin-top:12px">Send this to Ingersoll Painting and we'll get you a quote:</div>
+      <input type="text" id="ld-name" placeholder="Your name"/>
+      <input type="text" id="ld-contact" placeholder="Phone or email"/>
+      <button class="btn btn-green" style="width:100%" onclick="sendLead()">Send My Request</button>
+    </div>
+  </div>
+
+  <footer>Ingersoll Painting LLC · (315) 952-8259 · Family Owned Since 1978</footer>
+
+<script>
+const PAINTS = [
+  {name:'Cloud White', hex:'#eef0ea'}, {name:'Soft Gray', hex:'#c9ccce'},
+  {name:'Warm Greige', hex:'#c3b8a7'}, {name:'Storm Gray', hex:'#8d8f92'},
+  {name:'Charcoal', hex:'#4c4f54'}, {name:'Sage', hex:'#9aa88f'},
+  {name:'Sky Blue', hex:'#a7c3d6'}, {name:'Navy', hex:'#2f4257'},
+  {name:'Clay', hex:'#b98a6f'}, {name:'Forest', hex:'#3f5a48'},
+];
+let TOL = 34;
+const $ = id => document.getElementById(id);
+const cvs = $('canvas'), ctx = cvs.getContext('2d', { willReadFrequently: true });
+let origData = null;          // ImageData of the loaded (downscaled) photo
+let mask = null;              // Uint8Array, 1 = painted
+let history = [];             // stack of masks for undo (each entry: array of pixel indices)
+let paintColor = '#8d8f92';
+let showingBefore = false;
+
+// ---- swatches ----
+$('swatches').innerHTML = PAINTS.map((p,i) =>
+  `<div class="sw" data-i="${i}" style="background:${p.hex}" title="${p.name}" onclick="pickSwatch(${i})"><span>${p.name}</span></div>`
+).join('');
+function pickSwatch(i){ paintColor = PAINTS[i].hex; $('custom').value = PAINTS[i].hex; markSwatch(i); repaint(); }
+function pickCustom(hex){ paintColor = hex; markSwatch(-1); repaint(); }
+function markSwatch(i){ document.querySelectorAll('.sw').forEach((el,j)=>el.classList.toggle('on', j===i)); }
+
+// ---- load photo ----
+$('file').addEventListener('change', e => { const f = e.target.files[0]; if (f) loadImage(f); e.target.value=''; });
+function loadImage(file){
+  const img = new Image();
+  img.onload = () => {
+    const maxPx = 1100;
+    let w = img.width, h = img.height;
+    if (w > maxPx || h > maxPx){ if (w>h){ h=Math.round(h*maxPx/w); w=maxPx; } else { w=Math.round(w*maxPx/h); h=maxPx; } }
+    cvs.width = w; cvs.height = h;
+    ctx.drawImage(img, 0, 0, w, h);
+    origData = ctx.getImageData(0, 0, w, h);
+    mask = new Uint8Array(w*h);
+    history = [];
+    showingBefore = false;
+    cvs.classList.remove('hide'); $('empty').classList.add('hide');
+    $('tools').style.display=''; $('cta').style.display=''; $('ba-btn').disabled=false;
+    URL.revokeObjectURL(img.src);
+  };
+  img.src = URL.createObjectURL(file);
+}
+
+// ---- tap to select a wall (flood fill) then paint ----
+cvs.addEventListener('click', e => {
+  if (!origData) return;
+  const r = cvs.getBoundingClientRect();
+  const x = Math.round((e.clientX - r.left) * (cvs.width / r.width));
+  const y = Math.round((e.clientY - r.top)  * (cvs.height / r.height));
+  floodSelect(x, y);
+});
+
+function floodSelect(sx, sy){
+  const w = cvs.width, h = cvs.height, d = origData.data;
+  if (sx<0||sy<0||sx>=w||sy>=h) return;
+  const si = (sy*w + sx)*4;
+  const sr = d[si], sg = d[si+1], sb = d[si+2];
+  const tol2 = TOL*TOL;
+  const seen = new Uint8Array(w*h);
+  const added = [];
+  const stack = [sy*w + sx];
+  while (stack.length){
+    const p = stack.pop();
+    if (seen[p]) continue; seen[p] = 1;
+    const i = p*4;
+    const dr = d[i]-sr, dg = d[i+1]-sg, db = d[i+2]-sb;
+    if (dr*dr + dg*dg + db*db > tol2) continue;
+    if (!mask[p]){ mask[p] = 1; added.push(p); }
+    const px = p % w, py = (p - px)/w;
+    if (px>0)   stack.push(p-1);
+    if (px<w-1) stack.push(p+1);
+    if (py>0)   stack.push(p-w);
+    if (py<h-1) stack.push(p+w);
+  }
+  if (added.length){ history.push(added); repaint(); }
+}
+
+// ---- recolor: keep each pixel's original lightness/texture, take the paint's hue+saturation ----
+function repaint(){
+  if (!origData) return;
+  if (showingBefore){ ctx.putImageData(origData, 0, 0); return; }
+  const out = new ImageData(new Uint8ClampedArray(origData.data), cvs.width, cvs.height);
+  const d = out.data;
+  const [ph, ps, pl] = rgbToHsl(...hexToRgb(paintColor));
+  for (let p = 0; p < mask.length; p++){
+    if (!mask[p]) continue;
+    const i = p*4;
+    const [, , ol] = rgbToHsl(d[i], d[i+1], d[i+2]);
+    // blend original lightness toward the paint's so pale/dark colors read right,
+    // but keep most of the original shading so shadows + texture survive.
+    const nl = ol*0.68 + pl*0.32;
+    const [nr, ng, nb] = hslToRgb(ph, Math.min(1, ps*0.92), nl);
+    d[i]=nr; d[i+1]=ng; d[i+2]=nb;
+  }
+  ctx.putImageData(out, 0, 0);
+}
+
+function clearPaint(){ if(!origData) return; mask.fill(0); history=[]; showingBefore=false; repaint(); }
+function undoPaint(){ if(!history.length) return; const last = history.pop(); for (const p of last) mask[p]=0; repaint(); }
+function toggleBeforeAfter(){ showingBefore = !showingBefore; repaint(); $('ba-btn').textContent = showingBefore ? '👁️ Show After' : '👁️ Before / After'; }
+
+// ---- lead capture (v1: opens a prefilled text/email to the painter) ----
+function startLead(){ $('lead-form').style.display = 'block'; $('ld-name').focus(); }
+function sendLead(){
+  const name = ($('ld-name').value||'').trim();
+  const contact = ($('ld-contact').value||'').trim();
+  if (!name || !contact){ alert('Please add your name and a phone or email so we can reach you.'); return; }
+  const swatch = PAINTS.find(p=>p.hex.toLowerCase()===paintColor.toLowerCase());
+  const colorLabel = swatch ? swatch.name + ' (' + paintColor + ')' : paintColor;
+  const body = `Hi Ingersoll Painting! I used your color visualizer and I'd like a quote.\n\nName: ${name}\nContact: ${contact}\nColor I liked: ${colorLabel}`;
+  const isEmail = contact.includes('@');
+  if (isEmail){
+    window.location.href = 'mailto:info@ingersollpaintingllc.com?subject=' + encodeURIComponent('Quote request from Color Visualizer') + '&body=' + encodeURIComponent(body);
+  } else {
+    // Text the painter directly with the details prefilled
+    window.location.href = 'sms:+13159528259?&body=' + encodeURIComponent(body);
+  }
+}
+
+// ---- color math ----
+function hexToRgb(hex){ const n = parseInt(hex.replace('#',''),16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+function rgbToHsl(r,g,b){ r/=255;g/=255;b/=255; const mx=Math.max(r,g,b),mn=Math.min(r,g,b); let h,s,l=(mx+mn)/2;
+  if(mx===mn){h=s=0;} else { const dd=mx-mn; s=l>0.5?dd/(2-mx-mn):dd/(mx+mn);
+    switch(mx){case r:h=(g-b)/dd+(g<b?6:0);break;case g:h=(b-r)/dd+2;break;default:h=(r-g)/dd+4;} h/=6; } return [h,s,l]; }
+function hslToRgb(h,s,l){ let r,g,b; if(s===0){r=g=b=l;} else { const hue2=(p,q,t)=>{ if(t<0)t+=1; if(t>1)t-=1;
+    if(t<1/6)return p+(q-p)*6*t; if(t<1/2)return q; if(t<2/3)return p+(q-p)*(2/3-t)*6; return p; };
+    const q=l<0.5?l*(1+s):l+s-l*s, p=2*l-q; r=hue2(p,q,h+1/3); g=hue2(p,q,h); b=hue2(p,q,h-1/3); }
+  return [Math.round(r*255),Math.round(g*255),Math.round(b*255)]; }
+
+// expose a couple of hooks for testing
+window.__viz = { loadDataUrl(u){ return new Promise(res=>{ const img=new Image(); img.onload=()=>{ cvs.width=img.width;cvs.height=img.height;ctx.drawImage(img,0,0);origData=ctx.getImageData(0,0,img.width,img.height);mask=new Uint8Array(img.width*img.height);history=[];showingBefore=false;cvs.classList.remove('hide');$('empty').classList.add('hide');$('tools').style.display='';$('cta').style.display='';res(); }; img.src=u; }); },
+  tap(x,y){ floodSelect(x,y); }, setColor(h){ paintColor=h; repaint(); }, pixel(x,y){ const i=(y*cvs.width+x)*4; const d=ctx.getImageData(0,0,cvs.width,cvs.height).data; return [d[i],d[i+1],d[i+2]]; }, maskCount(){ return mask.reduce((a,b)=>a+b,0); } };
+</script>
+</body>
+</html>

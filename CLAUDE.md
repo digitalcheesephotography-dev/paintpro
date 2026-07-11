@@ -21,6 +21,8 @@ Reference document for AI assistants (Claude Code, future Claude chat sessions) 
 paintpro/
 ├── PaintPro-ZFold.html       # The entire app (~4,050 lines, ~360 KB)
 ├── print_hub.py              # PC-side print hub script — run on home computer to receive auto-print jobs
+├── proposal.html             # Standalone client e-signature page (opened by homeowners via a shared link)
+├── visualizer.html           # Standalone homeowner color visualizer — tap-wall recolor + "get a quote" lead
 ├── manifest.json             # PWA manifest (name, icons, theme, start URL)
 ├── sw.js                     # Service worker — offline cache, network-first for HTML
 ├── icon-192.png              # PWA icon, full-bleed

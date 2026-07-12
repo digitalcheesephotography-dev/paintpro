@@ -8,7 +8,7 @@
   script-src 'self' 'unsafe-inline' https://www.gstatic.com;
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob: https://firebasestorage.googleapis.com;
-  connect-src 'self' https://*.googleapis.com https://firebasestorage.googleapis.com https://*.firebasestorage.app https://*.firebaseapp.com https://*.firebaseio.com wss://*.firebaseio.com;
+  connect-src 'self' https://*.googleapis.com https://firebasestorage.googleapis.com https://*.firebasestorage.app https://*.firebaseapp.com https://*.firebaseio.com wss://*.firebaseio.com https://api.emailjs.com;
 "/>
 <title>Your Painting Proposal</title>
 <style>
@@ -61,6 +61,7 @@
   </div>
 
   <div id="accepted-banner" class="accepted-banner" style="display:none"></div>
+  <div id="emailed-note" style="display:none;max-width:720px;margin:-8px auto 16px;text-align:center;color:#215c1a;font-size:13px;font-family:Arial,sans-serif;font-weight:700">📧 A copy has been emailed to you.</div>
 
   <div id="paper" class="card"></div>
 
@@ -71,6 +72,9 @@
 
     <label for="signer-name">Your full name</label>
     <input type="text" id="signer-name" autocomplete="name" placeholder="e.g. Dave Reau"/>
+
+    <label for="signer-email" style="margin-top:16px">Your email <span style="color:#9aa7b4">(optional — we'll send you a copy)</span></label>
+    <input type="text" id="signer-email" autocomplete="email" inputmode="email" placeholder="you@email.com"/>
 
     <label for="sigpad" style="margin-top:16px">Signature</label>
     <div class="sigwrap">
@@ -236,6 +240,7 @@ async function acceptProposal(){
                : 'Please sign in the box above.');
     return;
   }
+  const email = ($('signer-email').value || '').trim();
   const btn = $('accept-btn'); btn.disabled = true; btn.textContent = 'Submitting…';
   let sigData = '';
   try { sigData = $('sigpad').toDataURL('image/png'); } catch(_){}
@@ -243,17 +248,47 @@ async function acceptProposal(){
     await _docRef.update({
       status: 'accepted',
       signerName: name,
+      signerEmail: email,
       signatureDataUrl: sigData,
       acceptedAt: Date.now(),
       acceptedUA: navigator.userAgent.slice(0, 180),
     });
     _data.status='accepted'; _data.signerName=name; _data.acceptedAt=Date.now(); _data.signatureDataUrl=sigData;
     showAccepted();
+    // Email the client a copy (best-effort — never blocks the acceptance).
+    let emailed = false;
+    if (email && /.+@.+\..+/.test(email) && _data.emailjs) emailed = await sendClientEmail(email);
+    if (emailed) { const n = document.getElementById('emailed-note'); if (n) n.style.display = 'block'; }
     window.scrollTo({ top:0, behavior:'smooth' });
   } catch(e){
     btn.disabled=false; btn.textContent='Accept & Sign';
     _showFormErr('Sorry, we could not submit your acceptance. Please check your internet and try again.');
   }
+}
+
+// Email the signer a copy via EmailJS (config carried on the proposal). The
+// email contains the link to this signed proposal — their permanent copy.
+async function sendClientEmail(to){
+  const cfg = _data.emailjs;
+  if (!cfg || !cfg.serviceId || !cfg.templateId || !cfg.publicKey) return false;
+  try {
+    const resp = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        service_id:  cfg.serviceId,
+        template_id: cfg.templateId,
+        user_id:     cfg.publicKey,
+        template_params: {
+          to_email:     to,
+          client_name:  _data.signerName || 'there',
+          company_name: (_data.company && _data.company.name) || 'Ingersoll Painting',
+          proposal_link: location.href,
+        },
+      }),
+    });
+    return resp.ok;
+  } catch(_) { return false; }
 }
 
 boot();

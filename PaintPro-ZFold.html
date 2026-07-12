@@ -1101,6 +1101,37 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div id="delete-data-status" style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px"></div>
   </div>
 
+  <!-- Auto-email client a copy on signing (EmailJS) -->
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
+    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">📧 Email Client a Copy</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      When a customer signs a proposal, automatically email them a copy. Free, sends through your own Gmail — no server. Paste your 3 EmailJS IDs below (setup steps at the bottom).
+    </div>
+    <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Service ID</label>
+    <input type="text" id="emailjs-service" placeholder="service_xxxxxxx" autocomplete="off"
+           style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:8px"/>
+    <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Template ID</label>
+    <input type="text" id="emailjs-template" placeholder="template_xxxxxxx" autocomplete="off"
+           style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:8px"/>
+    <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Public Key</label>
+    <input type="text" id="emailjs-key" placeholder="your public key" autocomplete="off"
+           style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:10px"/>
+    <button onclick="saveEmailjsConfig()"
+            style="width:100%;height:50px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">
+      Save Email Settings
+    </button>
+    <div id="emailjs-status" style="font-size:13px;color:var(--muted);text-align:center;margin-top:10px"></div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.7;background:var(--dark);border-radius:8px;padding:10px 12px;margin-top:10px">
+      <strong style="color:var(--text)">One-time setup (free, ~5 min):</strong><br>
+      1. Sign up at <strong style="color:var(--blue)">emailjs.com</strong><br>
+      2. <em>Email Services</em> → add service → connect your Gmail<br>
+      3. <em>Email Templates</em> → create one using these variables:<br>
+      &nbsp;&nbsp;<code>{{to_email}}</code>, <code>{{client_name}}</code>, <code>{{company_name}}</code>, <code>{{proposal_link}}</code><br>
+      4. Copy the <em>Service ID</em>, <em>Template ID</em>, and <em>Public Key</em> into the boxes above.<br>
+      5. In EmailJS <em>Account → Security</em>, add your app's web address to the allowed list.
+    </div>
+  </div>
+
   <!-- Color Visualizer -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
     <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🎨 Color Visualizer</div>
@@ -1858,6 +1889,24 @@ function saveProxyUrl() {
   localStorage.setItem('ingersoll_proxy_url_v1', u.origin);
   if(st){ st.textContent='✓ Proxy URL saved'; st.style.color='var(--green)'; }
   showToast('✓ Proxy URL saved');
+}
+
+// EmailJS config for auto-emailing a signed-proposal copy to the client.
+// Device-local (not synced). Public key is meant to be client-side; still, set
+// the allowed-origins list in the EmailJS dashboard to limit abuse.
+const EMAILJS_KEY = 'ingersoll_emailjs_v1';
+function loadEmailjsConfig(){ try { return JSON.parse(localStorage.getItem(EMAILJS_KEY)) || null; } catch { return null; } }
+function saveEmailjsConfig(){
+  const svc = (document.getElementById('emailjs-service').value || '').trim();
+  const tpl = (document.getElementById('emailjs-template').value || '').trim();
+  const key = (document.getElementById('emailjs-key').value || '').trim();
+  const st  = document.getElementById('emailjs-status');
+  const set = (m,ok) => { if(st){ st.textContent=m; st.style.color = ok?'var(--green)':'var(--red)'; } };
+  if (!svc && !tpl && !key) { localStorage.removeItem(EMAILJS_KEY); set('Email copies turned off.', true); return; }
+  if (!svc || !tpl || !key) { set('Fill in all three: Service ID, Template ID, and Public Key.'); return; }
+  localStorage.setItem(EMAILJS_KEY, JSON.stringify({ serviceId:svc, templateId:tpl, publicKey:key }));
+  set('✓ Saved — clients will be emailed a copy when they sign.', true);
+  showToast('✓ Email settings saved');
 }
 
 async function testAnthropicKey() {
@@ -4427,6 +4476,10 @@ async function createProposal(){
     company:{ name:'Ingersoll Painting LLC', phone:'(315) 952-8259', site:'ingersollpaintingllc.com' },
     status:'sent', signerName:'', signatureDataUrl:'', acceptedAt:0
   };
+  // If auto-email is configured, carry the EmailJS settings on the proposal so
+  // the client page can email the signer a copy the moment they accept.
+  const ej = loadEmailjsConfig();
+  if (ej) doc.emailjs = ej;
   showToast('Creating proposal…');
   try { await _db.collection('proposals').doc(id).set(doc); }
   catch(e){ showToast('Could not create proposal: ' + (e.code || e.message), 'err'); return; }
@@ -4742,6 +4795,12 @@ function switchTab(tab) {
   if(tab==='apt') { aptRender(); renderSupplies(); }
   if(tab==='settings') {
     renderLockSettings();
+    const ej = loadEmailjsConfig();
+    if (ej) {
+      const s=document.getElementById('emailjs-service'), t=document.getElementById('emailjs-template'), y=document.getElementById('emailjs-key');
+      if (s) s.value = ej.serviceId || ''; if (t) t.value = ej.templateId || ''; if (y) y.value = ej.publicKey || '';
+      const est=document.getElementById('emailjs-status'); if (est){ est.textContent='✓ Email copies are on'; est.style.color='var(--green)'; }
+    }
     const k = localStorage.getItem('ingersoll_anthropic_key_v1') || '';
     const el = document.getElementById('settings-anthropic-key');
     if (el) el.value = k;

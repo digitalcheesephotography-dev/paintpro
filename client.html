@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' https://www.gstatic.com;
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data:;
+  connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com https://*.firebaseio.com wss://*.firebaseio.com;
+"/>
+<meta name="theme-color" content="#1786bd"/>
+<link rel="manifest" href="client.webmanifest"/>
+<link rel="icon" href="favicon-32.png" sizes="32x32"/>
+<link rel="apple-touch-icon" href="apple-touch-icon.png"/>
+<title>My Painting Project — Ingersoll Painting</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{font-family:Georgia,'Times New Roman',serif;color:#141d27;background:#eef1f5;line-height:1.6;
+       padding:16px 14px calc(40px + env(safe-area-inset-bottom,0px));-webkit-text-size-adjust:100%}
+  .card{max-width:720px;margin:0 auto 14px;background:#fff;border:1px solid #dfe5ec;border-radius:12px;
+        box-shadow:0 2px 10px rgba(20,29,39,.06);padding:20px 18px}
+  .brand{font-size:20px;font-weight:700;color:#1786bd;letter-spacing:.3px}
+  .brand-sub{font-size:12px;color:#6b7a8d;margin-top:2px}
+  h1{font-size:22px;margin-bottom:4px}
+  h2{font-size:17px;margin-bottom:10px}
+  .muted{color:#6b7a8d;font-size:13px}
+  .state{max-width:720px;margin:40px auto;text-align:center;color:#6b7a8d;font-size:15px}
+  .notice{max-width:720px;margin:0 auto 14px;background:#fdf3e3;border:1.5px solid #d9a53f;color:#7a5a12;
+       border-radius:12px;padding:12px 14px;font-size:14px;font-family:Arial,sans-serif}
+
+  /* status tracker */
+  .steps{display:flex;margin:16px 0 6px}
+  .step{flex:1;text-align:center;position:relative}
+  .step .dot{width:26px;height:26px;border-radius:50%;background:#e3e9f0;border:2px solid #cdd6e0;
+       margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;
+       position:relative;z-index:1;font-family:Arial,sans-serif;font-weight:700}
+  .step .lbl{font-size:11px;color:#8b98a6;font-family:Arial,sans-serif;font-weight:700;letter-spacing:.3px;text-transform:uppercase}
+  .step::before{content:'';position:absolute;top:12px;left:-50%;width:100%;height:3px;background:#e3e9f0}
+  .step:first-child::before{display:none}
+  .step.done .dot{background:#2e7d24;border-color:#2e7d24}
+  .step.done::before{background:#2e7d24}
+  .step.done .lbl{color:#2e7d24}
+  .step.now .dot{background:#1786bd;border-color:#1786bd;box-shadow:0 0 0 4px rgba(23,134,189,.18)}
+  .step.now::before{background:#2e7d24}
+  .step.now .lbl{color:#1786bd}
+
+  /* checklist */
+  .task{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid #eef1f5;font-size:15px}
+  .task:last-child{border-bottom:none}
+  .task .tick{width:22px;height:22px;border-radius:50%;flex-shrink:0;margin-top:2px;
+       display:flex;align-items:center;justify-content:center;font-size:12px;font-family:Arial,sans-serif;font-weight:700}
+  .task.done .tick{background:#2e7d24;color:#fff}
+  .task.todo .tick{background:#fff;border:2px solid #cdd6e0}
+  .task.done .txt{color:#6b7a8d;text-decoration:line-through}
+  .bar{height:8px;background:#e3e9f0;border-radius:99px;overflow:hidden;margin:6px 0 12px}
+  .bar i{display:block;height:100%;background:#2e7d24;border-radius:99px;transition:width .4s}
+
+  /* buttons + form */
+  .btnrow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .btn{display:flex;align-items:center;justify-content:center;gap:6px;height:52px;border:none;border-radius:10px;
+       font-family:Arial,sans-serif;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none}
+  .btn-blue{background:#1786bd;color:#fff}
+  .btn-green{background:#2e7d24;color:#fff}
+  .btn-ghost{background:#fff;border:1.5px solid #cdd6e0;color:#1786bd}
+  label{display:block;font-size:13px;color:#41505f;margin:12px 0 6px;font-family:Arial,sans-serif;font-weight:700}
+  input[type=text],textarea{width:100%;border:1.5px solid #cdd6e0;border-radius:8px;padding:12px 14px;font-size:16px;
+       font-family:Georgia,serif;background:#fff;color:#141d27;outline:none}
+  input[type=text]{height:50px;padding:0 14px}
+  input[type=text]:focus,textarea:focus{border-color:#1786bd}
+  textarea{min-height:90px;resize:vertical}
+  .kv{display:flex;gap:10px;font-size:15px;margin-top:8px}
+  .kv .k{color:#6b7a8d;font-size:13px;font-family:Arial,sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.4px;min-width:92px;padding-top:2px}
+  footer{max-width:720px;margin:8px auto 0;text-align:center;color:#8b98a6;font-size:12px;font-family:Arial,sans-serif}
+</style>
+</head>
+<body>
+
+<div class="card" id="header-card">
+  <div class="brand" id="co-name">Ingersoll Painting LLC</div>
+  <div class="brand-sub" id="co-contact">(315) 952-8259 · Family Owned Since 1978</div>
+</div>
+
+<div id="loading" class="state">Loading…</div>
+<div id="notice" class="notice" style="display:none"></div>
+
+<!-- ── Project portal (shown when opened from a shared project link) ── -->
+<div id="portal" style="display:none">
+  <div class="card">
+    <h1 id="pt-title">Your Painting Project</h1>
+    <p class="muted" id="pt-greet"></p>
+
+    <div class="steps" id="pt-steps"></div>
+
+    <div id="pt-date-row" class="kv" style="display:none">
+      <span class="k">Scheduled</span><span id="pt-date"></span>
+    </div>
+    <p class="muted" id="pt-updated" style="margin-top:10px;font-size:12px"></p>
+  </div>
+
+  <div class="card" id="pt-tasks-card" style="display:none">
+    <h2>Work Checklist</h2>
+    <div class="muted" id="pt-progress" style="font-family:Arial,sans-serif;font-weight:700"></div>
+    <div class="bar"><i id="pt-bar" style="width:0%"></i></div>
+    <div id="pt-tasks"></div>
+  </div>
+</div>
+
+<!-- ── Generic client landing (no project link) ── -->
+<div id="generic" style="display:none">
+  <div class="card">
+    <h1>Your painting project, handled.</h1>
+    <p class="muted" style="margin-bottom:4px">Interior and exterior painting done right, by a family company serving Central New York since 1978. Tell us about your project and we will get you a free quote.</p>
+
+    <label for="q-name">Your name</label>
+    <input type="text" id="q-name" autocomplete="name" placeholder="e.g. Dave Reau"/>
+
+    <label for="q-contact">Phone or email</label>
+    <input type="text" id="q-contact" autocomplete="tel" placeholder="Best way to reach you"/>
+
+    <label for="q-desc">What needs painting?</label>
+    <textarea id="q-desc" placeholder="e.g. Living room and hallway, walls and ceilings. House exterior. Deck stain."></textarea>
+
+    <button class="btn btn-green" style="width:100%;margin-top:14px" onclick="sendQuote()">Send My Free Quote Request</button>
+  </div>
+</div>
+
+<!-- ── Shared cards (both modes) ── -->
+<div id="shared" style="display:none">
+  <div class="card">
+    <h2>Try a new color on your walls</h2>
+    <p class="muted" style="margin-bottom:12px">Snap a photo of your room and preview paint colors on it before we open a single can.</p>
+    <a class="btn btn-blue" href="visualizer.html">🎨 Open the Color Visualizer</a>
+  </div>
+
+  <div class="card">
+    <h2>Questions? Reach us anytime</h2>
+    <div class="btnrow" style="margin-top:12px">
+      <a class="btn btn-ghost" href="tel:+13159528259">📞 Call</a>
+      <a class="btn btn-ghost" href="sms:+13159528259">💬 Text</a>
+      <a class="btn btn-ghost" href="mailto:info@ingersollpaintingllc.com">✉️ Email</a>
+    </div>
+  </div>
+</div>
+
+<footer>Ingersoll Painting LLC · Hannibal, NY · 1-Year Workmanship Warranty on every job</footer>
+
+<!-- Firebase (same project as the PaintPro app) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+const FIREBASE_CONFIG = {
+  apiKey:            'AIzaSyCFY1yfVWgFX845-A73PC2EX0IuUOG1COM',
+  authDomain:        'paintpro-4267b.firebaseapp.com',
+  projectId:         'paintpro-4267b',
+  storageBucket:     'paintpro-4267b.firebasestorage.app',
+  messagingSenderId: '614443567698',
+  appId:             '1:614443567698:web:29083f2c588844143c2d8b',
+};
+
+// Client-friendly labels for the project statuses used in the PaintPro app.
+const STEPS = [
+  { key:'bidding',    label:'Quote' },
+  { key:'scheduled',  label:'Scheduled' },
+  { key:'inprogress', label:'Painting' },
+  { key:'complete',   label:'Complete' },
+];
+
+// Installed-app fix: the home-screen shortcut opens client.html with no ?id=,
+// so remember the last portal this device opened and return to it.
+const SAVED_ID_KEY = 'pp_client_portal_id';
+const params = new URLSearchParams(location.search);
+const portalId = params.get('id') || (localStorage.getItem(SAVED_ID_KEY) || '');
+let _data = null, _unsub = null;
+
+const $ = id => document.getElementById(id);
+const esc = s => (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function showGeneric(noticeMsg){
+  $('loading').style.display='none';
+  $('portal').style.display='none';
+  $('generic').style.display='block';
+  $('shared').style.display='block';
+  if (noticeMsg){ const n=$('notice'); n.textContent=noticeMsg; n.style.display='block'; }
+}
+
+async function boot(){
+  if (!portalId){ showGeneric(); return; }
+  let db;
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.firestore();
+  } catch(e){ showGeneric('Could not connect. Check your internet and reopen your project link.'); return; }
+  try {
+    const ref = db.collection('portals').doc(portalId);
+    const snap = await ref.get();
+    if (!snap.exists){
+      // Stale saved id (portal removed) — forget it and fall back to the landing page.
+      if (localStorage.getItem(SAVED_ID_KEY) === portalId) localStorage.removeItem(SAVED_ID_KEY);
+      showGeneric('That project link was not found. It may have been removed — ask your painter for a new one.');
+      return;
+    }
+    try { localStorage.setItem(SAVED_ID_KEY, portalId); } catch(_){}
+    _data = snap.data();
+    render();
+    // Live updates: when the painter checks off work, the client sees it.
+    _unsub = ref.onSnapshot(s => { if (s.exists){ _data = s.data(); render(); } }, () => {});
+  } catch(e){ showGeneric('Could not load your project right now. Please try the link again in a few minutes.'); }
+}
+
+function render(){
+  $('loading').style.display='none';
+  $('generic').style.display='none';
+  $('portal').style.display='block';
+  $('shared').style.display='block';
+
+  if (_data.company && _data.company.name) $('co-name').textContent = _data.company.name;
+
+  $('pt-title').textContent = _data.name || 'Your Painting Project';
+  $('pt-greet').textContent = _data.client ? `Hi ${_data.client} — here's where your project stands.` : "Here's where your project stands.";
+
+  // status tracker
+  const idx = Math.max(0, STEPS.findIndex(s => s.key === _data.status));
+  $('pt-steps').innerHTML = STEPS.map((s,i) => `
+    <div class="step ${i < idx ? 'done' : i === idx ? 'now' : ''}">
+      <div class="dot">${i < idx ? '✓' : ''}</div>
+      <div class="lbl">${s.label}</div>
+    </div>`).join('');
+
+  // scheduled date
+  const dr = $('pt-date-row');
+  if (_data.date){
+    dr.style.display='flex';
+    $('pt-date').textContent = fmtDate(_data.date);
+  } else dr.style.display='none';
+
+  // checklist
+  const tasks = _data.tasks || [];
+  const card = $('pt-tasks-card');
+  if (tasks.length){
+    card.style.display='block';
+    const done = tasks.filter(t => t.done).length;
+    $('pt-progress').textContent = `${done} of ${tasks.length} complete`;
+    $('pt-bar').style.width = Math.round(done/tasks.length*100) + '%';
+    $('pt-tasks').innerHTML = tasks.map(t => `
+      <div class="task ${t.done ? 'done' : 'todo'}">
+        <span class="tick">${t.done ? '✓' : ''}</span>
+        <span class="txt">${esc(t.text)}</span>
+      </div>`).join('');
+  } else card.style.display='none';
+
+  $('pt-updated').textContent = _data.updatedAt
+    ? 'Last updated ' + new Date(_data.updatedAt).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})
+    : '';
+}
+
+function fmtDate(d){
+  // project dates come from a date input (YYYY-MM-DD) or free text — show
+  // YYYY-MM-DD as a friendly local date, pass anything else through as-is.
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+  if (!m) return d;
+  return new Date(+m[1], +m[2]-1, +m[3]).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+}
+
+// ── Free quote request (opens a prefilled text or email to the painter) ──
+function sendQuote(){
+  const name    = ($('q-name').value||'').trim();
+  const contact = ($('q-contact').value||'').trim();
+  const desc    = ($('q-desc').value||'').trim();
+  if (!name || !contact){ alert('Please add your name and a phone or email so we can reach you.'); return; }
+  const body = `Hi Ingersoll Painting! I'd like a free quote.\n\nName: ${name}\nContact: ${contact}${desc ? '\nProject: ' + desc : ''}`;
+  if (contact.includes('@')){
+    location.href = 'mailto:info@ingersollpaintingllc.com?subject=' + encodeURIComponent('Free quote request') + '&body=' + encodeURIComponent(body);
+  } else {
+    location.href = 'sms:+13159528259?&body=' + encodeURIComponent(body);
+  }
+}
+
+// test hook: render a portal without Firestore
+window.__portal = { renderTest(data){ _data = data; render(); }, showGeneric };
+
+boot();
+</script>
+</body>
+</html>

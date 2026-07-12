@@ -22,6 +22,8 @@ paintpro/
 ├── PaintPro-ZFold.html       # The entire app (~4,050 lines, ~360 KB)
 ├── print_hub.py              # PC-side print hub script — run on home computer to receive auto-print jobs
 ├── proposal.html             # Standalone client e-signature page (opened by homeowners via a shared link)
+├── client.html               # Standalone client app — per-project portal (live status/checklist) + quote-request landing
+├── client.webmanifest        # PWA manifest for client.html so homeowners can install it as an app
 ├── visualizer.html           # Standalone homeowner color visualizer — tap-wall recolor + "get a quote" lead
 ├── manifest.json             # PWA manifest (name, icons, theme, start URL)
 ├── sw.js                     # Service worker — offline cache, network-first for HTML
@@ -209,7 +211,15 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 - Setup: `pip install requests` on PC, set matching topic in both files, run `python print_hub.py`
 - Auto-start on Windows: shortcut to `pythonw print_hub.py` in `shell:startup` folder
 
-### 7.7 Backup & Restore
+### 7.7 Client Portal (client.html)
+- "🔗 Client Portal" button on each project card (Clients tab → Projects) publishes the project to Firestore `portals/{randomId}` (`shareClientPortal`) and shows a shareable link — same capability-URL model as proposals.
+- The homeowner opens `client.html?id=…` (standalone, no login): live status tracker (Quote → Scheduled → Painting → Complete), scheduled date, and the task checklist with progress bar. Uses `onSnapshot` so checked-off tasks appear live.
+- `portalPush(proj)` re-publishes on `saveProject()` and `projToggleTask()` (fire-and-forget); `deleteProject()` deletes the portal doc. `proj.portalId` on the project keeps the link stable across edits — preserve it in `saveProject()`.
+- **Privacy:** `_portalDoc()` publishes only name/client/status/date/tasks — never `notes` or `value`.
+- `client.html` without `?id=` is a generic client landing: free-quote request (prefilled sms/mailto), visualizer link, call/text/email buttons. The last-opened portal id is remembered in the client's own localStorage (`pp_client_portal_id`) so the installed PWA reopens their project.
+- Rules for the `portals` collection are in `firestore.rules` (public read, owner-only writes) — must be published in the console.
+
+### 7.8 Backup & Restore
 - `buildBackup()` serializes all localStorage keys + IndexedDB photos into a JSON blob
 - `backupToDrive()` triggers a download of the backup JSON
 - `restoreFromBackup()` reads a backup JSON and restores all data
@@ -342,6 +352,9 @@ IndexedDB: `paintpro-photos` database, object store `photos`, keyed by photo ID 
 ### Projects
 `projLoad`, `projSave`, `renderProjects`, `openProjectModal`, `closeProjectModal`, `saveProject`, `deleteProject`, `projAddTask`, `projToggleTask`, `renderProjTasks`
 
+### Client Portal
+`shareClientPortal`, `portalPush`, `showPortalLinkModal`, `_portalDoc`, `_portalRandId`
+
 ### Notes
 `notesLoad`, `notesSave`, `renderNotes`, `openNoteModal`, `closeNoteModal`, `saveNote`, `deleteNote`
 
@@ -438,4 +451,4 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
 
 ---
 
-*Last updated: June 11, 2026 (full diagnostic sweep: voice reliability layer restored after regression — mishear corrections, undo, room naming, fractions, hyphenated compounds, maxAlternatives=3; measurement routing now follows the open room card; quota-safe saves via `safeSet()`; Firestore sync stale-write guard; AI JSON extraction hardened via `extractAIJson()`; service worker v5 only caches OK responses). If you make substantial changes to the app structure, update this file in the same commit.*
+*Last updated: July 12, 2026 (Client Portal added: client.html + client.webmanifest, `portals` Firestore collection with rules, share/auto-push hooks on Projects). Previous update June 11, 2026 (full diagnostic sweep: voice reliability layer restored after regression — mishear corrections, undo, room naming, fractions, hyphenated compounds, maxAlternatives=3; measurement routing now follows the open room card; quota-safe saves via `safeSet()`; Firestore sync stale-write guard; AI JSON extraction hardened via `extractAIJson()`; service worker v5 only caches OK responses). If you make substantial changes to the app structure, update this file in the same commit.*

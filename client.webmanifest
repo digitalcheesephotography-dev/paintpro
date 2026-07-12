@@ -1,0 +1,15 @@
+{
+  "name": "Ingersoll Painting — My Project",
+  "short_name": "My Painter",
+  "description": "Follow your painting project: live status, schedule, and work checklist from Ingersoll Painting LLC.",
+  "start_url": "./client.html",
+  "display": "standalone",
+  "background_color": "#eef1f5",
+  "theme_color": "#1786bd",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

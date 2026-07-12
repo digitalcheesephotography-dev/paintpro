@@ -4575,6 +4575,66 @@ function proposalWatch(id){
 }
 function watchAllProposals(){ proposalsLoad().filter(p => p.status !== 'accepted').forEach(p => proposalWatch(p.id)); }
 
+// ══════════════════════════════════════════════
+// CLIENT PORTAL
+// A project is published to Firestore portals/{id}; the client opens a
+// shareable link (client.html) showing live status, schedule date, and the
+// task checklist. Public-read by unguessable capability ID with owner-only
+// writes — see firestore.rules. Internal notes and the job value are never
+// published to the portal.
+// ══════════════════════════════════════════════
+function _portalRandId(){
+  const a = crypto.getRandomValues(new Uint8Array(16));
+  return 'port_' + Array.from(a, b => b.toString(16).padStart(2,'0')).join('');
+}
+function _portalDoc(p){
+  return {
+    ownerUid: _uid,
+    updatedAt: Date.now(),
+    name:   p.name   || 'Your Painting Project',
+    client: p.client || '',
+    status: p.status || 'bidding',
+    date:   p.date   || '',
+    tasks:  (p.tasks || []).map(t => ({ text: t.text, done: !!t.done })),
+    company: { name:'Ingersoll Painting LLC', phone:'(315) 952-8259', site:'ingersollpaintingllc.com' },
+  };
+}
+async function shareClientPortal(projId){
+  if (!_db || !_uid) { showToast('Sign in to share a client portal', 'warn'); return; }
+  const projects = projLoad();
+  const p = projects.find(x => x.id === projId);
+  if (!p) return;
+  const isNew = !p.portalId;
+  if (isNew) { p.portalId = _portalRandId(); projSave(projects); }
+  const doc = _portalDoc(p);
+  if (isNew) doc.createdAt = Date.now();
+  showToast(isNew ? 'Creating client portal…' : 'Updating client portal…');
+  try { await _db.collection('portals').doc(p.portalId).set(doc, { merge:true }); }
+  catch(e){ showToast('Could not publish portal: ' + (e.code || e.message), 'err'); return; }
+  const url = new URL('client.html?id=' + p.portalId, location.href).href;
+  showPortalLinkModal(url, p.client || 'your client');
+}
+// Push the latest project state to its portal (fire-and-forget) so the client
+// sees live status the moment a task is checked off or the project changes.
+function portalPush(p){
+  if (!p || !p.portalId || !_db || !_uid) return;
+  _db.collection('portals').doc(p.portalId).set(_portalDoc(p), { merge:true }).catch(() => {});
+}
+function showPortalLinkModal(url, client){
+  const s = _ppModal();
+  const title = document.createElement('div'); title.setAttribute('style','font-family:var(--head);font-size:22px;color:var(--blue);margin-bottom:6px'); title.textContent = 'Client portal ready';
+  const desc = document.createElement('p'); desc.setAttribute('style','color:var(--muted);font-size:14px;margin-bottom:14px;line-height:1.5');
+  desc.textContent = `Send this link to ${client}. They see the project status, schedule, and checklist live — it updates automatically as you check off work. Your notes and job value stay private.`;
+  const link = document.createElement('div'); link.setAttribute('style','background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text);word-break:break-all;margin-bottom:12px'); link.textContent = url;
+  const grid = document.createElement('div'); grid.setAttribute('style','display:grid;grid-template-columns:1fr 1fr;gap:8px');
+  const copy = document.createElement('button'); copy.setAttribute('style','height:50px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer'); copy.textContent = '📋 Copy Link';
+  copy.onclick = () => { (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => showToast('Link copied')).catch(() => showToast('Copy not available — long-press the link', 'warn')); };
+  const share = document.createElement('button'); share.setAttribute('style','height:50px;background:var(--card);border:1.5px solid var(--blue);border-radius:8px;color:var(--blue);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer'); share.textContent = 'Share / Text';
+  share.onclick = () => { if (navigator.share) navigator.share({ title:'Your painting project', text:'Follow your painting project from Ingersoll Painting — live status and progress:', url }).catch(()=>{}); else { if (navigator.clipboard) navigator.clipboard.writeText(url); showToast('Link copied — paste into a text'); } };
+  grid.append(copy, share);
+  s.append(title, desc, link, grid);
+}
+
 function saveBidPDF() {
   const bidEl = document.getElementById('bid-out');
   if (!bidEl || !bidEl.classList.contains('visible')) { showToast('Generate a bid first', 'warn'); return; }
@@ -6422,6 +6482,7 @@ function renderProjects() {
         </div>`).join('')}
       <div style="display:flex;gap:8px;margin-top:10px">
         <button onclick="openProjectModal('${p.id}')" style="flex:1;height:40px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">✏️ Edit</button>
+        <button onclick="shareClientPortal('${p.id}')" style="flex:1;height:40px;background:var(--panel);border:1px solid ${p.portalId?'var(--blue)':'var(--border)'};border-radius:8px;color:var(--blue);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">🔗 ${p.portalId?'Portal Link':'Client Portal'}</button>
       </div>`;
     list.appendChild(div);
   });
@@ -6434,6 +6495,7 @@ function projToggleTask(projId, taskId, done) {
   const task = (proj.tasks||[]).find(t=>t.id===taskId);
   if(task) task.done = done;
   projSave(projects);
+  portalPush(proj);
   renderProjects();
 }
 
@@ -6490,8 +6552,11 @@ function saveProject() {
     tasks:  projTasks,
     updatedAt: Date.now(),
   };
+  // keep the client-portal link stable across edits
+  if(existing>=0 && projects[existing].portalId) proj.portalId = projects[existing].portalId;
   if(existing>=0) projects[existing]=proj; else projects.unshift(proj);
   projSave(projects);
+  portalPush(proj);
   closeProjectModal();
   renderProjects();
   showToast(name+' saved');
@@ -6500,7 +6565,11 @@ function saveProject() {
 function deleteProject() {
   const id = document.getElementById('proj-modal-id').value;
   if(!id) return;
-  projSave(projLoad().filter(p=>p.id!==id));
+  const projects = projLoad();
+  const p = projects.find(x=>x.id===id);
+  // take the shared portal down with the project (best-effort)
+  if (p && p.portalId && _db) _db.collection('portals').doc(p.portalId).delete().catch(()=>{});
+  projSave(projects.filter(x=>x.id!==id));
   closeProjectModal();
   renderProjects();
 }

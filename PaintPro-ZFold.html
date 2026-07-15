@@ -1101,6 +1101,16 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div id="delete-data-status" style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px"></div>
   </div>
 
+  <!-- Proposals & Signatures -->
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
+    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">✍️ Proposals &amp; Signatures</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.5">See proposals you've sent and their signed status, or send a bid you wrote anywhere (like one from a Claude chat) as a signable proposal.</div>
+    <button onclick="openProposalsModal()"
+            style="width:100%;height:50px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">
+      📄 Open Proposals &amp; Send a Written Bid
+    </button>
+  </div>
+
   <!-- Auto-email client a copy on signing (EmailJS) -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
     <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">📧 Email Client a Copy</div>
@@ -4458,40 +4468,74 @@ function _ppModal(){
   return sheet;
 }
 
+// Send the currently-generated in-app bid for signature.
 async function createProposal(){
-  if (!_db || !_uid) { showToast('Sign in to send a proposal for signature', 'warn'); return; }
   const bidEl = document.getElementById('bid-out');
   if (!bidEl || !bidEl.classList.contains('visible')) { showToast('Generate a bid first', 'warn'); return; }
   const tmp = document.createElement('div'); tmp.innerHTML = bidEl.innerHTML;
   // The client proposal is display-only paper — strip every interactive control.
-  // (The main action buttons are NOT marked .no-print, so remove all buttons +
-  // inputs explicitly; the Accept/sign UI lives in proposal.html.)
   tmp.querySelectorAll('button, input, textarea, select, .no-print').forEach(el => el.remove());
-  const bodyHtml = tmp.innerHTML;
   const client  = document.getElementById('client-name').value || 'Client';
   const address = document.getElementById('job-address').value || '';
+  return _sendProposal(tmp.innerHTML, client, address);
+}
+
+// Shared: write a proposal doc, track it, and show the shareable link.
+async function _sendProposal(bodyHtml, client, address){
+  if (!_db || !_uid) { showToast('Sign in to send a proposal for signature', 'warn'); return; }
   const id = _propRandId();
   const doc = {
-    ownerUid:_uid, createdAt:Date.now(), client, address, bodyHtml,
+    ownerUid:_uid, createdAt:Date.now(), client:client||'Client', address:address||'', bodyHtml,
     company:{ name:'Ingersoll Painting LLC', phone:'(315) 952-8259', site:'ingersollpaintingllc.com' },
     status:'sent', signerName:'', signatureDataUrl:'', acceptedAt:0
   };
-  // If auto-email is configured, carry the EmailJS settings on the proposal so
-  // the client page can email the signer a copy the moment they accept.
   const ej = loadEmailjsConfig();
   if (ej) doc.emailjs = ej;
   showToast('Creating proposal…');
   try { await _db.collection('proposals').doc(id).set(doc); }
   catch(e){ showToast('Could not create proposal: ' + (e.code || e.message), 'err'); return; }
-  // Resolve proposal.html relative to the current page so the link keeps any
-  // subfolder (e.g. GitHub Pages serves this app under /paintpro/). Using
-  // location.origin dropped that path and produced a broken link.
   const url = new URL('proposal.html?id=' + id, location.href).href;
   const list = proposalsLoad();
-  list.unshift({ id, client, address, createdAt:doc.createdAt, status:'sent', url, signerName:'', acceptedAt:0, signatureDataUrl:'' });
+  list.unshift({ id, client:doc.client, address:doc.address, createdAt:doc.createdAt, status:'sent', url, signerName:'', acceptedAt:0, signatureDataUrl:'' });
   proposalsSave(list);
   proposalWatch(id);
-  showProposalLinkModal(url, client);
+  showProposalLinkModal(url, doc.client);
+}
+
+// Turn pasted plain-text bid content into safe, clean proposal HTML (blank
+// lines become paragraphs; single newlines become line breaks; everything
+// escaped). Lines that look like a hand-signature block are dropped, since
+// proposal.html adds its own interactive Accept & Sign section.
+function _bidTextToHtml(text){
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const cleaned = String(text).replace(/\r/g,'')
+    .split('\n')
+    .filter(line => !/^[_\s]{6,}$/.test(line) && !/^\s*(client signature|signature|date)\s*:?\s*_*\s*$/i.test(line))
+    .join('\n').trim();
+  const paras = cleaned.split(/\n{2,}/).map(p =>
+    `<p style="margin:0 0 12px">${esc(p).replace(/\n/g,'<br>')}</p>`).join('');
+  return `<div style="font-family:Georgia,'Times New Roman',serif;color:#111;font-size:14px;line-height:1.7">${paras}</div>`;
+}
+
+// Send an outside/written bid (e.g. one drafted in a Claude chat) for signature.
+function sendWrittenBid(){
+  const s = _ppModal();
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div style="font-family:var(--head);font-size:22px;color:var(--blue);margin-bottom:6px">Send a Written Bid for Signature</div>
+    <p style="color:var(--muted);font-size:14px;margin-bottom:14px;line-height:1.5">Paste a bid you wrote anywhere (like one from a Claude chat). It becomes a signable, e-mailable proposal — the customer gets the Accept &amp; Sign screen just like an in-app bid.</p>
+    <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Client name</label>
+    <input type="text" id="wb-client" placeholder="e.g. Bob Myers" style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:12px"/>
+    <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Paste the full bid text</label>
+    <textarea id="wb-text" rows="12" placeholder="Paste the whole proposal here…" style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;resize:vertical;margin-bottom:12px"></textarea>
+    <button id="wb-send" style="width:100%;height:52px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">✍️ Create Signable Proposal</button>`;
+  s.appendChild(wrap);
+  wrap.querySelector('#wb-send').onclick = () => {
+    const client = wrap.querySelector('#wb-client').value.trim();
+    const text   = wrap.querySelector('#wb-text').value.trim();
+    if (text.length < 20) { showToast('Paste the bid text first', 'warn'); return; }
+    _sendProposal(_bidTextToHtml(text), client || 'Client', '');
+  };
 }
 
 function showProposalLinkModal(url, client){
@@ -4513,12 +4557,17 @@ function showProposalLinkModal(url, client){
 
 function openProposalsModal(){
   const s = _ppModal();
-  const title = document.createElement('div'); title.setAttribute('style','font-family:var(--head);font-size:22px;color:var(--blue);margin-bottom:12px'); title.textContent = 'Sent Proposals';
+  const title = document.createElement('div'); title.setAttribute('style','font-family:var(--head);font-size:22px;color:var(--blue);margin-bottom:12px'); title.textContent = 'Proposals & Signatures';
   s.appendChild(title);
+  // Always-available: send a bid you wrote outside the app (e.g. from a chat).
+  const wb = document.createElement('button'); wb.setAttribute('style','width:100%;height:48px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;margin-bottom:14px');
+  wb.textContent = '✍️ Send a Written Bid for Signature';
+  wb.onclick = sendWrittenBid;
+  s.appendChild(wb);
   const list = proposalsLoad();
   if (!list.length) {
     const e = document.createElement('p'); e.setAttribute('style','color:var(--muted);font-size:14px;line-height:1.5');
-    e.textContent = 'No proposals sent yet. Generate a bid, then tap "Send for Signature."';
+    e.textContent = 'No proposals sent yet. Generate a bid and tap "Send for Signature," or paste a written bid above.';
     s.appendChild(e); return;
   }
   list.forEach(pr => {

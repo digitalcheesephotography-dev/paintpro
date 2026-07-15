@@ -4551,8 +4551,10 @@ function openProProposal(){
   if (!rooms.length) { showToast('Add a room / measurements first', 'warn'); return; }
   const cs = rooms.map(calc);
   const ex = (typeof jobExtras === 'function') ? jobExtras() : { total:0 };
-  const matTotal = cs.reduce((a,c)=>a+(c.mat||0),0);
   const labTotal = cs.reduce((a,c)=>a+(c.lab||0),0) + (ex.total||0);
+  const totalGal = cs.reduce((a,c)=>a+(c.gal||0),0);
+  const prodObj  = PRODUCTS.find(x => x.name === ((rooms[0] && rooms[0].product))) || { price:65 };
+  const costGal  = prodObj.price; // app stores paint COST per gallon
   const client  = document.getElementById('client-name').value || '';
   const address = document.getElementById('job-address').value || '';
   const isExt   = estimatorMode === 'exterior';
@@ -4575,9 +4577,11 @@ function openProProposal(){
     ${lbl('Scope of Work')}${inp('pp-scope', defScope, 5)}
     ${lbl('About the Product'+(prod?' ('+prod+')':''))}${inp('pp-about', defAbout, 4)}
     <div style="border-top:1px solid var(--border);margin:6px 0 14px"></div>
-    ${lbl('Paint & Materials  ($)')}${money('pp-mat', matTotal)}
-    ${lbl('Volume Paint Discount  ($, optional — leave 0 to hide)')}${money('pp-disc', 0)}
-    ${lbl('Project Services  ($ — labor as one number)')}${money('pp-svc', labTotal)}
+    ${lbl('Paint product name (shown on the paint line)')}${inp('pp-product', prod)}
+    ${lbl('Gallons')}${money('pp-gal', totalGal)}
+    ${lbl('Retail price per gallon  ($, what the store charges)')}${money('pp-retail', costGal)}
+    ${lbl('Your cost per gallon  ($, set below retail to show a Volume Discount)')}${money('pp-cost', costGal)}
+    ${lbl('Project Services  ($, labor as one number)')}${money('pp-svc', labTotal)}
     <div style="display:flex;justify-content:space-between;align-items:center;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:4px 0 16px">
       <span style="font-weight:700">Total</span><span id="pp-total" style="font-family:var(--head);font-size:22px;color:var(--green)">$0</span>
     </div>
@@ -4593,14 +4597,19 @@ function openProProposal(){
 }
 function _proNum(id){ const el=document.getElementById(id); return el ? (parseFloat(el.value)||0) : 0; }
 function _proRecalc(){
-  const total = _proNum('pp-mat') - _proNum('pp-disc') + _proNum('pp-svc');
+  const gal=_proNum('pp-gal'), retail=_proNum('pp-retail'), cost=_proNum('pp-cost'), svc=_proNum('pp-svc');
+  const total = gal*retail - gal*Math.max(0,retail-cost) + svc; // = gal*cost + services
   const el = document.getElementById('pp-total'); if (el) el.textContent = fmt(Math.max(0,total));
 }
 function _proCollect(){
   const g = id => (document.getElementById(id)||{}).value || '';
-  const mat=_proNum('pp-mat'), disc=_proNum('pp-disc'), svc=_proNum('pp-svc');
+  const gal=_proNum('pp-gal'), retail=_proNum('pp-retail'), cost=_proNum('pp-cost'), svc=_proNum('pp-svc');
+  const perGal = Math.max(0, retail-cost);
+  const paintRetail = gal*retail, discount = gal*perGal;
   return { title:g('pp-title'), client:g('pp-client'), address:g('pp-addr'), scope:g('pp-scope'), about:g('pp-about'),
-           mat, disc, svc, total:Math.max(0,mat-disc+svc), company:'Ingersoll Painting LLC' };
+    product:g('pp-product'), gal, retail, cost, svc, perGal, paintRetail, discount,
+    total:Math.max(0, paintRetail - discount + svc), company:'Ingersoll Painting LLC',
+    logo:(document.querySelector('header img')||{}).src || '' };
 }
 function _proParas(text){
   return String(text).replace(/\r/g,'').split(/\n{2,}/).filter(Boolean).map(p => {
@@ -4613,7 +4622,10 @@ function _proParas(text){
 function proProposalHtml(v, withSignature){
   const money = n => '$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const date  = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  const discRow = v.disc > 0 ? `<tr><td style="padding:8px 0;color:#2e7d24">Volume Paint Discount<div style="font-size:11px;color:#777">Our dealer pricing, passed on to you</div></td><td style="padding:8px 0;text-align:right;color:#2e7d24;white-space:nowrap">-${money(v.disc)}</td></tr>` : '';
+  const galStr = (v.gal % 1 === 0) ? String(v.gal) : v.gal.toFixed(1);
+  const paintName = v.product ? _esc(v.product) : 'Paint &amp; Materials';
+  const discRow = v.discount > 0 ? `<tr><td style="padding:8px 0;color:#2e7d24">Volume Paint Discount<div style="font-size:11px;color:#777">Our dealer pricing saves you ${money(v.perGal)} per gallon on all ${galStr} gallons</div></td><td style="padding:8px 0;text-align:right;color:#2e7d24;white-space:nowrap">-${money(v.discount)}</td></tr>` : '';
+  const saveCallout = v.discount > 0 ? `<div style="font-size:11px;color:#555;margin-top:8px">Ingersoll Painting passes its contractor discount directly to you. That is ${money(v.discount)} in savings on the paint for this project.</div>` : '';
   const sig = withSignature ? `
     <div style="margin-top:26px">
       <div style="font-size:13px;font-weight:bold;margin-bottom:18px">Acceptance</div>
@@ -4622,6 +4634,7 @@ function proProposalHtml(v, withSignature){
     </div>` : '';
   return `<div style="font-family:Georgia,'Times New Roman',serif;color:#111;font-size:13px;line-height:1.7">
     <div style="text-align:center;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:16px">
+      ${v.logo ? `<img src="${v.logo}" alt="Ingersoll Painting" style="height:70px;margin:0 auto 6px;display:block"/>` : ''}
       <div style="font-size:20px;font-weight:bold;letter-spacing:.5px">Ingersoll Painting LLC</div>
       <div style="font-size:11px;color:#555">Hannibal, New York | Serving Central New York Since 1978</div>
     </div>
@@ -4634,11 +4647,12 @@ function proProposalHtml(v, withSignature){
     ${v.about?`<div style="font-size:14px;font-weight:bold;margin:14px 0 6px;border-bottom:1px solid #ddd;padding-bottom:3px">About the Product</div>${_proParas(v.about)}`:''}
     <div style="font-size:14px;font-weight:bold;margin:14px 0 6px;border-bottom:1px solid #ddd;padding-bottom:3px">Project Investment</div>
     <table style="width:100%;font-size:13px;border-collapse:collapse">
-      <tr><td style="padding:8px 0">Paint &amp; Materials</td><td style="padding:8px 0;text-align:right;white-space:nowrap">${money(v.mat)}</td></tr>
+      <tr><td style="padding:8px 0">${paintName}<div style="font-size:11px;color:#777">${galStr} gallons at ${money(v.retail)} per gallon, retail</div></td><td style="padding:8px 0;text-align:right;white-space:nowrap">${money(v.paintRetail)}</td></tr>
       ${discRow}
       <tr><td style="padding:8px 0">Project Services<div style="font-size:11px;color:#777">Surface preparation, protection of the surrounding area, application of two coats, and full cleanup</div></td><td style="padding:8px 0;text-align:right;white-space:nowrap">${money(v.svc)}</td></tr>
       <tr style="border-top:2px solid #111"><td style="padding:10px 0;font-weight:bold;font-size:15px">Total</td><td style="padding:10px 0;text-align:right;font-weight:bold;font-size:15px;white-space:nowrap">${money(v.total)}</td></tr>
     </table>
+    ${saveCallout}
     <div style="background:#f6f6f4;border:1px solid #e5e5e0;border-radius:6px;padding:12px;font-size:11px;color:#555;margin-top:16px;line-height:1.6">
       <strong>1-Year Workmanship Warranty.</strong> Ingersoll Painting LLC stands behind its work. All labor and workmanship on this project are covered by a full 1-year warranty from the date of completion. If any area fails due to workmanship within that first year, we will return and make it right at no cost to you.<br><br>
       <strong>Paint &amp; Materials Disclaimer.</strong> Based on the size and specifics of your project, the paint cost and materials are an estimate. Pricing may be adjusted if more paint and materials are needed. Labor costs are estimated based on the expected scope of work. If unforeseen issues arise during the project, adjustments may be necessary.

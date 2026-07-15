@@ -4581,7 +4581,13 @@ function openProProposal(){
     ${lbl('Gallons')}${money('pp-gal', totalGal)}
     ${lbl('Retail price per gallon  ($, what the store charges)')}${money('pp-retail', costGal)}
     ${lbl('Your cost per gallon  ($, set below retail to show a Volume Discount)')}${money('pp-cost', costGal)}
-    ${lbl('Project Services  ($, labor as one number)')}${money('pp-svc', labTotal)}
+    <div id="pp-svc-single">${lbl('Project Services  ($, labor as one number)')}${money('pp-svc', labTotal)}</div>
+    <button type="button" id="pp-bld-toggle" onclick="_proEnableBuildings()" style="width:100%;height:42px;background:transparent;border:1px dashed var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;margin-bottom:12px">＋ Multiple buildings? Break the price down by building / area</button>
+    <div id="pp-buildings-wrap" style="display:none;margin-bottom:12px">
+      ${lbl('Project cost by building / area (each becomes its own line)')}
+      <div id="pp-buildings"></div>
+      <button type="button" onclick="_proAddBuilding()" style="width:100%;height:40px;background:var(--dark);border:1px solid var(--border);border-radius:8px;color:var(--blue);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">＋ Add building / area</button>
+    </div>
     <div style="display:flex;justify-content:space-between;align-items:center;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:4px 0 16px">
       <span style="font-weight:700">Total</span><span id="pp-total" style="font-family:var(--head);font-size:22px;color:var(--green)">$0</span>
     </div>
@@ -4596,18 +4602,54 @@ function openProProposal(){
   s.querySelector('#pp-share').onclick = () => { const v=_proCollect(); const t = `${v.title} — ${v.company} — ${v.client}: ${fmt(v.total)}`; if(navigator.share) navigator.share({title:v.title, text:t}).catch(()=>{}); else showToast('Sharing not available here','warn'); };
 }
 function _proNum(id){ const el=document.getElementById(id); return el ? (parseFloat(el.value)||0) : 0; }
+// Per-building breakdown: active only when the buildings section is shown and
+// has at least one named/priced row. Then Project Services = sum of buildings.
+function _proBuildings(){
+  const wrap=document.getElementById('pp-buildings-wrap');
+  if(!wrap || wrap.style.display==='none') return null;
+  const rows=[...document.querySelectorAll('.pp-bld-row')].map(r=>({
+    name:(r.querySelector('.pp-bld-name').value||'').trim(),
+    amount:parseFloat(r.querySelector('.pp-bld-amt').value)||0
+  })).filter(b=>b.name || b.amount);
+  return rows.length ? rows : null;
+}
+function _proServicesTotal(){ const b=_proBuildings(); return b ? b.reduce((a,x)=>a+x.amount,0) : _proNum('pp-svc'); }
+function _proEnableBuildings(){
+  const single=document.getElementById('pp-svc-single'); if(single) single.style.display='none';
+  const tg=document.getElementById('pp-bld-toggle'); if(tg) tg.style.display='none';
+  const wrap=document.getElementById('pp-buildings-wrap'); if(wrap) wrap.style.display='block';
+  if(!document.getElementById('pp-buildings').children.length){
+    _proAddBuilding('Main House', _proNum('pp-svc'));
+    _proAddBuilding('', '');
+  }
+  _proRecalc();
+}
+function _proAddBuilding(name, amt){
+  const c=document.getElementById('pp-buildings'); if(!c) return;
+  const row=document.createElement('div'); row.className='pp-bld-row';
+  row.setAttribute('style','display:grid;grid-template-columns:1fr 108px 34px;gap:6px;margin-bottom:8px');
+  const iStyle='background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-family:var(--font);font-size:14px';
+  row.innerHTML =
+    `<input type="text" class="pp-bld-name" placeholder="Building / area" value="${_esc(name||'')}" style="${iStyle}"/>`+
+    `<input type="text" inputmode="decimal" class="pp-bld-amt" placeholder="$" value="${amt?Number(amt).toFixed(2):''}" oninput="_proRecalc()" style="${iStyle};text-align:right"/>`+
+    `<button type="button" onclick="this.closest('.pp-bld-row').remove();_proRecalc()" style="background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);font-size:14px;cursor:pointer">✕</button>`;
+  c.appendChild(row);
+  _proRecalc();
+}
 function _proRecalc(){
-  const gal=_proNum('pp-gal'), retail=_proNum('pp-retail'), cost=_proNum('pp-cost'), svc=_proNum('pp-svc');
-  const total = gal*retail - gal*Math.max(0,retail-cost) + svc; // = gal*cost + services
+  const gal=_proNum('pp-gal'), retail=_proNum('pp-retail'), cost=_proNum('pp-cost');
+  const total = gal*retail - gal*Math.max(0,retail-cost) + _proServicesTotal(); // = gal*cost + services
   const el = document.getElementById('pp-total'); if (el) el.textContent = fmt(Math.max(0,total));
 }
 function _proCollect(){
   const g = id => (document.getElementById(id)||{}).value || '';
-  const gal=_proNum('pp-gal'), retail=_proNum('pp-retail'), cost=_proNum('pp-cost'), svc=_proNum('pp-svc');
+  const gal=_proNum('pp-gal'), retail=_proNum('pp-retail'), cost=_proNum('pp-cost');
+  const buildings=_proBuildings();
+  const svc=_proServicesTotal();
   const perGal = Math.max(0, retail-cost);
   const paintRetail = gal*retail, discount = gal*perGal;
   return { title:g('pp-title'), client:g('pp-client'), address:g('pp-addr'), scope:g('pp-scope'), about:g('pp-about'),
-    product:g('pp-product'), gal, retail, cost, svc, perGal, paintRetail, discount,
+    product:g('pp-product'), gal, retail, cost, svc, buildings, perGal, paintRetail, discount,
     total:Math.max(0, paintRetail - discount + svc), company:'Ingersoll Painting LLC',
     logo:(document.querySelector('header img')||{}).src || '' };
 }
@@ -4649,7 +4691,10 @@ function proProposalHtml(v, withSignature){
     <table style="width:100%;font-size:13px;border-collapse:collapse">
       <tr><td style="padding:8px 0">${paintName}<div style="font-size:11px;color:#777">${galStr} gallons at ${money(v.retail)} per gallon, retail</div></td><td style="padding:8px 0;text-align:right;white-space:nowrap">${money(v.paintRetail)}</td></tr>
       ${discRow}
-      <tr><td style="padding:8px 0">Project Services<div style="font-size:11px;color:#777">Surface preparation, protection of the surrounding area, application of two coats, and full cleanup</div></td><td style="padding:8px 0;text-align:right;white-space:nowrap">${money(v.svc)}</td></tr>
+      ${(v.buildings && v.buildings.length)
+        ? `<tr><td colspan="2" style="padding:10px 0 2px;font-weight:bold">Project Services by Building</td></tr>` +
+          v.buildings.map(bd => `<tr><td style="padding:6px 0 6px 12px">${_esc(bd.name||'Building')}</td><td style="padding:6px 0;text-align:right;white-space:nowrap">${money(bd.amount)}</td></tr>`).join('')
+        : `<tr><td style="padding:8px 0">Project Services<div style="font-size:11px;color:#777">Surface preparation, protection of the surrounding area, application of two coats, and full cleanup</div></td><td style="padding:8px 0;text-align:right;white-space:nowrap">${money(v.svc)}</td></tr>`}
       <tr style="border-top:2px solid #111"><td style="padding:10px 0;font-weight:bold;font-size:15px">Total</td><td style="padding:10px 0;text-align:right;font-weight:bold;font-size:15px;white-space:nowrap">${money(v.total)}</td></tr>
     </table>
     ${saveCallout}

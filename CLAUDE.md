@@ -327,6 +327,8 @@ IndexedDB: `paintpro-photos` database, object store `photos`, keyed by photo ID 
 ### Calculation & bid generation
 `calc`, `recalcAll`, `recalcRoom`, `jobExtras`, `renderBid`, `toggleBid`, `shareBid`, `saveClientFromBid`
 
+**Professional Proposal (`openProProposal`):** composes a polished client-facing proposal (Scope, About the Product, Project Investment table, warranty, disclaimer) from the current job. All money fields (`pp-mat`/`pp-disc`/`pp-svc`) pre-fill from `calc` but are editable with a live total (`_proRecalc`); `proProposalHtml(v, withSignature)` renders the Georgia layout. Sends via `_sendProposal` (shared with `createProposal`), previews/prints via `_proOpenPrint`. **Written bids** (`sendWrittenBid` → `_bidTextToHtml`) let any pasted bid become a signable proposal. Reachable from the bid output and Settings → Proposals & Signatures.
+
 ### Labor rates
 `loadRates`, `saveRates`, `syncRatesUI`, `toggleRatesCard`, `updateGlobalRate`, `toggleRoomRates`, `updateRoomRate`
 

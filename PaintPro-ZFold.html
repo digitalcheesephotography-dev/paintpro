@@ -4283,6 +4283,10 @@ function renderBid() {
         style="width:100%;height:44px;margin-top:8px;background:transparent;border:1.5px solid #7c3aed;color:#7c3aed;border-radius:8px;font-family:Georgia,serif;font-size:13px;font-weight:700;cursor:pointer">
         📄 Sent Proposals &amp; Signatures
       </button>
+      <button onclick="copyBidForQuickBooks()" class="no-print"
+        style="width:100%;height:52px;margin-top:10px;background:#2ca01c;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:15px;font-weight:700;cursor:pointer">
+        📗 Copy for QuickBooks
+      </button>
       <button onclick="saveClientFromBid()"
         style="width:100%;height:50px;margin-top:10px;background:#2e8b1e;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer">
         💾 Save Client to Contacts
@@ -4559,6 +4563,62 @@ async function createProposal(){
     grand = cs.reduce((a,c)=>a+(c.total||0),0) + (ex.total||0);
   } catch(_){}
   return _sendProposal(tmp.innerHTML, client, address, grand);
+}
+
+// Build a QuickBooks-ready estimate block from the current job and copy it, so
+// James can paste it into a normal Claude chat (with the QuickBooks connector)
+// and have the estimate entered in his books with no re-typing. Figures match
+// the on-screen bid exactly: Project Services = labor + door/window extras,
+// Paint & Materials = the bid's materials line, total = the bid total.
+function copyBidForQuickBooks(){
+  if (!rooms.length){ showToast('Add a room / measurements first', 'warn'); return; }
+  const cs    = rooms.map(calc);
+  const ex    = jobExtras();
+  const mat   = cs.reduce((a,c)=>a+c.mat,0);
+  const lab   = cs.reduce((a,c)=>a+c.lab,0) + ex.total;
+  const grand = mat + lab;
+  if (grand <= 0){ showToast('Nothing to copy yet — fill in a room', 'warn'); return; }
+  const gal    = cs.reduce((a,c)=>a+(c.gal||0),0);
+  const client = (document.getElementById('client-name').value || '').trim() || 'Customer';
+  const addr   = (document.getElementById('job-address').value || '').trim();
+  const isExt  = estimatorMode === 'exterior';
+  const kind   = isExt ? 'Exterior' : 'Interior';
+  const names  = rooms.filter((r,i)=>cs[i].valid).map(r=>(r.name||'').trim()).filter(Boolean).join(', ');
+  const svc = isExt
+    ? 'Power washing, surface preparation, protection of landscaping and surrounding areas, two full coats of quality exterior paint, and complete cleanup.'
+    : 'Surface preparation, minor wall repair, protection of floors and furniture, two full coats of quality interior paint, and complete cleanup.';
+  const m2 = n => '$' + n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const L = [];
+  L.push('Create a QuickBooks estimate for the following painting job.','');
+  L.push('Customer: ' + client);
+  if (addr) L.push('Billing address: ' + addr);
+  L.push('Job: ' + kind + ' painting' + (names ? ' - ' + names : ''), '');
+  L.push('Line items:');
+  L.push('1. ' + kind + ' Painting - Project Services');
+  L.push('   ' + svc);
+  L.push('   Quantity 1 - Amount ' + m2(lab), '');
+  L.push('2. Paint & Materials');
+  L.push('   Quality ' + (isExt ? 'exterior' : 'interior') + ' paint and supplies' + (gal > 0 ? ', ' + gal + ' gallon' + (gal === 1 ? '' : 's') : '') + '.');
+  L.push('   Quantity 1 - Amount ' + m2(mat), '');
+  L.push('Estimate total: ' + m2(grand));
+  L.push('Note to customer: Estimate valid for 30 days. 1-Year Workmanship Warranty included.');
+  if (typeof depositEnabled === 'function' && depositEnabled()){
+    const pct = (loadDepositConfig() || {}).pct || 25;
+    L.push('', 'Request a ' + pct + '% deposit (' + m2(grand * pct / 100) + ') on this estimate.');
+  }
+  const text = L.join('\n');
+  const done = () => showToast('✓ Copied for QuickBooks — paste into a Claude chat');
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(() => _qbFallback(text));
+  } else { _qbFallback(text); }
+}
+// Clipboard blocked (some Android WebViews) — show the text for manual copy.
+function _qbFallback(text){
+  const s = _ppModal();
+  const t = document.createElement('div'); t.setAttribute('style','font-family:var(--head);font-size:20px;color:#2ca01c;margin-bottom:8px'); t.textContent = '📗 Copy for QuickBooks';
+  const p = document.createElement('p'); p.setAttribute('style','color:var(--muted);font-size:13px;margin-bottom:10px;line-height:1.5'); p.textContent = 'Long-press in the box below, Select All, Copy — then paste into a Claude chat that has QuickBooks connected.';
+  const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly',''); ta.setAttribute('style','width:100%;height:300px;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--text);font-family:monospace;font-size:12px;line-height:1.5');
+  s.append(t, p, ta); ta.focus(); ta.select();
 }
 
 // Shared: write a proposal doc, track it, and show the shareable link.

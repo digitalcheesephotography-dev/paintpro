@@ -338,7 +338,9 @@ IndexedDB: `paintpro-photos` database, object store `photos`, keyed by photo ID 
 `buildBackup`, `backupToDrive`, `restoreFromBackup`, `deleteAllMyData` (privacy right-to-delete: wipes local + Firestore `SYNC_KEYS` docs + `paintpro-photos` IndexedDB, double-confirmed)
 
 ### Calculation & bid generation
-`calc`, `recalcAll`, `recalcRoom`, `jobExtras`, `renderBid`, `toggleBid`, `shareBid`, `saveClientFromBid`
+`calc`, `recalcAll`, `recalcRoom`, `jobExtras`, `renderBid`, `toggleBid`, `shareBid`, `saveClientFromBid`, `copyBidForQuickBooks`
+
+**Copy for QuickBooks (`copyBidForQuickBooks`):** A 📗 button on the bid output builds a plain-text estimate block (Customer, address, Project Services = labor + door/window/shutter extras, Paint & Materials = the bid's materials line, total = the bid total, plus a deposit line when `depositEnabled()`) and copies it. James pastes it into a normal Claude chat with the QuickBooks connector to enter the estimate with no re-typing — the bridge is app → Claude → QuickBooks (the single-file PWA can't call Intuit's API directly). Figures mirror `renderBid` exactly so books match the bid. `_qbFallback()` shows the text for manual copy when the clipboard API is blocked.
 
 **Professional Proposal (`openProProposal`):** composes a polished client-facing proposal (Scope, About the Product, Project Investment table, warranty, disclaimer) from the current job. All money fields (`pp-mat`/`pp-disc`/`pp-svc`) pre-fill from `calc` but are editable with a live total (`_proRecalc`); `proProposalHtml(v, withSignature)` renders the Georgia layout. Sends via `_sendProposal` (shared with `createProposal`), previews/prints via `_proOpenPrint`. **Written bids** (`sendWrittenBid` → `_bidTextToHtml`) let any pasted bid become a signable proposal. Reachable from the bid output and Settings → Proposals & Signatures.
 

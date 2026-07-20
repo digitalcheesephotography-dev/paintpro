@@ -4,7 +4,7 @@
 // Bump CACHE version only when the service worker logic itself changes — not for
 // routine HTML edits (those are handled by network-first already).
 
-const CACHE = 'paintpro-v8';
+const CACHE = 'paintpro-v9';
 
 // Cache that briefly holds a file shared in from the Android share sheet,
 // handed off to the app on the next page load. Kept separate so the app-shell

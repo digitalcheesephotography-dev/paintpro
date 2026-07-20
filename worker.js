@@ -33,7 +33,7 @@ Scale anchors: a standard interior door is 6.8 ft tall and 2.8 ft wide; a light 
 - surfaceNotes: brief note on any surface issues visible (peeling paint, water stains, cracks, holes, texture damage) — empty string if surfaces look fine`;
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const cors = corsHeaders(request);
 
     if (request.method === 'OPTIONS') {
@@ -55,6 +55,66 @@ export default {
     try { body = await request.json(); } catch {
       return new Response(JSON.stringify({ error: { message: 'Invalid JSON body' } }),
         { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } });
+    }
+
+    const jsonOut = (obj, status = 200) => new Response(JSON.stringify(obj),
+      { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+
+    // ── Stripe deposit collection ────────────────────────────────────────────
+    // The Stripe SECRET key lives ONLY here, as a Cloudflare env var
+    // (STRIPE_SECRET_KEY) — never in the app or on the client. Card data never
+    // touches our code: we hand the client to Stripe's own hosted checkout page.
+    if (body.stripe) {
+      const key = (env && env.STRIPE_SECRET_KEY) || '';
+      if (!key) return jsonOut({ error: { message: 'Payments not set up. Add STRIPE_SECRET_KEY to this Worker.' } }, 400);
+      const stripeGet = (path) => fetch('https://api.stripe.com/v1/' + path, {
+        headers: { 'Authorization': 'Bearer ' + key },
+      });
+
+      // Create a Checkout Session for a one-time deposit and return its URL.
+      if (body.stripe === 'checkout') {
+        const cents = Math.round(Number(body.amount) || 0);
+        if (cents < 50) return jsonOut({ error: { message: 'Deposit amount too small.' } }, 400);
+        const label   = String(body.label || 'Deposit').slice(0, 120);
+        const propId  = String(body.proposalId || '').replace(/[^\w-]/g, '').slice(0, 80);
+        const ret     = String(body.returnUrl || '');
+        // Only accept a return URL on one of our known origins.
+        if (!ALLOWED_ORIGINS.some(o => ret.startsWith(o))) {
+          return jsonOut({ error: { message: 'Bad return URL' } }, 400);
+        }
+        const p = new URLSearchParams();
+        p.append('mode', 'payment');
+        p.append('success_url', ret + (ret.includes('?') ? '&' : '?') + 'paid={CHECKOUT_SESSION_ID}');
+        p.append('cancel_url',  ret);
+        p.append('line_items[0][price_data][currency]', 'usd');
+        p.append('line_items[0][price_data][product_data][name]', label);
+        p.append('line_items[0][price_data][unit_amount]', String(cents));
+        p.append('line_items[0][quantity]', '1');
+        p.append('payment_intent_data[description]', label);
+        if (propId) p.append('metadata[proposalId]', propId);
+        if (body.email && /.+@.+\..+/.test(body.email)) p.append('customer_email', String(body.email).slice(0, 120));
+        const r = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: p,
+        });
+        const d = await r.json();
+        if (!r.ok) return jsonOut({ error: { message: (d.error && d.error.message) || 'Stripe error' } }, r.status);
+        return jsonOut({ url: d.url, id: d.id });
+      }
+
+      // Verify a completed session so the confirmation shown to the client is
+      // authoritative (checked against Stripe), not just a URL parameter.
+      if (body.stripe === 'verify') {
+        const sid = String(body.sessionId || '').replace(/[^\w-]/g, '').slice(0, 120);
+        if (!sid) return jsonOut({ error: { message: 'Missing session id' } }, 400);
+        const r = await stripeGet('checkout/sessions/' + sid);
+        const d = await r.json();
+        if (!r.ok) return jsonOut({ error: { message: (d.error && d.error.message) || 'Stripe error' } }, r.status);
+        return jsonOut({ paid: d.payment_status === 'paid', amount: d.amount_total, currency: d.currency });
+      }
+
+      return jsonOut({ error: { message: 'Unknown stripe action' } }, 400);
     }
 
     const { apiKey, base64, messages, model, max_tokens, system, testOnly } = body;

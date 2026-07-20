@@ -1142,6 +1142,38 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     </div>
   </div>
 
+  <!-- Collect a deposit online (Stripe) -->
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
+    <div style="font-family:var(--head);font-size:20px;color:var(--green);margin-bottom:4px">💳 Collect a Deposit Online</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      When a customer signs a proposal, show them a <strong style="color:var(--text)">Pay Deposit</strong> button. They pay by card on Stripe's secure page (their card never touches this app), and the money goes to your bank. You keep a set percent of the job total as the deposit.
+    </div>
+    <label style="display:flex;align-items:center;gap:10px;font-size:15px;color:var(--text);margin-bottom:12px;cursor:pointer">
+      <input type="checkbox" id="deposit-enabled" style="width:22px;height:22px;accent-color:var(--green)"/>
+      Offer an online deposit on signed proposals
+    </label>
+    <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Deposit percent of job total</label>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <input type="text" id="deposit-pct" inputmode="decimal" placeholder="25"
+             style="width:100px;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:16px;text-align:right"/>
+      <span style="font-size:18px;color:var(--muted)">%</span>
+    </div>
+    <button onclick="saveDepositConfig()"
+            style="width:100%;height:50px;background:var(--green);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">
+      Save Payment Settings
+    </button>
+    <div id="deposit-status" style="font-size:13px;color:var(--muted);text-align:center;margin-top:10px"></div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.7;background:var(--dark);border-radius:8px;padding:10px 12px;margin-top:10px">
+      <strong style="color:var(--text)">One-time setup (~20 min):</strong><br>
+      1. Create a free account at <strong style="color:var(--blue)">stripe.com</strong> and verify your business (add your bank for payouts).<br>
+      2. In Stripe → <em>Developers → API keys</em>, copy your <em>Secret key</em> (starts with <code>sk_live_</code>).<br>
+      3. In Cloudflare → your Worker → <em>Settings → Variables</em>, add a <strong style="color:var(--text)">Secret</strong> named <code>STRIPE_SECRET_KEY</code> and paste the key. Deploy.<br>
+      4. Make sure your <em>Proxy URL</em> is set in the AI Settings card above — the Pay button uses the same Worker.<br>
+      5. Turn on the switch above, set your percent, and Save. Test with a real signed proposal (Stripe has a test mode too).<br>
+      <strong style="color:var(--text)">Fees:</strong> Stripe charges about 2.9% + 30¢ per card payment. No monthly fee.
+    </div>
+  </div>
+
   <!-- Color Visualizer -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
     <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🎨 Color Visualizer</div>
@@ -1917,6 +1949,38 @@ function saveEmailjsConfig(){
   localStorage.setItem(EMAILJS_KEY, JSON.stringify({ serviceId:svc, templateId:tpl, publicKey:key }));
   set('✓ Saved — clients will be emailed a copy when they sign.', true);
   showToast('✓ Email settings saved');
+}
+
+// ── Deposit / card payments (Stripe) ────────────────────────────────────────
+// Device-local config. The Worker (Proxy URL in AI Settings) holds the Stripe
+// SECRET key as a Cloudflare env var — the app never sees or stores it. Here we
+// only keep the deposit percentage and an on/off flag.
+const DEPOSIT_KEY = 'ingersoll_deposit_v1';
+function loadDepositConfig(){
+  try { const d = JSON.parse(localStorage.getItem(DEPOSIT_KEY)); return d && typeof d === 'object' ? d : null; }
+  catch { return null; }
+}
+function depositEnabled(){ const d = loadDepositConfig(); return !!(d && d.enabled && d.pct > 0); }
+function saveDepositConfig(){
+  const pctRaw = (document.getElementById('deposit-pct').value || '').trim();
+  const on     = document.getElementById('deposit-enabled').checked;
+  const st     = document.getElementById('deposit-status');
+  const set    = (m,ok) => { if(st){ st.textContent=m; st.style.color = ok?'var(--green)':'var(--red)'; } };
+  const pct = parseFloat(pctRaw);
+  if (on && (!(pct > 0) || pct > 100)) { set('Enter a deposit percent between 1 and 100.'); return; }
+  localStorage.setItem(DEPOSIT_KEY, JSON.stringify({ enabled:on, pct: pct > 0 ? pct : 25 }));
+  const proxy = localStorage.getItem('ingersoll_proxy_url_v1') || '';
+  if (on && !proxy) { set('Saved, but set your Proxy URL in AI Settings so the Pay button works.', false); showToast('⚠️ Set your Proxy URL in AI Settings'); return; }
+  set(on ? `✓ Saved — proposals will offer a ${pct}% deposit to pay online.` : 'Saved — online deposit turned off.', true);
+  showToast('✓ Payment settings saved');
+}
+// Fill the deposit inputs from saved config when Settings opens.
+function syncDepositUI(){
+  const d = loadDepositConfig();
+  const pctEl = document.getElementById('deposit-pct');
+  const onEl  = document.getElementById('deposit-enabled');
+  if (pctEl) pctEl.value = d && d.pct ? d.pct : 25;
+  if (onEl)  onEl.checked = !!(d && d.enabled);
 }
 
 async function testAnthropicKey() {
@@ -4487,11 +4551,21 @@ async function createProposal(){
   tmp.querySelectorAll('button, input, textarea, select, .no-print').forEach(el => el.remove());
   const client  = document.getElementById('client-name').value || 'Client';
   const address = document.getElementById('job-address').value || '';
-  return _sendProposal(tmp.innerHTML, client, address);
+  // Grand total (rooms + job extras) — used to compute an optional deposit.
+  let grand = 0;
+  try {
+    const cs = rooms.map(calc);
+    const ex = (typeof jobExtras === 'function') ? jobExtras() : { total:0 };
+    grand = cs.reduce((a,c)=>a+(c.total||0),0) + (ex.total||0);
+  } catch(_){}
+  return _sendProposal(tmp.innerHTML, client, address, grand);
 }
 
 // Shared: write a proposal doc, track it, and show the shareable link.
-async function _sendProposal(bodyHtml, client, address){
+// `totalForDeposit` (optional) is the job grand total in dollars; when the app
+// is set up to collect an online deposit, it becomes a Pay-Deposit button on
+// the client's signed proposal.
+async function _sendProposal(bodyHtml, client, address, totalForDeposit){
   if (!_db || !_uid) { showToast('Sign in to send a proposal for signature', 'warn'); return; }
   const id = _propRandId();
   const doc = {
@@ -4501,15 +4575,28 @@ async function _sendProposal(bodyHtml, client, address){
   };
   const ej = loadEmailjsConfig();
   if (ej) doc.emailjs = ej;
+  // Attach an online deposit when configured, the Worker URL is known, and we
+  // have a total to take the percentage of.
+  let depositInfo = null;
+  const dcfg  = loadDepositConfig();
+  const proxy = localStorage.getItem('ingersoll_proxy_url_v1') || '';
+  if (depositEnabled() && proxy && totalForDeposit > 0) {
+    const cents = Math.round(totalForDeposit * (dcfg.pct / 100) * 100);
+    if (cents >= 50) {
+      depositInfo = { pct: dcfg.pct, amount: cents, label: `Deposit — ${client || 'Client'}` };
+      doc.deposit   = depositInfo;
+      doc.payWorker = proxy;
+    }
+  }
   showToast('Creating proposal…');
   try { await _db.collection('proposals').doc(id).set(doc); }
   catch(e){ showToast('Could not create proposal: ' + (e.code || e.message), 'err'); return; }
   const url = new URL('proposal.html?id=' + id, location.href).href;
   const list = proposalsLoad();
-  list.unshift({ id, client:doc.client, address:doc.address, createdAt:doc.createdAt, status:'sent', url, signerName:'', acceptedAt:0, signatureDataUrl:'' });
+  list.unshift({ id, client:doc.client, address:doc.address, createdAt:doc.createdAt, status:'sent', url, signerName:'', acceptedAt:0, signatureDataUrl:'', deposit: depositInfo });
   proposalsSave(list);
   proposalWatch(id);
-  showProposalLinkModal(url, doc.client);
+  showProposalLinkModal(url, doc.client, depositInfo);
 }
 
 // Turn pasted plain-text bid content into safe, clean proposal HTML (blank
@@ -4538,13 +4625,17 @@ function sendWrittenBid(){
     <input type="text" id="wb-client" placeholder="e.g. Bob Myers" style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:12px"/>
     <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Paste the full bid text</label>
     <textarea id="wb-text" rows="12" placeholder="Paste the whole proposal here…" style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;resize:vertical;margin-bottom:12px"></textarea>
+    ${depositEnabled() ? `<label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Job total $ <span style="color:#6b7a8d">(optional — for the online deposit)</span></label>
+    <input type="text" id="wb-total" inputmode="decimal" placeholder="e.g. 4200" style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:12px"/>` : ''}
     <button id="wb-send" style="width:100%;height:52px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">✍️ Create Signable Proposal</button>`;
   s.appendChild(wrap);
   wrap.querySelector('#wb-send').onclick = () => {
     const client = wrap.querySelector('#wb-client').value.trim();
     const text   = wrap.querySelector('#wb-text').value.trim();
     if (text.length < 20) { showToast('Paste the bid text first', 'warn'); return; }
-    _sendProposal(_bidTextToHtml(text), client || 'Client', '');
+    const totEl = wrap.querySelector('#wb-total');
+    const total = totEl ? parseFloat((totEl.value || '').replace(/[^0-9.]/g,'')) || 0 : 0;
+    _sendProposal(_bidTextToHtml(text), client || 'Client', '', total);
   };
 }
 
@@ -4603,7 +4694,7 @@ function openProProposal(){
       <button id="pp-share" style="height:48px;background:var(--panel);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer">Share / Text</button>
     </div>`;
   _proRecalc();
-  s.querySelector('#pp-send').onclick  = () => { const v=_proCollect(); _sendProposal(proProposalHtml(v), v.client, v.address); };
+  s.querySelector('#pp-send').onclick  = () => { const v=_proCollect(); _sendProposal(proProposalHtml(v), v.client, v.address, v.total); };
   s.querySelector('#pp-pdf').onclick   = () => _proOpenPrint(proProposalHtml(_proCollect(), true));
   s.querySelector('#pp-share').onclick = () => { const v=_proCollect(); const t = `${v.title} — ${v.company} — ${v.client}: ${fmt(v.total)}`; if(navigator.share) navigator.share({title:v.title, text:t}).catch(()=>{}); else showToast('Sharing not available here','warn'); };
 }
@@ -4723,11 +4814,18 @@ function _proOpenPrint(html){
   setTimeout(()=>URL.revokeObjectURL(url), 20000);
 }
 
-function showProposalLinkModal(url, client){
+function showProposalLinkModal(url, client, depositInfo){
   const s = _ppModal();
   const title = document.createElement('div'); title.setAttribute('style','font-family:var(--head);font-size:22px;color:var(--blue);margin-bottom:6px'); title.textContent = 'Proposal ready to send';
   const desc = document.createElement('p'); desc.setAttribute('style','color:var(--muted);font-size:14px;margin-bottom:14px;line-height:1.5');
   desc.textContent = `Send this link to ${client}. They review it, sign, and accept from their phone — you'll be notified here the moment they do.`;
+  s.appendChild(title); s.appendChild(desc);
+  if (depositInfo && depositInfo.amount) {
+    const dep = document.createElement('div');
+    dep.setAttribute('style','background:#0f2110;border:1px solid #2e7d24;border-radius:8px;padding:10px 12px;font-size:13px;color:#5cc24e;margin-bottom:12px;font-weight:700');
+    dep.textContent = `💳 After signing, they'll be offered a ${depositInfo.pct}% deposit of ${fmt(depositInfo.amount/100)} to pay online.`;
+    s.appendChild(dep);
+  }
   const link = document.createElement('div'); link.setAttribute('style','background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text);word-break:break-all;margin-bottom:12px'); link.textContent = url;
   const grid = document.createElement('div'); grid.setAttribute('style','display:grid;grid-template-columns:1fr 1fr;gap:8px');
   const copy = document.createElement('button'); copy.setAttribute('style','height:50px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer'); copy.textContent = '📋 Copy Link';
@@ -4737,7 +4835,7 @@ function showProposalLinkModal(url, client){
   // the url after the text, which was pasting the link twice.
   share.onclick = () => { if (navigator.share) navigator.share({ title:'Your painting proposal', text:"Here's your painting proposal from Ingersoll Painting — review and accept:", url }).catch(()=>{}); else { if (navigator.clipboard) navigator.clipboard.writeText(url); showToast('Link copied — paste into a text'); } };
   grid.append(copy, share);
-  s.append(title, desc, link, grid);
+  s.append(link, grid);
 }
 
 function openProposalsModal(){
@@ -4767,6 +4865,11 @@ function openProposalsModal(){
       ? `Signed by ${pr.signerName || 'client'} · ${pr.acceptedAt ? new Date(pr.acceptedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : ''}`
       : `Sent ${new Date(pr.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;
     card.append(head, meta);
+    if (pr.deposit && pr.deposit.amount) {
+      const dep = document.createElement('div'); dep.setAttribute('style','font-size:12px;color:#5cc24e;margin-bottom:8px;font-weight:700');
+      dep.textContent = `💳 ${pr.deposit.pct}% deposit offered: ${fmt(pr.deposit.amount/100)}`;
+      card.appendChild(dep);
+    }
     const btns = document.createElement('div'); btns.setAttribute('style','display:flex;gap:8px');
     const copy = document.createElement('button'); copy.setAttribute('style','flex:1;height:40px;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--blue);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer'); copy.textContent = 'Copy Link';
     copy.onclick = () => { if (navigator.clipboard) navigator.clipboard.writeText(pr.url).then(() => showToast('Link copied')); };
@@ -5029,6 +5132,7 @@ function switchTab(tab) {
   if(tab==='apt') { aptRender(); renderSupplies(); }
   if(tab==='settings') {
     renderLockSettings();
+    syncDepositUI();
     const ej = loadEmailjsConfig();
     if (ej) {
       const s=document.getElementById('emailjs-service'), t=document.getElementById('emailjs-template'), y=document.getElementById('emailjs-key');
@@ -6083,6 +6187,7 @@ const BACKUP_KEYS = [
   'ingersoll_rates_v1',
   'ingersoll_ext_rates_v1',
   'ingersoll_proxy_url_v1',
+  'ingersoll_deposit_v1',
   // ingersoll_anthropic_key_v1 and ingersoll_accounts_v1 excluded — contain secrets
 ];
 

@@ -209,6 +209,18 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 - Setup: `pip install requests` on PC, set matching topic in both files, run `python print_hub.py`
 - Auto-start on Windows: shortcut to `pythonw print_hub.py` in `shell:startup` folder
 
+### 7.8 Online deposit collection (Stripe) — built
+- Lets a homeowner pay a deposit by card right after they sign a proposal. **Card data never touches the app or `proposal.html`** — the client is handed off to Stripe's hosted checkout (PCI stays with Stripe).
+- **Config:** Settings → 💳 Collect a Deposit Online. `ingersoll_deposit_v1 = {enabled, pct}` (device-local). `loadDepositConfig()` / `depositEnabled()` / `saveDepositConfig()` / `syncDepositUI()`.
+- **Secret key** (`STRIPE_SECRET_KEY`) lives ONLY as a Cloudflare env var on the Worker (`worker.js`) — never in the app. The app reuses the existing **Proxy URL** (`ingersoll_proxy_url_v1`) as the Worker endpoint.
+- **Worker (`worker.js`)** now takes `(request, env)` and handles `body.stripe`:
+  - `'checkout'` → creates a Stripe Checkout Session for the deposit amount (cents), returns `{url}`. Validates the `returnUrl` is one of `ALLOWED_ORIGINS`. `success_url` carries `paid={CHECKOUT_SESSION_ID}`.
+  - `'verify'` → GETs the session, returns `{paid, amount}` so the client-side "received" confirmation is authoritative (checked against Stripe, not spoofable for display).
+- **App side:** `_sendProposal(bodyHtml, client, address, totalForDeposit)` attaches `doc.deposit = {pct, amount(cents), label}` and `doc.payWorker = proxyUrl` when `depositEnabled()` + a proxy URL + a total are all present. `createProposal()` computes the grand total; `openProProposal` passes `v.total`; `sendWrittenBid` shows an optional "Job total $" field. The Proposals list and the link modal surface the deposit amount.
+- **Client side (`proposal.html`):** `maybeDeposit()` runs on render. After signing (status `accepted`), `showPayButton()` offers "💳 Pay Deposit $X"; `startDeposit()` POSTs `{stripe:'checkout', …}` to `payWorker` and redirects to Stripe. On return with `?paid=<sessionId>`, it POSTs `{stripe:'verify'}`, and `showDepositPaid()` shows the received banner. CSP `connect-src` adds `https://*.workers.dev`.
+- **Deposit-paid status is NOT written back to Firestore** (avoids loosening the proposal rules). James's source of truth for payment is Stripe's own dashboard + receipt email. A webhook-based status sync is the documented future enhancement.
+- One-time setup (James): create a Stripe account, add `STRIPE_SECRET_KEY` secret to the Worker in Cloudflare, ensure Proxy URL is set, turn on the switch + set a percent.
+
 ### 7.7 Backup & Restore
 - `buildBackup()` serializes all localStorage keys + IndexedDB photos into a JSON blob
 - `backupToDrive()` triggers a download of the backup JSON
@@ -298,6 +310,7 @@ Exterior: `front side` / `left side` / `name it garage` / `call it back`
 | `ingersoll_bio_v1` | App Lock WebAuthn credential id for fingerprint unlock (device-local) |
 | `ingersoll_proposals_v1` | Sent e-signature proposals (id, client, status, url, signer; device-local) |
 | `ingersoll_emailjs_v1` | EmailJS config {serviceId, templateId, publicKey} for auto-emailing signed-proposal copies (device-local) |
+| `ingersoll_deposit_v1` | Online-deposit config {enabled, pct} for Stripe deposit collection on signed proposals (device-local) |
 
 **Client e-signature proposals:** "✍️ Send for Signature" on a bid writes it to Firestore `proposals/{randomId}` (`createProposal`) and shows a shareable link. The homeowner opens `proposal.html?id=…` (standalone, no login — public read by unguessable capability ID), reviews, types their name + draws a signature, and accepts; the doc flips to `status:'accepted'` with the signature PNG. The app watches sent proposals (`proposalWatch` / `watchAllProposals` in `setupFirestoreSync`) and toasts when signed; `openProposalsModal` lists them. Rules for the `proposals` collection are in `firestore.rules` (public read, owner-only create/delete, one-time constrained client accept) — must be published in the console.
 

@@ -8,7 +8,7 @@
   script-src 'self' 'unsafe-inline' https://www.gstatic.com;
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob: https://firebasestorage.googleapis.com;
-  connect-src 'self' https://*.googleapis.com https://firebasestorage.googleapis.com https://*.firebasestorage.app https://*.firebaseapp.com https://*.firebaseio.com wss://*.firebaseio.com https://api.emailjs.com;
+  connect-src 'self' https://*.googleapis.com https://firebasestorage.googleapis.com https://*.firebasestorage.app https://*.firebaseapp.com https://*.firebaseio.com wss://*.firebaseio.com https://api.emailjs.com https://*.workers.dev;
 "/>
 <title>Your Painting Proposal</title>
 <style>
@@ -147,6 +147,86 @@ function render(){
   } else {
     setupSignature();
   }
+  maybeDeposit();
+}
+
+// ── Online deposit (Stripe via the contractor's Worker) ─────────────────────
+// The proposal doc carries deposit={pct,amount(cents),label} and payWorker (the
+// Worker URL). Card data never touches this page — we hand the client to
+// Stripe's hosted checkout. On return, we verify the session with the Worker so
+// the "received" confirmation is authoritative, not just a URL parameter.
+function _depositCfg(){
+  const d = _data.deposit;
+  if (!d || !d.amount || !_data.payWorker) return null;
+  return d;
+}
+function _returnUrl(){
+  return location.origin + location.pathname + '?id=' + encodeURIComponent(propId);
+}
+async function maybeDeposit(){
+  const d = _depositCfg();
+  if (!d) return;
+  const paidSession = params.get('paid');
+  if (paidSession) {
+    // Client just came back from Stripe — verify it really went through.
+    let ok = false, amt = 0;
+    try {
+      const r = await fetch(_data.payWorker, {
+        method:'POST', headers:{'content-type':'application/json'},
+        body: JSON.stringify({ stripe:'verify', sessionId: paidSession }),
+      });
+      const j = await r.json(); ok = !!j.paid; amt = j.amount || 0;
+    } catch(_){}
+    if (ok) { showDepositPaid(amt || d.amount); return; }
+  }
+  // Offer the deposit once the proposal is signed.
+  if (_data.status === 'accepted') showPayButton(d);
+}
+function _fmtMoney(cents){ return '$' + (cents/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function showPayButton(d){
+  if (document.getElementById('pay-wrap')) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'pay-wrap'; wrap.className = 'card no-print';
+  wrap.innerHTML =
+    `<h1 style="font-size:19px;margin-bottom:6px">Pay Your Deposit</h1>` +
+    `<p class="muted" style="margin-bottom:14px">A ${esc(String(d.pct))}% deposit of <strong style="color:#215c1a">${_fmtMoney(d.amount)}</strong> secures your spot on the schedule. Pay securely by card - you'll get a receipt by email.</p>` +
+    `<button id="pay-btn" style="width:100%;height:58px;background:#1786bd;color:#fff;border:none;border-radius:10px;font-family:Arial,sans-serif;font-size:17px;font-weight:700;cursor:pointer">💳 Pay Deposit ${_fmtMoney(d.amount)}</button>` +
+    `<div id="pay-err" class="form-err"></div>` +
+    `<div class="legal">Payments are processed securely by Stripe. Your card details are never stored by ${esc((_data.company&&_data.company.name)||'us')}.</div>`;
+  const anchor = document.getElementById('accepted-banner');
+  if (anchor && anchor.style.display !== 'none') anchor.insertAdjacentElement('afterend', wrap);
+  else document.getElementById('content').appendChild(wrap);
+  document.getElementById('pay-btn').onclick = () => startDeposit(d);
+}
+async function startDeposit(d){
+  const btn = document.getElementById('pay-btn'); const err = document.getElementById('pay-err');
+  if (err){ err.textContent=''; err.classList.remove('show'); }
+  btn.disabled = true; btn.textContent = 'Opening secure checkout…';
+  try {
+    const r = await fetch(_data.payWorker, {
+      method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({
+        stripe:'checkout', amount:d.amount, label:d.label || 'Deposit',
+        proposalId: propId, returnUrl: _returnUrl(), email: _data.signerEmail || '',
+      }),
+    });
+    const j = await r.json();
+    if (j.url) { location.href = j.url; return; }
+    throw new Error((j.error && j.error.message) || 'Could not start checkout');
+  } catch(e){
+    btn.disabled=false; btn.textContent = `💳 Pay Deposit ${_fmtMoney(d.amount)}`;
+    if (err){ err.textContent = 'Sorry, we could not open checkout. Please try again in a moment.'; err.classList.add('show'); }
+  }
+}
+function showDepositPaid(cents){
+  const old = document.getElementById('pay-wrap'); if (old) old.remove();
+  if (document.getElementById('paid-wrap')) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'paid-wrap'; wrap.className = 'accepted-banner';
+  wrap.textContent = `✓ Deposit of ${_fmtMoney(cents)} received. Thank you! A receipt has been emailed to you.`;
+  const anchor = document.getElementById('accepted-banner');
+  if (anchor && anchor.style.display !== 'none') anchor.insertAdjacentElement('afterend', wrap);
+  else document.getElementById('content').insertBefore(wrap, document.getElementById('paper'));
 }
 
 function showAccepted(){
@@ -253,8 +333,9 @@ async function acceptProposal(){
       acceptedAt: Date.now(),
       acceptedUA: navigator.userAgent.slice(0, 180),
     });
-    _data.status='accepted'; _data.signerName=name; _data.acceptedAt=Date.now(); _data.signatureDataUrl=sigData;
+    _data.status='accepted'; _data.signerName=name; _data.signerEmail=email; _data.acceptedAt=Date.now(); _data.signatureDataUrl=sigData;
     showAccepted();
+    maybeDeposit();
     // Email the client a copy (best-effort — never blocks the acceptance).
     let emailed = false;
     if (email && /.+@.+\..+/.test(email) && _data.emailjs) emailed = await sendClientEmail(email);

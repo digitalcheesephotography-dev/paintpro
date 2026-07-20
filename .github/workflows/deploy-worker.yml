@@ -58,7 +58,10 @@ jobs:
                   if name not in TARGETS:
                       continue
                   boundary = 'XBOUNDARYpaintpro123'
-                  meta = json.dumps({'main_module': 'worker.js', 'compatibility_date': '2024-01-01'})
+                  # keep_bindings preserves secrets/vars added in the Cloudflare
+                  # dashboard (e.g. STRIPE_SECRET_KEY) so a code redeploy doesn't wipe them.
+                  meta = json.dumps({'main_module': 'worker.js', 'compatibility_date': '2024-01-01',
+                                     'keep_bindings': ['secret_text', 'plain_text']})
                   body = (
                       f'--{boundary}\r\n'
                       f'Content-Disposition: form-data; name="metadata"\r\n'

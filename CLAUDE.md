@@ -432,6 +432,7 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
 
 ### Service worker cache
 - Bumping `CACHE = 'paintpro-v1'` to `v2` forces a re-install for all existing PWA users. Use this when service worker logic changes, NOT for routine HTML edits (those are network-first).
+- **Manual refresh:** Settings → 🔄 Refresh App runs `forceRefresh()` — updates the SW registration, clears all caches (only when online, so an offline user isn't stranded), and reloads fresh from the network. For when an installed PWA is showing a stale copy. Job data is untouched.
 
 ### Bluetooth
 - Requires HTTPS — won't work on `file://`. Netlify provides HTTPS automatically.

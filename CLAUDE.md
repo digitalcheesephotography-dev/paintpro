@@ -139,6 +139,7 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 1. **ESTIMATE** (`#tab-estimate` → `#estimator-section`) — room-by-room measurements + doors/windows + bid generation
 2. **CLIENTS** (`#tab-contacts` → `#contacts-section`) — sub-nav for Clients, Projects, Materials, Notes
 3. **APT PRICING** (`#tab-apt` → `#apt-section`) — property/unit pricing reference
+4. **☰ MENU** (`#tab-settings` → `#settings-section`) — quick-action grid (Jobs, Proposals & Signatures, Shared Files, Send a Written Bid) followed by collapsed settings sections. `buildSettingsAccordion()` (run once at boot) folds every settings card to its title row with a chevron; tap to expand. New settings cards added as plain `<div>` cards in `#settings-section` are picked up automatically — first child = always-visible header, rest = collapsible body.
 
 ### Estimator tab order (top to bottom)
 1. **📁 Jobs button** (`#current-job-badge`) — opens the saved-jobs modal; label reflects currently-loaded snapshot name when set

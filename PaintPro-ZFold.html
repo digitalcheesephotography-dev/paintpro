@@ -521,6 +521,20 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
         <button onclick="sendEstimateAssistant()" aria-label="Send to assistant"
           style="height:48px;width:52px;background:#2baae1;border:none;border-radius:8px;color:#fff;font-size:20px;cursor:pointer;flex-shrink:0;line-height:1">➤</button>
       </div>
+      <!-- Manual add — works with no signal (no AI needed) -->
+      <button onclick="toggleManualCharge()" id="manual-charge-btn"
+        style="background:none;border:none;color:var(--muted);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;margin-top:10px;padding:2px">+ Add charge by hand</button>
+      <div id="manual-charge-form" style="display:none;flex-direction:column;gap:8px;margin-top:8px;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:10px">
+        <input type="text" id="mc-label" placeholder="What is it? (e.g. Sheetrock repair)"
+          style="background:var(--panel);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;padding:0 12px;height:44px;font-family:var(--font);outline:none"/>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="mc-amount" inputmode="decimal" placeholder="$ amount"
+            style="flex:1;background:var(--panel);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;padding:0 12px;height:44px;font-family:var(--font);min-width:0;outline:none"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();manualAddCharge()}"/>
+          <button onclick="manualAddCharge()"
+            style="height:44px;padding:0 18px;background:var(--green);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;white-space:nowrap">Add</button>
+        </div>
+      </div>
     </div>
 
     <div id="notes-wrap">
@@ -6320,6 +6334,27 @@ function addJobLineItem(label, amount){
 }
 function removeJobLineItem(i){
   if (i >= 0 && i < jobLineItems.length){ jobLineItems.splice(i, 1); renderLineItems(); recalcAll(); markDirty(); }
+}
+// Manual add — the no-signal backup for the AI assistant.
+function toggleManualCharge(){
+  const f = document.getElementById('manual-charge-form');
+  if (!f) return;
+  const show = f.style.display === 'none' || !f.style.display;
+  f.style.display = show ? 'flex' : 'none';
+  if (show) { const el = document.getElementById('mc-label'); if (el) el.focus(); }
+}
+function manualAddCharge(){
+  const lblEl = document.getElementById('mc-label');
+  const amtEl = document.getElementById('mc-amount');
+  if (!lblEl || !amtEl) return;
+  const lbl = (lblEl.value || '').trim();
+  const amt = parseFloat((amtEl.value || '').replace(/[^0-9.]/g, '')) || 0;
+  if (!lbl) { showToast('Type what the charge is', 'warn'); lblEl.focus(); return; }
+  if (amt <= 0) { showToast('Enter a dollar amount', 'warn'); amtEl.focus(); return; }
+  addJobLineItem(lbl, amt);
+  lblEl.value = ''; amtEl.value = '';
+  document.getElementById('manual-charge-form').style.display = 'none';
+  showToast('✓ Charge added');
 }
 function renderLineItems(){
   const el = document.getElementById('line-items-list');

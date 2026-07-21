@@ -4033,6 +4033,12 @@ function docsDBOpen() {
   });
 }
 async function docPut(file) {
+  // Same name + same size = same file; don't store a duplicate copy.
+  try {
+    const existing = await docAll();
+    const dup = existing.find(d => d.name === (file.name || 'shared') && d.size === (file.size || 0));
+    if (dup) return dup.id;
+  } catch(_) {}
   const db = await docsDBOpen();
   const rec = { id: 'd' + Date.now() + Math.random().toString(36).slice(2, 7),
                 name: file.name || 'shared', type: file.type || '', size: file.size || 0,
@@ -4143,7 +4149,7 @@ async function openDocsInbox() {
       const imp = document.createElement('button');
       imp.setAttribute('style', 'width:100%;height:44px;margin-top:8px;background:#0a2b0a;border:1.5px solid var(--green);border-radius:8px;color:var(--green);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer');
       imp.textContent = '✨ Fill Into App';
-      imp.onclick = () => importBidDoc(rec);
+      imp.onclick = () => importBidDoc(rec, imp);
       card.appendChild(imp);
     }
     if (isText) {
@@ -4248,7 +4254,14 @@ function _blobToB64(blob) {
     r.readAsDataURL(blob);
   });
 }
-async function importBidDoc(rec) {
+async function importBidDoc(rec, btn) {
+  // All progress and errors show ON the tapped button — a transient toast is
+  // too easy to miss in the field, which reads as "the button does nothing".
+  const orig = btn ? btn.textContent : '';
+  const setBtn = t => { if (btn) btn.textContent = t; };
+  const btnOk  = () => { if (btn) { btn.disabled = false; btn.style.borderColor = 'var(--green)'; btn.style.color = 'var(--green)'; setBtn(orig); } };
+  if (btn) btn.disabled = true;
+  setBtn('⏳ Reading the bid…');
   showToast('✨ Reading the bid…');
   try {
     let content;
@@ -4267,10 +4280,18 @@ async function importBidDoc(rec) {
     const res  = await callAI([{ role: 'user', content }], 'claude-sonnet-4-6', 2000);
     const text = ((res && res.content) || []).map(b => b.text || '').join('');
     const json = extractAIJson(text);
-    if (!json || (!(json.areas || []).length && !json.client)) { showToast('Could not read a bid out of that file', 'warn'); return; }
+    if (!json || (!(json.areas || []).length && !json.client)) throw new Error('Could not read a bid out of that file');
+    btnOk();
     applyImportedBid(json);
   } catch(e) {
-    showToast('⚠️ ' + (e.message || 'Import failed'), 'warn');
+    const msg = e.message || 'Import failed';
+    showToast('⚠️ ' + msg, 'warn');
+    if (btn) {
+      btn.disabled = false;
+      btn.style.borderColor = 'var(--red)'; btn.style.color = 'var(--red)';
+      setBtn('⚠️ ' + msg);
+      setTimeout(btnOk, 12000);
+    }
   }
 }
 function applyImportedBid(json) {

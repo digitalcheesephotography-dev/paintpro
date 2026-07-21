@@ -4,7 +4,7 @@
 // Bump CACHE version only when the service worker logic itself changes — not for
 // routine HTML edits (those are handled by network-first already).
 
-const CACHE = 'paintpro-v9';
+const CACHE = 'paintpro-v10';
 
 // Cache that briefly holds a file shared in from the Android share sheet,
 // handed off to the app on the next page load. Kept separate so the app-shell
@@ -49,19 +49,31 @@ self.addEventListener('fetch', evt => {
   const { request } = evt;
   const url = new URL(request.url);
 
-  // Share Target — a file shared from the Android "Share" sheet POSTs here.
-  // Stash it in a cache and redirect to the app, which picks it up on load.
+  // Share Target — anything shared from the Android "Share" sheet POSTs here:
+  // photos, PDFs, Word docs, or plain text. Stash it all in a cache and
+  // redirect to the app, which picks it up on load. `shared_image` is read
+  // too in case Android still holds the older image-only manifest.
   if (request.method === 'POST' && url.pathname.endsWith('/share-target')) {
     evt.respondWith((async () => {
       try {
-        const form = await request.formData();
-        const file = form.get('shared_image');
-        if (file && file.size) {
-          const cache = await caches.open(SHARE_CACHE);
-          await cache.put('shared-file', new Response(file, {
-            headers: { 'content-type': file.type || 'image/jpeg' }
+        const form  = await request.formData();
+        const files = [...form.getAll('shared_files'), ...form.getAll('shared_image')]
+          .filter(f => f && typeof f === 'object' && f.size);
+        const cache = await caches.open(SHARE_CACHE);
+        const meta  = [];
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i];
+          await cache.put('shared-file-' + i, new Response(f, {
+            headers: { 'content-type': f.type || 'application/octet-stream' }
           }));
+          meta.push({ key: 'shared-file-' + i, name: f.name || ('shared-' + i), type: f.type || '' });
         }
+        await cache.put('shared-meta', new Response(JSON.stringify({
+          files: meta,
+          title: form.get('title') || '',
+          text:  form.get('text')  || '',
+          url:   form.get('url')   || ''
+        }), { headers: { 'content-type': 'application/json' } }));
       } catch (e) { /* fall through to redirect either way */ }
       // 303 forces the follow-up request to be a GET of the app itself
       return Response.redirect('./PaintPro-ZFold.html?shared=1', 303);

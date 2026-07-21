@@ -1154,6 +1154,16 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     </button>
   </div>
 
+  <!-- Shared Files inbox -->
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
+    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">📥 Shared With PaintPro</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.5">Files shared into the app from your phone's Share menu — bid PDFs, Word docs, text. Tap Share on any file, pick PaintPro, and it lands here.</div>
+    <button onclick="openDocsInbox()"
+            style="width:100%;height:50px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">
+      📥 Open Shared Files
+    </button>
+  </div>
+
   <!-- Auto-email client a copy on signing (EmailJS) -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
     <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">📧 Email Client a Copy</div>
@@ -3963,16 +3973,43 @@ function clearMeasurements() {
   showToast('🗑️ Measurements cleared');
 }
 
-// ── Share Target: a photo shared into the app from the Android Share sheet ────
-// The service worker stashed the file in the 'paintpro-shared' cache and
-// redirected here with ?shared=1. Pick it up and ask what to do with it.
+// ── Share Target: anything shared into the app from the Android Share sheet ──
+// The service worker stashed the file(s) in the 'paintpro-shared' cache and
+// redirected here with ?shared=1. A single photo keeps the existing photo
+// choice flow; documents (PDF, Word, text) go to the Shared Files inbox.
 async function checkSharedFile() {
   if (!/[?&]shared=1\b/.test(location.search)) return;
   // Clean the URL so a reload or back-nav doesn't re-trigger the pickup
   try { history.replaceState(null, '', location.pathname); } catch(_) {}
   try {
     const cache = await caches.open('paintpro-shared');
-    const resp  = await cache.match('shared-file');
+    const mResp = await cache.match('shared-meta');
+    if (mResp) {
+      const meta = await mResp.json();
+      await cache.delete('shared-meta');
+      const files = [];
+      for (const fm of (meta.files || [])) {
+        const r = await cache.match(fm.key);
+        if (!r) continue;
+        const blob = await r.blob();
+        await cache.delete(fm.key);
+        if (blob && blob.size) files.push(new File([blob], fm.name || 'shared', { type: fm.type || blob.type || '' }));
+      }
+      // Text-only share (a bid pasted from a chat, a link) → save as a .txt doc
+      if (!files.length && (meta.text || meta.url || meta.title)) {
+        const txt = [meta.title, meta.text, meta.url].filter(Boolean).join('\n\n');
+        const nm  = ((meta.title || 'Shared text').replace(/[\\/:*?"<>|]/g, '').slice(0, 60) || 'Shared text') + '.txt';
+        files.push(new File([new Blob([txt], { type: 'text/plain' })], nm, { type: 'text/plain' }));
+      }
+      if (!files.length) return;
+      if (files.length === 1 && /^image\//.test(files[0].type)) { showSharedPhotoChoice(files[0]); return; }
+      let saved = 0;
+      for (const f of files) { try { await docPut(f); saved++; } catch(e) { console.warn('[Share] doc save failed', e); } }
+      if (saved) { showToast('📥 ' + saved + (saved > 1 ? ' files' : ' file') + ' saved to PaintPro'); openDocsInbox(); }
+      return;
+    }
+    // Legacy path: a single image stashed by an older service worker version
+    const resp = await cache.match('shared-file');
     if (!resp) return;
     const blob = await resp.blob();
     await cache.delete('shared-file');
@@ -3980,6 +4017,127 @@ async function checkSharedFile() {
     const file = new File([blob], 'shared.jpg', { type: blob.type || 'image/jpeg' });
     showSharedPhotoChoice(file);
   } catch(e) { console.warn('[Share] pickup failed', e); }
+}
+
+// ── Shared Files inbox (IndexedDB 'paintpro-docs') ───────────────────────────
+// Documents shared into the app live here: bid PDFs from a Claude chat, Word
+// docs, text shares. View, re-share, turn a text bid into a signable proposal,
+// or delete. Device-local (not synced) — these are copies of files that
+// already exist elsewhere.
+function docsDBOpen() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open('paintpro-docs', 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore('docs', { keyPath: 'id' }); };
+    req.onsuccess = () => res(req.result);
+    req.onerror   = () => rej(req.error);
+  });
+}
+async function docPut(file) {
+  const db = await docsDBOpen();
+  const rec = { id: 'd' + Date.now() + Math.random().toString(36).slice(2, 7),
+                name: file.name || 'shared', type: file.type || '', size: file.size || 0,
+                date: Date.now(), blob: file };
+  return new Promise((res, rej) => {
+    const tx = db.transaction('docs', 'readwrite');
+    tx.objectStore('docs').put(rec);
+    tx.oncomplete = () => res(rec.id);
+    tx.onerror    = () => rej(tx.error);
+  });
+}
+async function docAll() {
+  const db = await docsDBOpen();
+  return new Promise((res, rej) => {
+    const req = db.transaction('docs', 'readonly').objectStore('docs').getAll();
+    req.onsuccess = () => res((req.result || []).sort((a, b) => b.date - a.date));
+    req.onerror   = () => rej(req.error);
+  });
+}
+async function docDelete(id) {
+  const db = await docsDBOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('docs', 'readwrite');
+    tx.objectStore('docs').delete(id);
+    tx.oncomplete = () => res();
+    tx.onerror    = () => rej(tx.error);
+  });
+}
+function _docIcon(type, name) {
+  if (/^image\//.test(type)) return '🖼️';
+  if (type === 'application/pdf' || /\.pdf$/i.test(name)) return '📄';
+  if (/wordprocessingml|msword/.test(type) || /\.docx?$/i.test(name)) return '📝';
+  if (/^text\//.test(type) || /\.txt$/i.test(name)) return '💬';
+  return '📎';
+}
+function _docSize(n) {
+  if (!n) return '';
+  return n < 1024*1024 ? Math.max(1, Math.round(n/1024)) + ' KB' : (n/1048576).toFixed(1) + ' MB';
+}
+async function openDocsInbox() {
+  const s = _ppModal();
+  const title = document.createElement('div');
+  title.setAttribute('style', 'font-family:var(--head);font-size:22px;color:var(--blue);margin-bottom:6px');
+  title.textContent = '📥 Shared With PaintPro';
+  s.appendChild(title);
+  let docs = [];
+  try { docs = await docAll(); } catch(_) {}
+  if (!docs.length) {
+    const e = document.createElement('p');
+    e.setAttribute('style', 'color:var(--muted);font-size:14px;line-height:1.6');
+    e.textContent = 'Nothing here yet. From any app, tap Share on a file (a bid PDF, a Word doc, a photo, even plain text) and pick PaintPro — it lands here automatically.';
+    s.appendChild(e);
+    return;
+  }
+  docs.forEach(rec => {
+    const card = document.createElement('div');
+    card.setAttribute('style', 'background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px');
+    const isText = /^text\//.test(rec.type) || /\.txt$/i.test(rec.name);
+    const head = document.createElement('div');
+    head.setAttribute('style', 'display:flex;align-items:center;gap:8px;margin-bottom:10px');
+    head.innerHTML = `<span style="font-size:22px">${_docIcon(rec.type, rec.name)}</span>
+      <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(rec.name)}</div>
+      <div style="font-size:11px;color:var(--muted)">${new Date(rec.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})} · ${_docSize(rec.size)}</div></div>`;
+    const del = document.createElement('button');
+    del.setAttribute('style', 'background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);font-size:13px;cursor:pointer;padding:6px 10px;flex:none');
+    del.textContent = '✕';
+    del.onclick = async () => { if (!confirm('Delete "' + rec.name + '"?')) return; await docDelete(rec.id); openDocsInbox(); };
+    head.appendChild(del);
+    card.appendChild(head);
+    const row = document.createElement('div');
+    row.setAttribute('style', 'display:grid;grid-template-columns:1fr 1fr' + (isText ? ' ' : '') + ';gap:8px');
+    const btnStyle = 'height:44px;background:var(--dark);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer';
+    const open = document.createElement('button');
+    open.setAttribute('style', btnStyle);
+    open.textContent = '📂 Open';
+    open.onclick = () => {
+      const u = URL.createObjectURL(rec.blob);
+      const w = window.open(u, '_blank');
+      if (!w) showToast('Allow pop-ups to view files', 'warn');
+      setTimeout(() => URL.revokeObjectURL(u), 60000);
+    };
+    const share = document.createElement('button');
+    share.setAttribute('style', btnStyle);
+    share.textContent = 'Share / Text';
+    share.onclick = () => {
+      const f = new File([rec.blob], rec.name, { type: rec.type || 'application/octet-stream' });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) navigator.share({ files: [f] }).catch(() => {});
+      else open.onclick();
+    };
+    row.append(open, share);
+    card.appendChild(row);
+    if (isText) {
+      const wb = document.createElement('button');
+      wb.setAttribute('style', 'width:100%;height:44px;margin-top:8px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer');
+      wb.textContent = '✍️ Send as Signable Proposal';
+      wb.onclick = async () => {
+        const txt = await rec.blob.text();
+        sendWrittenBid();
+        const ta = document.getElementById('wb-text');
+        if (ta) ta.value = txt;
+      };
+      card.appendChild(wb);
+    }
+    s.appendChild(card);
+  });
 }
 
 // Ask whether the shared photo is a measurement note (→ AI scan) or a
@@ -4818,6 +4976,19 @@ Our work will include:
         ? `${prod} is a premium exterior finish well suited to this project. It offers excellent adhesion and coverage, resists peeling, blistering, and fading, and holds up through Central New York winters and summers for a durable, long-lasting finish.`
         : `${prod} is a quality interior finish well suited to this project. It offers excellent adhesion and smooth, even coverage, resists scuffs and stains, and wipes clean easily for a durable, great-looking finish that keeps its color over time.`)
     : '';
+  // Standard format: per-room itemized breakdown (walls / ceiling / trim per
+  // room, plus doors, windows, and custom charges), pre-filled from the job.
+  _proDefaultAreas = rooms.map((rm,i)=>({
+    name: (rm.name||'').trim() || (isExt ? 'Side '+(i+1) : 'Room '+(i+1)),
+    items: _proRoomItems(rm)
+  })).filter(a=>a.items.length);
+  const exItems = [];
+  if (ex.doorTotal)    exItems.push({label:'Doors ('+ex.doorCount+')', amount:ex.doorTotal});
+  if (ex.winTotal)     exItems.push({label:'Windows ('+ex.winCount+')', amount:ex.winTotal});
+  if (ex.shutterTotal) exItems.push({label:'Shutters ('+ex.shutterCount+')', amount:ex.shutterTotal});
+  if (ex.washTotal)    exItems.push({label:'Power washing', amount:ex.washTotal});
+  (ex.lineItems||[]).forEach(li=>{ if (li.amount) exItems.push({label:li.label||'Additional service', amount:li.amount}); });
+  if (exItems.length) _proDefaultAreas.push({name:'Additional Services', items:exItems});
   const inp = (id,val,rows) => rows
     ? `<textarea id="${id}" rows="${rows}" style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;resize:vertical;margin-bottom:12px">${_esc(val)}</textarea>`
     : `<input type="text" id="${id}" value="${_esc(val)}" style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:12px"/>`;
@@ -4837,12 +5008,15 @@ Our work will include:
     ${lbl('Gallons')}${money('pp-gal', totalGal)}
     ${lbl('Retail price per gallon  ($, what the store charges — edit to your real retail)')}${money('pp-retail', costGal * MARKUP)}
     ${lbl('Your cost per gallon  ($, set below retail to show a Volume Discount)')}${money('pp-cost', costGal)}
-    <div id="pp-svc-single">${lbl('Project Services  ($, labor as one number)')}${money('pp-svc', labTotal)}</div>
-    <button type="button" id="pp-bld-toggle" onclick="_proEnableBuildings()" style="width:100%;height:42px;background:transparent;border:1px dashed var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;margin-bottom:12px">＋ Multiple buildings? Break the price down by building / area</button>
-    <div id="pp-buildings-wrap" style="display:none;margin-bottom:12px">
-      ${lbl('Project cost by building / area (each becomes its own line)')}
-      <div id="pp-buildings"></div>
-      <button type="button" onclick="_proAddBuilding()" style="width:100%;height:40px;background:var(--dark);border:1px solid var(--border);border-radius:8px;color:var(--blue);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">＋ Add building / area</button>
+    <div id="pp-svc-single" style="display:none">
+      ${lbl('Project Services  ($, labor as one number)')}${money('pp-svc', labTotal)}
+      <button type="button" onclick="_proUseAreas()" style="width:100%;height:42px;background:transparent;border:1px dashed var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;margin:2px 0 12px">＋ Break the price down by room / area</button>
+    </div>
+    <div id="pp-areas-wrap" style="margin-bottom:12px">
+      ${lbl('Project cost by room / area — edit any label or amount, ✕ removes a line. Add lines for extras like Sheetrock repair.')}
+      <div id="pp-areas"></div>
+      <button type="button" onclick="_proAddArea()" style="width:100%;height:40px;background:var(--dark);border:1px solid var(--border);border-radius:8px;color:var(--blue);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;margin-bottom:6px">＋ Add room / area</button>
+      <button type="button" onclick="_proUseSingle()" style="width:100%;height:36px;background:transparent;border:none;color:var(--muted);font-family:var(--font);font-size:12px;cursor:pointer">Use one Project Services number instead</button>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:4px 0 16px">
       <span style="font-weight:700">Total</span><span id="pp-total" style="font-family:var(--head);font-size:22px;color:var(--green)">$0</span>
@@ -4852,44 +5026,101 @@ Our work will include:
       <button id="pp-pdf" style="height:48px;background:var(--panel);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer">⬇️ Preview / PDF</button>
       <button id="pp-share" style="height:48px;background:var(--panel);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer">Share / Text</button>
     </div>`;
+  if (_proDefaultAreas.length) _proDefaultAreas.forEach(a=>_proAddArea(a.name, a.items));
+  else _proUseSingle();
   _proRecalc();
   s.querySelector('#pp-send').onclick  = () => { const v=_proCollect(); _sendProposal(proProposalHtml(v), v.client, v.address, v.total); };
   s.querySelector('#pp-pdf').onclick   = () => _proOpenPrint(proProposalHtml(_proCollect(), true));
   s.querySelector('#pp-share').onclick = () => { const v=_proCollect(); const t = `${v.title} — ${v.company} — ${v.client}: ${fmt(v.total)}`; if(navigator.share) navigator.share({title:v.title, text:t}).catch(()=>{}); else showToast('Sharing not available here','warn'); };
 }
 function _proNum(id){ const el=document.getElementById(id); return el ? (parseFloat(el.value)||0) : 0; }
-// Per-building breakdown: active only when the buildings section is shown and
-// has at least one named/priced row. Then Project Services = sum of buildings.
-function _proBuildings(){
-  const wrap=document.getElementById('pp-buildings-wrap');
-  if(!wrap || wrap.style.display==='none') return null;
-  const rows=[...document.querySelectorAll('.pp-bld-row')].map(r=>({
-    name:(r.querySelector('.pp-bld-name').value||'').trim(),
-    amount:parseFloat(r.querySelector('.pp-bld-amt').value)||0
-  })).filter(b=>b.name || b.amount);
-  return rows.length ? rows : null;
+let _proDefaultAreas = [];
+// Itemized labor lines for one room, using the same math as calc()/calcExt().
+function _proRoomItems(room){
+  const items=[]; const push=(l,a)=>{ if(a>0) items.push({label:l, amount:Math.round(a*100)/100}); };
+  const h = parseFloat(room.height)||0;
+  const runLF = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0), 0);
+  const runSF = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0)*(parseFloat(w.ht)||h), 0);
+  if (room.mode === 'exterior') {
+    const r = room.rates || extRates;
+    const soffitSF=(room.soffitSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0),0);
+    const porchSF =(room.porchCeilSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0),0);
+    const deckSF  =(room.deckSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0),0);
+    if (room.surfaces.walls)   push('Siding', runSF*r.walls);
+    push('Soffit', soffitSF*r.ceiling);
+    if (room.surfaces.ceiling) push('Porch ceiling', porchSF*r.ceiling);
+    if (room.surfaces.floor)   push('Deck', deckSF*r.floor);
+    if (room.surfaces.trim)    push('Trim', runLF*r.trim);
+  } else {
+    const r = room.rates || rates;
+    const floorSF=(parseFloat(room.floorLength)||0)*(parseFloat(room.floorWidth)||0);
+    if (room.surfaces.walls)   push('Walls', runSF*r.walls);
+    if (room.surfaces.ceiling) push('Ceiling', floorSF*r.ceiling);
+    if (room.surfaces.floor)   push('Floor', floorSF*r.floor);
+    if (room.surfaces.trim)    push('Trim', runLF*r.trim);
+  }
+  return items;
 }
-function _proServicesTotal(){ const b=_proBuildings(); return b ? b.reduce((a,x)=>a+x.amount,0) : _proNum('pp-svc'); }
-function _proEnableBuildings(){
+// Per-room/area itemized breakdown (the standard proposal format): each area
+// has a name plus label+amount lines; Project Services = sum of every line.
+function _proAreasData(){
+  const wrap=document.getElementById('pp-areas-wrap');
+  if(!wrap || wrap.style.display==='none') return null;
+  const areas=[...document.querySelectorAll('.pp-area')].map(card=>({
+    name:(card.querySelector('.pp-area-name').value||'').trim(),
+    items:[...card.querySelectorAll('.pp-area-item')].map(r=>({
+      label:(r.querySelector('.pp-item-label').value||'').trim(),
+      amount:parseFloat(r.querySelector('.pp-item-amt').value)||0
+    })).filter(it=>it.label || it.amount)
+  })).filter(a=>a.name || a.items.length);
+  return areas.length ? areas : null;
+}
+function _proServicesTotal(){
+  const a=_proAreasData();
+  if (a) return a.reduce((s,x)=>s+x.items.reduce((t,i)=>t+i.amount,0),0);
+  return _proNum('pp-svc');
+}
+function _proUseSingle(){
+  const wrap=document.getElementById('pp-areas-wrap'); if(wrap) wrap.style.display='none';
+  const single=document.getElementById('pp-svc-single'); if(single) single.style.display='block';
+  _proRecalc();
+}
+function _proUseAreas(){
   const single=document.getElementById('pp-svc-single'); if(single) single.style.display='none';
-  const tg=document.getElementById('pp-bld-toggle'); if(tg) tg.style.display='none';
-  const wrap=document.getElementById('pp-buildings-wrap'); if(wrap) wrap.style.display='block';
-  if(!document.getElementById('pp-buildings').children.length){
-    _proAddBuilding('Main House', _proNum('pp-svc'));
-    _proAddBuilding('', '');
+  const wrap=document.getElementById('pp-areas-wrap'); if(wrap) wrap.style.display='block';
+  if(!document.getElementById('pp-areas').children.length){
+    if (_proDefaultAreas.length) _proDefaultAreas.forEach(a=>_proAddArea(a.name, a.items));
+    else _proAddArea();
   }
   _proRecalc();
 }
-function _proAddBuilding(name, amt){
-  const c=document.getElementById('pp-buildings'); if(!c) return;
-  const row=document.createElement('div'); row.className='pp-bld-row';
-  row.setAttribute('style','display:grid;grid-template-columns:1fr 108px 34px;gap:6px;margin-bottom:8px');
+function _proAddArea(name, items){
+  const c=document.getElementById('pp-areas'); if(!c) return;
+  const card=document.createElement('div'); card.className='pp-area';
+  card.setAttribute('style','border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:10px;background:var(--card)');
   const iStyle='background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-family:var(--font);font-size:14px';
+  card.innerHTML =
+    `<div style="display:grid;grid-template-columns:1fr 34px;gap:6px;margin-bottom:8px">
+      <input type="text" class="pp-area-name" placeholder="Room / area" value="${_esc(name||'')}" style="${iStyle};font-weight:700"/>
+      <button type="button" onclick="this.closest('.pp-area').remove();_proRecalc()" style="background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);font-size:14px;cursor:pointer">✕</button>
+    </div>
+    <div class="pp-area-items"></div>
+    <button type="button" onclick="_proAddAreaItem(this.closest('.pp-area'))" style="width:100%;height:36px;background:transparent;border:1px dashed var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer">＋ line (Sheetrock repair, etc.)</button>`;
+  c.appendChild(card);
+  if (items && items.length) items.forEach(it=>_proAddAreaItem(card, it.label, it.amount));
+  else _proAddAreaItem(card);
+  _proRecalc();
+}
+function _proAddAreaItem(card, label, amt){
+  const wrap=card && card.querySelector('.pp-area-items'); if(!wrap) return;
+  const iStyle='background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-family:var(--font);font-size:14px';
+  const row=document.createElement('div'); row.className='pp-area-item';
+  row.setAttribute('style','display:grid;grid-template-columns:1fr 96px 30px;gap:6px;margin-bottom:6px');
   row.innerHTML =
-    `<input type="text" class="pp-bld-name" placeholder="Building / area" value="${_esc(name||'')}" style="${iStyle}"/>`+
-    `<input type="text" inputmode="decimal" class="pp-bld-amt" placeholder="$" value="${amt?Number(amt).toFixed(2):''}" oninput="_proRecalc()" style="${iStyle};text-align:right"/>`+
-    `<button type="button" onclick="this.closest('.pp-bld-row').remove();_proRecalc()" style="background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);font-size:14px;cursor:pointer">✕</button>`;
-  c.appendChild(row);
+    `<input type="text" class="pp-item-label" placeholder="Walls / Ceiling / Sheetrock repair" value="${_esc(label||'')}" style="${iStyle}"/>`+
+    `<input type="text" inputmode="decimal" class="pp-item-amt" placeholder="$" value="${amt?Number(amt).toFixed(2):''}" oninput="_proRecalc()" style="${iStyle};text-align:right"/>`+
+    `<button type="button" onclick="this.closest('.pp-area-item').remove();_proRecalc()" style="background:transparent;border:none;color:var(--red);font-size:14px;cursor:pointer">✕</button>`;
+  wrap.appendChild(row);
   _proRecalc();
 }
 function _proRecalc(){
@@ -4900,12 +5131,12 @@ function _proRecalc(){
 function _proCollect(){
   const g = id => (document.getElementById(id)||{}).value || '';
   const gal=_proNum('pp-gal'), retail=_proNum('pp-retail'), cost=_proNum('pp-cost');
-  const buildings=_proBuildings();
+  const areas=_proAreasData();
   const svc=_proServicesTotal();
   const perGal = Math.max(0, retail-cost);
   const paintRetail = gal*retail, discount = gal*perGal;
   return { title:g('pp-title'), client:g('pp-client'), address:g('pp-addr'), scope:g('pp-scope'), about:g('pp-about'),
-    product:g('pp-product'), gal, retail, cost, svc, buildings, perGal, paintRetail, discount,
+    product:g('pp-product'), gal, retail, cost, svc, areas, perGal, paintRetail, discount,
     total:Math.max(0, paintRetail - discount + svc), company:'Ingersoll Painting LLC',
     logo:(document.querySelector('header img')||{}).src || '' };
 }
@@ -4946,14 +5177,20 @@ function proProposalHtml(v, withSignature){
     ${v.scope?`<div style="font-size:14px;font-weight:bold;margin:0 0 6px;border-bottom:1px solid #ddd;padding-bottom:3px">Scope of Work</div>${_proParas(v.scope)}`:''}
     ${v.about?`<div style="font-size:14px;font-weight:bold;margin:14px 0 6px;border-bottom:1px solid #ddd;padding-bottom:3px">About the Product${v.product?': '+_esc(v.product):''}</div>${_proParas(v.about)}`:''}
     <div style="font-size:14px;font-weight:bold;margin:14px 0 6px;border-bottom:1px solid #ddd;padding-bottom:3px">Project Investment</div>
+    ${v.paintRetail > 0 ? '' : '<p style="margin:0 0 8px;font-size:12px;color:#555">Pricing below includes all labor, paint, and materials. Cost is shown per room so you can see exactly where the investment goes.</p>'}
     <table style="width:100%;font-size:13px;border-collapse:collapse">
-      <tr><td style="padding:8px 0">${paintName}<div style="font-size:11px;color:#777">${galStr} gallons at ${money(v.retail)} per gallon, retail</div></td><td style="padding:8px 0;text-align:right;white-space:nowrap">${money(v.paintRetail)}</td></tr>
+      ${v.paintRetail > 0 ? `<tr><td style="padding:8px 0">${paintName}<div style="font-size:11px;color:#777">${galStr} gallons at ${money(v.retail)} per gallon, retail</div></td><td style="padding:8px 0;text-align:right;white-space:nowrap">${money(v.paintRetail)}</td></tr>` : ''}
       ${discRow}
-      ${(v.buildings && v.buildings.length)
-        ? `<tr><td colspan="2" style="padding:10px 0 2px;font-weight:bold">Project Services by Building</td></tr>` +
-          v.buildings.map(bd => `<tr><td style="padding:6px 0 6px 12px">${_esc(bd.name||'Building')}</td><td style="padding:6px 0;text-align:right;white-space:nowrap">${money(bd.amount)}</td></tr>`).join('')
+      ${(v.areas && v.areas.length)
+        ? v.areas.map(a => {
+            const nm = _esc(a.name || 'Area');
+            const sub = a.items.reduce((t,i)=>t+(i.amount||0),0);
+            return `<tr><td colspan="2" style="padding:7px 10px;background:#eaf6fc;font-weight:bold">${nm}</td></tr>`
+              + a.items.map(i => `<tr><td style="padding:6px 0 6px 14px">${_esc(i.label||'')}</td><td style="padding:6px 0;text-align:right;white-space:nowrap">${money(i.amount||0)}</td></tr>`).join('')
+              + (a.items.length > 1 ? `<tr><td style="padding:6px 0 8px 14px;font-weight:bold;border-top:1px solid #ddd">${nm} subtotal</td><td style="padding:6px 0 8px;text-align:right;font-weight:bold;white-space:nowrap;border-top:1px solid #ddd">${money(sub)}</td></tr>` : '');
+          }).join('')
         : `<tr><td style="padding:8px 0">Project Services<div style="font-size:11px;color:#777">Complete surface preparation including scraping and sanding of loose and peeling paint, protection of landscaping and surrounding surfaces, application of two coats, and full cleanup</div></td><td style="padding:8px 0;text-align:right;white-space:nowrap">${money(v.svc)}</td></tr>`}
-      <tr style="border-top:2px solid #111"><td style="padding:10px 0;font-weight:bold;font-size:15px">Total</td><td style="padding:10px 0;text-align:right;font-weight:bold;font-size:15px;white-space:nowrap">${money(v.total)}</td></tr>
+      <tr style="border-top:2px solid #111"><td style="padding:10px 0;font-weight:bold;font-size:15px">Total Project Investment</td><td style="padding:10px 0;text-align:right;font-weight:bold;font-size:15px;white-space:nowrap">${money(v.total)}</td></tr>
     </table>
     ${saveCallout}
     <div style="font-size:14px;font-weight:bold;margin:18px 0 6px;border-bottom:1px solid #ddd;padding-bottom:3px">1-Year Workmanship Warranty</div>
@@ -6538,8 +6775,9 @@ async function deleteAllMyData() {
     }
   } catch (_) {}
 
-  // 2. Delete the local IndexedDB photo store and the cloud photo blobs.
+  // 2. Delete the local IndexedDB photo + shared-docs stores and the cloud photo blobs.
   try { if (window.indexedDB) indexedDB.deleteDatabase('paintpro-photos'); } catch (_) {}
+  try { if (window.indexedDB) indexedDB.deleteDatabase('paintpro-docs'); } catch (_) {}
   try {
     if (_storage && _uid) {
       await Promise.race([

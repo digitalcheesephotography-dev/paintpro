@@ -228,6 +228,14 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 - **QuickBooks copy** lists custom charges as their own lines; Project Services = `lab - lineItemsTotal` so the QuickBooks total isn't double-counted.
 - **Persistence:** `jobLineItems` and `assistantChat` are in `getJobSnapshot()` / `applyJobData()` (and reset in `startNewJob` / `clearMeasurements`). No new localStorage key — they live inside the job snapshot.
 
+### 7.10 Share into PaintPro (Android share target) — built
+- PaintPro appears in the Android Share sheet (installed PWA) for **photos, PDFs, Word docs, and plain text** — `share_target` in `manifest.json` (`shared_files` param + title/text/url).
+- `sw.js` intercepts the POST to `./share-target`, stashes every file in the `paintpro-shared` cache (`shared-file-0…n` + a `shared-meta` JSON index), and 303-redirects to the app with `?shared=1`. It also reads the legacy `shared_image` field in case Android still holds the old image-only manifest.
+- `checkSharedFile()` (boot): a **single image** keeps the existing photo-choice flow (`showSharedPhotoChoice` → AI scan or room photo). **Documents / multiple files** are saved to IndexedDB `paintpro-docs` (store `docs`) and the inbox opens. A **text-only share** becomes a `.txt` doc.
+- **Shared Files inbox** (`openDocsInbox()`, Settings → 📥 Shared With PaintPro): list with Open (blob URL), Share / Text (`navigator.share` with files), delete; text docs get "✍️ Send as Signable Proposal" which opens `sendWrittenBid()` prefilled.
+- Helpers: `docsDBOpen` / `docPut` / `docAll` / `docDelete` / `_docIcon` / `_docSize`. Device-local, not synced or backed up (docs are copies of files that exist elsewhere). `deleteAllMyData()` deletes the `paintpro-docs` DB.
+- SW cache bumped to `paintpro-v10` for this change (share-target logic changed).
+
 ### 7.7 Backup & Restore
 - `buildBackup()` serializes all localStorage keys + IndexedDB photos into a JSON blob
 - `backupToDrive()` triggers a download of the backup JSON
@@ -343,7 +351,10 @@ IndexedDB: `paintpro-photos` database, object store `photos`, keyed by photo ID 
 `photoDBOpen`, `photoPut`, `photoGet`, `photoDelete`, `migratePhotosToIDB`, `compressToBase64`, `addRoomPhotos`, `addRoomPhotoFiles`, `removeRoomPhoto`, `renderRoomPhotoStrip`, `viewRoomPhoto`, `closeRoomPhotoLightbox` (AI-batch photos: `addAIPhotos`, `renderAIPhotoStrip`, `analyzeAIPhotos`)
 
 ### Backup & restore
-`buildBackup`, `backupToDrive`, `restoreFromBackup`, `deleteAllMyData` (privacy right-to-delete: wipes local + Firestore `SYNC_KEYS` docs + `paintpro-photos` IndexedDB, double-confirmed)
+`buildBackup`, `backupToDrive`, `restoreFromBackup`, `deleteAllMyData` (privacy right-to-delete: wipes local + Firestore `SYNC_KEYS` docs + `paintpro-photos` and `paintpro-docs` IndexedDB, double-confirmed)
+
+### Share target & Shared Files inbox
+`checkSharedFile`, `showSharedPhotoChoice`, `openDocsInbox`, `docsDBOpen`, `docPut`, `docAll`, `docDelete`, `_docIcon`, `_docSize` (Android Share sheet → app; photos keep the scan/room-photo choice, documents land in the 📥 inbox in Settings)
 
 ### Estimate Assistant & custom charges
 `addJobLineItem`, `removeJobLineItem`, `renderLineItems`, `buildEstimateSummary`, `sendEstimateAssistant`, `renderAssistantMsgs`, `clearEstimateAssistant` (whole-job AI that adds custom charges like Sheetrock and can update any room by name; replaces the removed per-room AI chat)
@@ -355,7 +366,7 @@ IndexedDB: `paintpro-photos` database, object store `photos`, keyed by photo ID 
 
 **Pay by Card (QuickBooks) (`payByCardQuickBooks`):** Optional reusable QuickBooks payment link (`ingersoll_qb_paylink_v1`, set in Settings → Payments). When set, a 💳 button appears on the bid output (in-person collection) and the link rides on the proposal doc (`doc.qbPayLink`); `proposal.html` shows a client Pay-by-Card button (`maybeQuickBooksPay()`) when a link is present and no exact-amount Stripe deposit is configured (Stripe takes precedence).
 
-**Professional Proposal (`openProProposal`):** composes a polished client-facing proposal (Scope, About the Product, Project Investment table, warranty, disclaimer) from the current job. All money fields (`pp-mat`/`pp-disc`/`pp-svc`) pre-fill from `calc` but are editable with a live total (`_proRecalc`); `proProposalHtml(v, withSignature)` renders the Georgia layout. Sends via `_sendProposal` (shared with `createProposal`), previews/prints via `_proOpenPrint`. **Written bids** (`sendWrittenBid` → `_bidTextToHtml`) let any pasted bid become a signable proposal. Reachable from the bid output and Settings → Proposals & Signatures.
+**Professional Proposal (`openProProposal`):** composes a polished client-facing proposal (Scope, About the Product, Project Investment table, warranty, disclaimer) from the current job. **Standard format is a per-room itemized breakdown:** `_proDefaultAreas` pre-fills one area card per room (Walls/Ceiling/Floor/Trim lines from the room's measurements and rates via `_proRoomItems`) plus an "Additional Services" area for doors/windows/shutters/washing/custom charges. Each area = name + label/amount lines, all editable in the modal (`_proAddArea` / `_proAddAreaItem` / `_proAreasData`); `_proUseSingle()` / `_proUseAreas()` toggle back to a single Project Services number. `proProposalHtml(v, withSignature)` renders the Georgia layout with a shaded header row per area, per-area subtotals, and a Total Project Investment row; the paint + Volume Discount lines render only when gallons/retail are set (zero them for an everything-included price, which swaps in an "includes all labor, paint, and materials" note). Money fields stay editable with a live total (`_proRecalc`). Sends via `_sendProposal` (shared with `createProposal`), previews/prints via `_proOpenPrint`. **Written bids** (`sendWrittenBid` → `_bidTextToHtml`) let any pasted bid become a signable proposal. Reachable from the bid output and Settings → Proposals & Signatures.
 
 ### Labor rates
 `loadRates`, `saveRates`, `syncRatesUI`, `toggleRatesCard`, `updateGlobalRate`, `toggleRoomRates`, `updateRoomRate`

@@ -399,6 +399,7 @@ IndexedDB: `paintpro-photos` database, object store `photos`, keyed by photo ID 
 ## 13. Communication preferences (the user)
 
 James:
+- **ALWAYS make links clickable.** Every URL you give James must be written in full with the `https://` prefix (e.g. `https://lovely-kitsune-6c5c82.netlify.app/PaintPro-ZFold.html`) so it renders as a tappable link on his phone. NEVER post a bare domain like `lovely-kitsune-6c5c82.netlify.app` — it shows as dead plain text and he cannot tap it. This is a firm, standing rule.
 - **Uses voice-to-text.** Messages are brief, sometimes fragmented, with occasional speech recognition errors (e.g. "stores" for "doors", "weather" for "whether")
 - **Prefers ready-to-use outputs** with minimal back-and-forth. When asking clarifying questions, use `ask_user_input_v0` with tappable options — typing on mobile is friction
 - **When errors accumulate, prefers a full restart** of a feature over incremental fixes

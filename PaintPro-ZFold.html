@@ -1158,6 +1158,13 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
              style="width:100px;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:16px;text-align:right"/>
       <span style="font-size:18px;color:var(--muted)">%</span>
     </div>
+    <div style="border-top:1px solid var(--border);margin:16px 0 12px"></div>
+    <div style="font-size:14px;color:var(--text);font-weight:700;margin-bottom:4px">Pay by Card with QuickBooks (optional)</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px;line-height:1.5">
+      Paste your reusable QuickBooks payment link here. It adds a <strong style="color:var(--text)">💳 Pay by Card (QuickBooks)</strong> button to your bids so a customer can pay on the spot, straight into your QuickBooks. Get the link in QuickBooks under <em>Get paid → Payment links</em> (QuickBooks Payments must be on).
+    </div>
+    <input type="text" id="qb-paylink" inputmode="url" placeholder="https://…intuit.com/pay/…" autocomplete="off"
+           style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:12px"/>
     <button onclick="saveDepositConfig()"
             style="width:100%;height:50px;background:var(--green);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">
       Save Payment Settings
@@ -1956,11 +1963,13 @@ function saveEmailjsConfig(){
 // SECRET key as a Cloudflare env var — the app never sees or stores it. Here we
 // only keep the deposit percentage and an on/off flag.
 const DEPOSIT_KEY = 'ingersoll_deposit_v1';
+const QB_PAYLINK_KEY = 'ingersoll_qb_paylink_v1'; // reusable QuickBooks payment link
 function loadDepositConfig(){
   try { const d = JSON.parse(localStorage.getItem(DEPOSIT_KEY)); return d && typeof d === 'object' ? d : null; }
   catch { return null; }
 }
 function depositEnabled(){ const d = loadDepositConfig(); return !!(d && d.enabled && d.pct > 0); }
+function loadQbPayLink(){ return (localStorage.getItem(QB_PAYLINK_KEY) || '').trim(); }
 function saveDepositConfig(){
   const pctRaw = (document.getElementById('deposit-pct').value || '').trim();
   const on     = document.getElementById('deposit-enabled').checked;
@@ -1968,19 +1977,31 @@ function saveDepositConfig(){
   const set    = (m,ok) => { if(st){ st.textContent=m; st.style.color = ok?'var(--green)':'var(--red)'; } };
   const pct = parseFloat(pctRaw);
   if (on && (!(pct > 0) || pct > 100)) { set('Enter a deposit percent between 1 and 100.'); return; }
+  // Reusable QuickBooks payment link (optional; must be a plain https link).
+  const qbLink = (document.getElementById('qb-paylink').value || '').trim();
+  if (qbLink && !/^https:\/\/\S+$/i.test(qbLink)) { set('The QuickBooks payment link must start with https://'); return; }
+  if (qbLink) localStorage.setItem(QB_PAYLINK_KEY, qbLink); else localStorage.removeItem(QB_PAYLINK_KEY);
   localStorage.setItem(DEPOSIT_KEY, JSON.stringify({ enabled:on, pct: pct > 0 ? pct : 25 }));
   const proxy = localStorage.getItem('ingersoll_proxy_url_v1') || '';
-  if (on && !proxy) { set('Saved, but set your Proxy URL in AI Settings so the Pay button works.', false); showToast('⚠️ Set your Proxy URL in AI Settings'); return; }
-  set(on ? `✓ Saved — proposals will offer a ${pct}% deposit to pay online.` : 'Saved — online deposit turned off.', true);
+  if (on && !proxy) { set('Saved, but set your Proxy URL in AI Settings so the Stripe Pay button works.', false); showToast('⚠️ Set your Proxy URL in AI Settings'); return; }
+  set('✓ Payment settings saved.' + (on ? ` Proposals offer a ${pct}% Stripe deposit.` : '') + (qbLink ? ' QuickBooks Pay-by-Card link saved.' : ''), true);
   showToast('✓ Payment settings saved');
 }
-// Fill the deposit inputs from saved config when Settings opens.
+// Open the reusable QuickBooks payment link (in-person / hand-the-phone use).
+function payByCardQuickBooks(){
+  const link = loadQbPayLink();
+  if (!link){ showToast('Add your QuickBooks payment link in ⚙️ Settings → Payments', 'warn'); switchTab('settings'); return; }
+  window.open(link, '_blank');
+}
+// Fill the payment inputs from saved config when Settings opens.
 function syncDepositUI(){
   const d = loadDepositConfig();
   const pctEl = document.getElementById('deposit-pct');
   const onEl  = document.getElementById('deposit-enabled');
+  const qbEl  = document.getElementById('qb-paylink');
   if (pctEl) pctEl.value = d && d.pct ? d.pct : 25;
   if (onEl)  onEl.checked = !!(d && d.enabled);
+  if (qbEl)  qbEl.value = loadQbPayLink();
 }
 
 async function testAnthropicKey() {
@@ -4287,6 +4308,10 @@ function renderBid() {
         style="width:100%;height:52px;margin-top:10px;background:#2ca01c;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:15px;font-weight:700;cursor:pointer">
         📗 Copy for QuickBooks
       </button>
+      ${loadQbPayLink() ? `<button onclick="payByCardQuickBooks()" class="no-print"
+        style="width:100%;height:52px;margin-top:10px;background:transparent;border:1.5px solid #2ca01c;color:#2ca01c;border-radius:8px;font-family:Georgia,serif;font-size:15px;font-weight:700;cursor:pointer">
+        💳 Pay by Card (QuickBooks)
+      </button>` : ''}
       <button onclick="saveClientFromBid()"
         style="width:100%;height:50px;margin-top:10px;background:#2e8b1e;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer">
         💾 Save Client to Contacts
@@ -4602,10 +4627,13 @@ function copyBidForQuickBooks(){
   L.push('   Quantity 1 - Amount ' + m2(mat), '');
   L.push('Estimate total: ' + m2(grand));
   L.push('Note to customer: Estimate valid for 30 days. 1-Year Workmanship Warranty included.');
+  let payAmt = grand, payWhat = 'this estimate';
   if (typeof depositEnabled === 'function' && depositEnabled()){
     const pct = (loadDepositConfig() || {}).pct || 25;
-    L.push('', 'Request a ' + pct + '% deposit (' + m2(grand * pct / 100) + ') on this estimate.');
+    payAmt = grand * pct / 100; payWhat = 'the ' + pct + '% deposit';
+    L.push('', 'Request a ' + pct + '% deposit (' + m2(payAmt) + ') on this estimate.');
   }
+  L.push('', 'Also create a QuickBooks Pay-Now payment link for ' + payWhat + ' (' + m2(payAmt) + ') and give me the link so I can text it to the customer.');
   const text = L.join('\n');
   const done = () => showToast('✓ Copied for QuickBooks — paste into a Claude chat');
   if (navigator.clipboard && navigator.clipboard.writeText){
@@ -4648,6 +4676,10 @@ async function _sendProposal(bodyHtml, client, address, totalForDeposit){
       doc.payWorker = proxy;
     }
   }
+  // Reusable QuickBooks Pay-by-Card link (shown on the client page when no
+  // exact-amount Stripe deposit is configured).
+  const qbLink = loadQbPayLink();
+  if (qbLink) doc.qbPayLink = qbLink;
   showToast('Creating proposal…');
   try { await _db.collection('proposals').doc(id).set(doc); }
   catch(e){ showToast('Could not create proposal: ' + (e.code || e.message), 'err'); return; }
@@ -6248,6 +6280,7 @@ const BACKUP_KEYS = [
   'ingersoll_ext_rates_v1',
   'ingersoll_proxy_url_v1',
   'ingersoll_deposit_v1',
+  'ingersoll_qb_paylink_v1',
   // ingersoll_anthropic_key_v1 and ingersoll_accounts_v1 excluded — contain secrets
 ];
 

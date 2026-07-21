@@ -148,6 +148,7 @@ function render(){
     setupSignature();
   }
   maybeDeposit();
+  maybeQuickBooksPay();
 }
 
 // ── Online deposit (Stripe via the contractor's Worker) ─────────────────────
@@ -181,6 +182,25 @@ async function maybeDeposit(){
   }
   // Offer the deposit once the proposal is signed.
   if (_data.status === 'accepted') showPayButton(d);
+}
+// QuickBooks reusable Pay-by-Card link — an alternative when there's no exact
+// Stripe deposit set. Shown once the proposal is signed.
+function maybeQuickBooksPay(){
+  if (_data.deposit && _data.deposit.amount) return; // Stripe deposit takes precedence
+  const link = _data.qbPayLink;
+  if (!link || !/^https:\/\//i.test(link)) return;
+  if (_data.status !== 'accepted') return;
+  if (document.getElementById('qbpay-wrap')) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'qbpay-wrap'; wrap.className = 'card no-print';
+  wrap.innerHTML =
+    `<h1 style="font-size:19px;margin-bottom:6px">Pay by Card</h1>` +
+    `<p class="muted" style="margin-bottom:14px">Pay securely by card through QuickBooks. You'll get a receipt by email.</p>` +
+    `<a href="${esc(link)}" target="_blank" rel="noopener" style="display:block;text-align:center;line-height:58px;height:58px;background:#2ca01c;color:#fff;border-radius:10px;font-family:Arial,sans-serif;font-size:17px;font-weight:700;text-decoration:none">💳 Pay by Card</a>` +
+    `<div class="legal">Payments are processed securely by QuickBooks. Your card details are never stored by ${esc((_data.company&&_data.company.name)||'us')}.</div>`;
+  const anchor = document.getElementById('accepted-banner');
+  if (anchor && anchor.style.display !== 'none') anchor.insertAdjacentElement('afterend', wrap);
+  else document.getElementById('content').appendChild(wrap);
 }
 function _fmtMoney(cents){ return '$' + (cents/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function showPayButton(d){
@@ -336,6 +356,7 @@ async function acceptProposal(){
     _data.status='accepted'; _data.signerName=name; _data.signerEmail=email; _data.acceptedAt=Date.now(); _data.signatureDataUrl=sigData;
     showAccepted();
     maybeDeposit();
+    maybeQuickBooksPay();
     // Email the client a copy (best-effort — never blocks the acceptance).
     let emailed = false;
     if (email && /.+@.+\..+/.test(email) && _data.emailjs) emailed = await sendClientEmail(email);

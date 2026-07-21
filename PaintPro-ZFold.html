@@ -5078,10 +5078,11 @@ function saveBidPDF() {
   const bidEl = document.getElementById('bid-out');
   if (!bidEl || !bidEl.classList.contains('visible')) { showToast('Generate a bid first', 'warn'); return; }
   const inner = bidEl.innerHTML;
-  // Strip the no-print action buttons and agent panel — only the paper content
+  // Strip EVERY interactive control (not just .no-print) so no contractor
+  // button, input, or the AI agent panel can leak into the client's PDF.
   const tmp = document.createElement('div');
   tmp.innerHTML = inner;
-  tmp.querySelectorAll('.no-print').forEach(el => el.remove());
+  tmp.querySelectorAll('button, input, textarea, select, .no-print').forEach(el => el.remove());
   const bidHTML = tmp.innerHTML;
 
   const html = `<!DOCTYPE html>

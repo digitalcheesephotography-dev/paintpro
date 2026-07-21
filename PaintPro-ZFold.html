@@ -1016,7 +1016,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
       </button>
     </div>
     <div id="settings-key-status" style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:14px"></div>
-    <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Proxy URL <span style="color:var(--border)">(required for AI on phone — see setup below)</span></label>
+    <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Proxy URL <span style="color:var(--border)">(optional — AI works with just the key; only needed for online card payments)</span></label>
     <input type="url" id="settings-proxy-url" placeholder="https://paintpro-ai.yourname.workers.dev"
            style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:13px 14px;color:var(--text);font-family:var(--font);font-size:14px;margin-bottom:10px"/>
     <button onclick="saveProxyUrl()"
@@ -2085,7 +2085,7 @@ async function testAnthropicKey() {
     } else {
       const resp = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', 'anthropic-dangerous-allow-browser': 'true' },
+        headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' },
         body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 5, messages: [{ role: 'user', content: 'Hi' }] }),
       });
       data = await resp.json();
@@ -2096,7 +2096,7 @@ async function testAnthropicKey() {
       if (st) { st.textContent = '✓ Key works — AI photo estimator is ready'; st.style.color = 'var(--green)'; }
     }
   } catch(e) {
-    const hint = proxyUrl ? 'Check your proxy URL is correct' : 'Set a Proxy URL in Settings above';
+    const hint = proxyUrl ? 'Check your proxy URL is correct (or clear it — AI works with just the key)' : 'Check your connection and try again';
     if (st) { st.textContent = '✗ Network error — ' + hint; st.style.color = 'var(--red)'; }
   }
 }
@@ -6032,29 +6032,40 @@ Scale anchors: interior door=6.8 ft tall/2.8 ft wide; light switch plate=4.5 inc
 async function callAI(messages, model = 'claude-sonnet-4-6', max_tokens = 1024, system = null) {
   const apiKey   = localStorage.getItem('ingersoll_anthropic_key_v1') || '';
   const proxyUrl = localStorage.getItem('ingersoll_proxy_url_v1') || '';
-  if (!apiKey && !proxyUrl) throw new Error('No API key — add one in ⚙️ Settings');
+  if (!apiKey) throw new Error('No API key — add one in ⚙️ Settings');
 
   const payload = { model, max_tokens, messages };
   if (system) payload.system = system;
 
+  // Anthropic supports CORS from browsers with this opt-in header, so a direct
+  // call works with just the API key — no proxy Worker needed for AI. A saved
+  // Proxy URL is still used first (it also powers Stripe), but if the Worker
+  // is unreachable or dead we fall back to calling the API directly.
+  const direct = () => fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify(payload),
+  });
   let resp;
   if (proxyUrl) {
-    resp = await fetch(proxyUrl, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ apiKey, ...payload }),
-    });
+    try {
+      resp = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ apiKey, ...payload }),
+      });
+      if (!resp.ok && resp.status >= 500 && apiKey) resp = await direct();
+    } catch (_) {
+      if (!apiKey) throw new Error('Could not reach the AI proxy — check the Proxy URL in ⚙️ Settings');
+      resp = await direct();
+    }
   } else {
-    resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-        'anthropic-dangerous-allow-browser': 'true',
-      },
-      body: JSON.stringify(payload),
-    });
+    resp = await direct();
   }
   let data;
   try {

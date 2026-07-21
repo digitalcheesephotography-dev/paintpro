@@ -73,7 +73,7 @@
     <label for="signer-name">Your full name</label>
     <input type="text" id="signer-name" autocomplete="name" placeholder="e.g. Dave Reau"/>
 
-    <label for="signer-email" style="margin-top:16px">Your email <span style="color:#9aa7b4">(optional — we'll send you a copy)</span></label>
+    <label for="signer-email" style="margin-top:16px">Your email <span style="color:#9aa7b4">(optional, we'll send you a copy)</span></label>
     <input type="text" id="signer-email" autocomplete="email" inputmode="email" placeholder="you@email.com"/>
 
     <label for="sigpad" style="margin-top:16px">Signature</label>
@@ -264,7 +264,7 @@ function showAccepted(){
     b.insertAdjacentElement('afterend', btn);
     const note = document.createElement('div');
     note.setAttribute('style','max-width:720px;margin:8px auto 0;text-align:center;color:#6b7a8d;font-size:12px;font-family:Arial,sans-serif');
-    note.textContent = 'Tip: this link is your copy — reopen it anytime to see the signed proposal.';
+    note.textContent = 'Tip: this link is your copy. Reopen it anytime to see the signed proposal.';
     btn.insertAdjacentElement('afterend', note);
   }
 }

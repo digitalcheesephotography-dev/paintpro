@@ -4177,7 +4177,7 @@ function renderBid() {
     return `
       <tr style="border-bottom:1px solid #e5e7eb">
         <td style="padding:8px 6px;font-weight:700;font-size:13px">${_esc(r.name)}</td>
-        <td style="padding:8px 6px;font-size:12px;color:#555">${surfs||'—'}</td>
+        <td style="padding:8px 6px;font-size:12px;color:#555">${surfs||'-'}</td>
         <td style="padding:8px 6px;font-size:12px">${_esc(short)}</td>
         <td style="padding:8px 6px;font-size:12px;text-align:center">${r.coats}</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${sf}</td>
@@ -4190,8 +4190,8 @@ function renderBid() {
       <tr style="border-bottom:1px solid #e5e7eb">
         <td style="padding:8px 6px;font-weight:700;font-size:13px">Doors</td>
         <td style="padding:8px 6px;font-size:12px;color:#555">${ex.doorCount} units</td>
-        <td style="padding:8px 6px;font-size:12px">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
+        <td style="padding:8px 6px;font-size:12px">-</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center">-</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.doorPrice)} ea</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.doorTotal)}</td>
       </tr>` : '')
@@ -4199,8 +4199,8 @@ function renderBid() {
       <tr style="border-bottom:1px solid #e5e7eb">
         <td style="padding:8px 6px;font-weight:700;font-size:13px">Windows</td>
         <td style="padding:8px 6px;font-size:12px;color:#555">${ex.winCount} units</td>
-        <td style="padding:8px 6px;font-size:12px">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
+        <td style="padding:8px 6px;font-size:12px">-</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center">-</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.winPrice)} ea</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.winTotal)}</td>
       </tr>` : '')
@@ -4208,8 +4208,8 @@ function renderBid() {
       <tr style="border-bottom:1px solid #e5e7eb">
         <td style="padding:8px 6px;font-weight:700;font-size:13px">Shutters</td>
         <td style="padding:8px 6px;font-size:12px;color:#555">${ex.shutterCount} units</td>
-        <td style="padding:8px 6px;font-size:12px">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
+        <td style="padding:8px 6px;font-size:12px">-</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center">-</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.shutterTotal / ex.shutterCount)} ea</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.shutterTotal)}</td>
       </tr>` : '')
@@ -4217,18 +4217,18 @@ function renderBid() {
       <tr style="border-bottom:1px solid #e5e7eb">
         <td style="padding:8px 6px;font-weight:700;font-size:13px">Power Wash</td>
         <td style="padding:8px 6px;font-size:12px;color:#555">${ex.washSF.toFixed(0)} sq ft</td>
-        <td style="padding:8px 6px;font-size:12px">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
+        <td style="padding:8px 6px;font-size:12px">-</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center">-</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.washTotal/ex.washSF)}/sf</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.washTotal)}</td>
       </tr>` : '')
     + (ex.lineItems || []).filter(li => (parseFloat(li.amount)||0) !== 0).map(li => `
       <tr style="border-bottom:1px solid #e5e7eb">
         <td style="padding:8px 6px;font-weight:700;font-size:13px">${_esc(li.label)}</td>
-        <td style="padding:8px 6px;font-size:12px;color:#555">—</td>
-        <td style="padding:8px 6px;font-size:12px">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:right">—</td>
+        <td style="padding:8px 6px;font-size:12px;color:#555">-</td>
+        <td style="padding:8px 6px;font-size:12px">-</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center">-</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right">-</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(parseFloat(li.amount)||0)}</td>
       </tr>`).join('');
 
@@ -4243,7 +4243,7 @@ function renderBid() {
           info@ingersollpaintingllc.com &nbsp;|&nbsp; ingersollpaintingllc.com
         </div>
         <div style="margin-top:8px;font-size:11px;color:#888;letter-spacing:2px;text-transform:uppercase">
-          Family Owned Since 1978 — Licensed &amp; Insured
+          Family Owned Since 1978 - Licensed &amp; Insured
         </div>
       </div>
 
@@ -4300,7 +4300,7 @@ function renderBid() {
       <!-- ABOUT THE PRODUCT -->
       <div style="margin-bottom:14px;font-size:12px">
         <div style="font-weight:700;margin-bottom:4px">About the Product</div>
-        <div style="color:#444">Benjamin Moore paints are used throughout this project. Known for exceptional coverage, durability, and color retention — backed by one of the most trusted names in the industry.</div>
+        <div style="color:#444">Benjamin Moore paints are used throughout this project. Known for exceptional coverage, durability, and color retention, backed by one of the most trusted names in the industry.</div>
       </div>
 
       ${notes ? `
@@ -4855,7 +4855,7 @@ Our work will include:
   _proRecalc();
   s.querySelector('#pp-send').onclick  = () => { const v=_proCollect(); _sendProposal(proProposalHtml(v), v.client, v.address, v.total); };
   s.querySelector('#pp-pdf').onclick   = () => _proOpenPrint(proProposalHtml(_proCollect(), true));
-  s.querySelector('#pp-share').onclick = () => { const v=_proCollect(); const t = `${v.title} — ${v.company} — ${v.client}: ${fmt(v.total)}`; if(navigator.share) navigator.share({title:v.title, text:t}).catch(()=>{}); else showToast('Sharing not available here','warn'); };
+  s.querySelector('#pp-share').onclick = () => { const v=_proCollect(); const t = `${v.title} - ${v.company} - ${v.client}: ${fmt(v.total)}`; if(navigator.share) navigator.share({title:v.title, text:t}).catch(()=>{}); else showToast('Sharing not available here','warn'); };
 }
 function _proNum(id){ const el=document.getElementById(id); return el ? (parseFloat(el.value)||0) : 0; }
 // Per-building breakdown: active only when the buildings section is shown and
@@ -4995,7 +4995,7 @@ function showProposalLinkModal(url, client, depositInfo){
   const share = document.createElement('button'); share.setAttribute('style','height:50px;background:var(--card);border:1.5px solid var(--blue);border-radius:8px;color:var(--blue);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer'); share.textContent = 'Share / Text';
   // Pass the link ONLY as `url` (not also inside `text`) — messaging apps append
   // the url after the text, which was pasting the link twice.
-  share.onclick = () => { if (navigator.share) navigator.share({ title:'Your painting proposal', text:"Here's your painting proposal from Ingersoll Painting — review and accept:", url }).catch(()=>{}); else { if (navigator.clipboard) navigator.clipboard.writeText(url); showToast('Link copied — paste into a text'); } };
+  share.onclick = () => { if (navigator.share) navigator.share({ title:'Your painting proposal', text:"Here's your painting proposal from Ingersoll Painting. Review and accept:", url }).catch(()=>{}); else { if (navigator.clipboard) navigator.clipboard.writeText(url); showToast('Link copied — paste into a text'); } };
   grid.append(copy, share);
   s.append(link, grid);
 }
@@ -5089,7 +5089,7 @@ function saveBidPDF() {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Ingersoll Painting — Bid</title>
+<title>Ingersoll Painting - Bid</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:Georgia,'Times New Roman',serif;font-size:13px;line-height:1.7;color:#111;background:#fff;padding:24px 20px;max-width:700px;margin:0 auto}
@@ -5122,7 +5122,7 @@ function shareBid() {
   const roomLines = rooms.map((r,i) => {
     const c     = cs[i];
     const surfs = Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>k).join(', ');
-    return `${r.name} (${surfs||'walls'}): ${c.totalSF.toFixed(0)} sf — ${fmt(c.total)}`;
+    return `${r.name} (${surfs||'walls'}): ${c.totalSF.toFixed(0)} sf - ${fmt(c.total)}`;
   }).join('\n');
 
   const text = `INGERSOLL PAINTING LLC
@@ -5141,7 +5141,7 @@ Family Owned Since 1978`;
 
   if (navigator.share) {
     navigator.share({
-      title: `Ingersoll Painting — Estimate for ${client}`,
+      title: `Ingersoll Painting - Estimate for ${client}`,
       text: text,
     }).catch(()=>{});
   } else {
@@ -5203,7 +5203,7 @@ async function printAtHome() {
   const roomLines = rooms.map((r,i)=>{
     const c = cs[i];
     const surfs = Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>k).join(', ');
-    return `  ${r.name} (${surfs||'walls'}): ${c.totalSF.toFixed(0)} sf — ${fmt(c.total)}`;
+    return `  ${r.name} (${surfs||'walls'}): ${c.totalSF.toFixed(0)} sf - ${fmt(c.total)}`;
   }).join('\n');
 
   const doorLine = extras.doorCount > 0

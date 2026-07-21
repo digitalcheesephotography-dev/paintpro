@@ -195,7 +195,7 @@ def build_page(text):
     Print dialog should open automatically. If not, press Ctrl+P.
   </p>
   <pre>{safe}</pre>
-  <div class="footer">Ingersoll Painting LLC &mdash; Family Owned Since 1978 &mdash; (315) 952-8259</div>
+  <div class="footer">Ingersoll Painting LLC - Family Owned Since 1978 - (315) 952-8259</div>
 </body>
 </html>"""
 

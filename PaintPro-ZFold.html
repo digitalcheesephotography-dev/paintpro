@@ -4813,7 +4813,11 @@ Our work will include:
 - Protection of landscaping, walkways, and surrounding surfaces throughout the project
 - Application of two full coats of quality paint
 - Daily cleanup and complete removal of all project debris when the work is finished`;
-  const defAbout = prod ? `${prod} is a quality, durable finish well suited to this project. It offers excellent adhesion and coverage, resists peeling and fading, and holds up well through Central New York winters and summers for a clean, lasting result.` : '';
+  const defAbout = prod
+    ? (isExt
+        ? `${prod} is a premium exterior finish well suited to this project. It offers excellent adhesion and coverage, resists peeling, blistering, and fading, and holds up through Central New York winters and summers for a durable, long-lasting finish.`
+        : `${prod} is a quality interior finish well suited to this project. It offers excellent adhesion and smooth, even coverage, resists scuffs and stains, and wipes clean easily for a durable, great-looking finish that keeps its color over time.`)
+    : '';
   const inp = (id,val,rows) => rows
     ? `<textarea id="${id}" rows="${rows}" style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;resize:vertical;margin-bottom:12px">${_esc(val)}</textarea>`
     : `<input type="text" id="${id}" value="${_esc(val)}" style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:12px"/>`;

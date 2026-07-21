@@ -4125,12 +4125,7 @@ async function openDocsInbox() {
     const open = document.createElement('button');
     open.setAttribute('style', btnStyle);
     open.textContent = '📂 Open';
-    open.onclick = () => {
-      const u = URL.createObjectURL(rec.blob);
-      const w = window.open(u, '_blank');
-      if (!w) showToast('Allow pop-ups to view files', 'warn');
-      setTimeout(() => URL.revokeObjectURL(u), 60000);
-    };
+    open.onclick = () => viewDoc(rec);
     const share = document.createElement('button');
     share.setAttribute('style', btnStyle);
     share.textContent = 'Share / Text';
@@ -4165,6 +4160,61 @@ async function openDocsInbox() {
     }
     s.appendChild(card);
   });
+}
+
+// ── Viewing a stored doc ─────────────────────────────────────────────────────
+// Images and text render in an in-app overlay. PDFs and Word docs can't be
+// displayed by Android Chrome (no built-in viewer — window.open on a blob is a
+// silent no-op in the installed app), so hand them to the system: save via a
+// download anchor and let the download notification open the real viewer.
+// Desktop browsers still get a normal new-tab view.
+function _docOverlay() {
+  const old = document.getElementById('doc-view-overlay');
+  if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.id = 'doc-view-overlay';
+  ov.setAttribute('style', 'position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:10001;display:flex;flex-direction:column;padding:16px;overflow:hidden');
+  const x = document.createElement('button');
+  x.setAttribute('style', 'align-self:flex-end;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:16px;cursor:pointer;padding:8px 16px;margin-bottom:10px;flex:none');
+  x.textContent = '✕ Close';
+  x.onclick = () => ov.remove();
+  ov.appendChild(x);
+  document.body.appendChild(ov);
+  return ov;
+}
+async function viewDoc(rec) {
+  const isText = /^text\//.test(rec.type) || /\.txt$/i.test(rec.name);
+  if (/^image\//.test(rec.type)) {
+    const ov = _docOverlay();
+    const u = URL.createObjectURL(rec.blob);
+    const img = document.createElement('img');
+    img.src = u;
+    img.setAttribute('style', 'flex:1;min-height:0;object-fit:contain;max-width:100%');
+    img.onclick = () => { ov.remove(); };
+    ov.appendChild(img);
+    setTimeout(() => URL.revokeObjectURL(u), 60000);
+    return;
+  }
+  if (isText) {
+    const ov = _docOverlay();
+    const pre = document.createElement('pre');
+    pre.setAttribute('style', 'flex:1;min-height:0;overflow:auto;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;color:var(--text);font-family:var(--font);font-size:15px;line-height:1.6;white-space:pre-wrap;word-break:break-word;margin:0');
+    pre.textContent = await rec.blob.text();
+    ov.appendChild(pre);
+    return;
+  }
+  // PDF / Word / anything else
+  const u = URL.createObjectURL(rec.blob);
+  if (/Android/i.test(navigator.userAgent)) {
+    const a = document.createElement('a');
+    a.href = u; a.download = rec.name || 'file';
+    document.body.appendChild(a); a.click(); a.remove();
+    showToast('📄 Sent to Downloads — tap the download notification to open it');
+  } else {
+    const w = window.open(u, '_blank');
+    if (!w) showToast('Allow pop-ups to view files', 'warn');
+  }
+  setTimeout(() => URL.revokeObjectURL(u), 60000);
 }
 
 // ── Fill Into App: AI-read a bid document → prefilled Professional Proposal ──

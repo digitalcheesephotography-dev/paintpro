@@ -228,6 +228,14 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 - **QuickBooks copy** lists custom charges as their own lines; Project Services = `lab - lineItemsTotal` so the QuickBooks total isn't double-counted.
 - **Persistence:** `jobLineItems` and `assistantChat` are in `getJobSnapshot()` / `applyJobData()` (and reset in `startNewJob` / `clearMeasurements`). No new localStorage key — they live inside the job snapshot.
 
+### 7.10 Share into PaintPro (Android share target) — built
+- PaintPro appears in the Android Share sheet (installed PWA) for **photos, PDFs, Word docs, and plain text** — `share_target` in `manifest.json` (`shared_files` param + title/text/url).
+- `sw.js` intercepts the POST to `./share-target`, stashes every file in the `paintpro-shared` cache (`shared-file-0…n` + a `shared-meta` JSON index), and 303-redirects to the app with `?shared=1`. It also reads the legacy `shared_image` field in case Android still holds the old image-only manifest.
+- `checkSharedFile()` (boot): a **single image** keeps the existing photo-choice flow (`showSharedPhotoChoice` → AI scan or room photo). **Documents / multiple files** are saved to IndexedDB `paintpro-docs` (store `docs`) and the inbox opens. A **text-only share** becomes a `.txt` doc.
+- **Shared Files inbox** (`openDocsInbox()`, Settings → 📥 Shared With PaintPro): list with Open (blob URL), Share / Text (`navigator.share` with files), delete; text docs get "✍️ Send as Signable Proposal" which opens `sendWrittenBid()` prefilled.
+- Helpers: `docsDBOpen` / `docPut` / `docAll` / `docDelete` / `_docIcon` / `_docSize`. Device-local, not synced or backed up (docs are copies of files that exist elsewhere). `deleteAllMyData()` deletes the `paintpro-docs` DB.
+- SW cache bumped to `paintpro-v10` for this change (share-target logic changed).
+
 ### 7.7 Backup & Restore
 - `buildBackup()` serializes all localStorage keys + IndexedDB photos into a JSON blob
 - `backupToDrive()` triggers a download of the backup JSON
@@ -343,7 +351,10 @@ IndexedDB: `paintpro-photos` database, object store `photos`, keyed by photo ID 
 `photoDBOpen`, `photoPut`, `photoGet`, `photoDelete`, `migratePhotosToIDB`, `compressToBase64`, `addRoomPhotos`, `addRoomPhotoFiles`, `removeRoomPhoto`, `renderRoomPhotoStrip`, `viewRoomPhoto`, `closeRoomPhotoLightbox` (AI-batch photos: `addAIPhotos`, `renderAIPhotoStrip`, `analyzeAIPhotos`)
 
 ### Backup & restore
-`buildBackup`, `backupToDrive`, `restoreFromBackup`, `deleteAllMyData` (privacy right-to-delete: wipes local + Firestore `SYNC_KEYS` docs + `paintpro-photos` IndexedDB, double-confirmed)
+`buildBackup`, `backupToDrive`, `restoreFromBackup`, `deleteAllMyData` (privacy right-to-delete: wipes local + Firestore `SYNC_KEYS` docs + `paintpro-photos` and `paintpro-docs` IndexedDB, double-confirmed)
+
+### Share target & Shared Files inbox
+`checkSharedFile`, `showSharedPhotoChoice`, `openDocsInbox`, `docsDBOpen`, `docPut`, `docAll`, `docDelete`, `_docIcon`, `_docSize` (Android Share sheet → app; photos keep the scan/room-photo choice, documents land in the 📥 inbox in Settings)
 
 ### Estimate Assistant & custom charges
 `addJobLineItem`, `removeJobLineItem`, `renderLineItems`, `buildEstimateSummary`, `sendEstimateAssistant`, `renderAssistantMsgs`, `clearEstimateAssistant` (whole-job AI that adds custom charges like Sheetrock and can update any room by name; replaces the removed per-room AI chat)

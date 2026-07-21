@@ -1154,6 +1154,16 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     </button>
   </div>
 
+  <!-- Shared Files inbox -->
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
+    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">📥 Shared With PaintPro</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.5">Files shared into the app from your phone's Share menu — bid PDFs, Word docs, text. Tap Share on any file, pick PaintPro, and it lands here.</div>
+    <button onclick="openDocsInbox()"
+            style="width:100%;height:50px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">
+      📥 Open Shared Files
+    </button>
+  </div>
+
   <!-- Auto-email client a copy on signing (EmailJS) -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
     <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">📧 Email Client a Copy</div>
@@ -3963,16 +3973,43 @@ function clearMeasurements() {
   showToast('🗑️ Measurements cleared');
 }
 
-// ── Share Target: a photo shared into the app from the Android Share sheet ────
-// The service worker stashed the file in the 'paintpro-shared' cache and
-// redirected here with ?shared=1. Pick it up and ask what to do with it.
+// ── Share Target: anything shared into the app from the Android Share sheet ──
+// The service worker stashed the file(s) in the 'paintpro-shared' cache and
+// redirected here with ?shared=1. A single photo keeps the existing photo
+// choice flow; documents (PDF, Word, text) go to the Shared Files inbox.
 async function checkSharedFile() {
   if (!/[?&]shared=1\b/.test(location.search)) return;
   // Clean the URL so a reload or back-nav doesn't re-trigger the pickup
   try { history.replaceState(null, '', location.pathname); } catch(_) {}
   try {
     const cache = await caches.open('paintpro-shared');
-    const resp  = await cache.match('shared-file');
+    const mResp = await cache.match('shared-meta');
+    if (mResp) {
+      const meta = await mResp.json();
+      await cache.delete('shared-meta');
+      const files = [];
+      for (const fm of (meta.files || [])) {
+        const r = await cache.match(fm.key);
+        if (!r) continue;
+        const blob = await r.blob();
+        await cache.delete(fm.key);
+        if (blob && blob.size) files.push(new File([blob], fm.name || 'shared', { type: fm.type || blob.type || '' }));
+      }
+      // Text-only share (a bid pasted from a chat, a link) → save as a .txt doc
+      if (!files.length && (meta.text || meta.url || meta.title)) {
+        const txt = [meta.title, meta.text, meta.url].filter(Boolean).join('\n\n');
+        const nm  = ((meta.title || 'Shared text').replace(/[\\/:*?"<>|]/g, '').slice(0, 60) || 'Shared text') + '.txt';
+        files.push(new File([new Blob([txt], { type: 'text/plain' })], nm, { type: 'text/plain' }));
+      }
+      if (!files.length) return;
+      if (files.length === 1 && /^image\//.test(files[0].type)) { showSharedPhotoChoice(files[0]); return; }
+      let saved = 0;
+      for (const f of files) { try { await docPut(f); saved++; } catch(e) { console.warn('[Share] doc save failed', e); } }
+      if (saved) { showToast('📥 ' + saved + (saved > 1 ? ' files' : ' file') + ' saved to PaintPro'); openDocsInbox(); }
+      return;
+    }
+    // Legacy path: a single image stashed by an older service worker version
+    const resp = await cache.match('shared-file');
     if (!resp) return;
     const blob = await resp.blob();
     await cache.delete('shared-file');
@@ -3980,6 +4017,127 @@ async function checkSharedFile() {
     const file = new File([blob], 'shared.jpg', { type: blob.type || 'image/jpeg' });
     showSharedPhotoChoice(file);
   } catch(e) { console.warn('[Share] pickup failed', e); }
+}
+
+// ── Shared Files inbox (IndexedDB 'paintpro-docs') ───────────────────────────
+// Documents shared into the app live here: bid PDFs from a Claude chat, Word
+// docs, text shares. View, re-share, turn a text bid into a signable proposal,
+// or delete. Device-local (not synced) — these are copies of files that
+// already exist elsewhere.
+function docsDBOpen() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open('paintpro-docs', 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore('docs', { keyPath: 'id' }); };
+    req.onsuccess = () => res(req.result);
+    req.onerror   = () => rej(req.error);
+  });
+}
+async function docPut(file) {
+  const db = await docsDBOpen();
+  const rec = { id: 'd' + Date.now() + Math.random().toString(36).slice(2, 7),
+                name: file.name || 'shared', type: file.type || '', size: file.size || 0,
+                date: Date.now(), blob: file };
+  return new Promise((res, rej) => {
+    const tx = db.transaction('docs', 'readwrite');
+    tx.objectStore('docs').put(rec);
+    tx.oncomplete = () => res(rec.id);
+    tx.onerror    = () => rej(tx.error);
+  });
+}
+async function docAll() {
+  const db = await docsDBOpen();
+  return new Promise((res, rej) => {
+    const req = db.transaction('docs', 'readonly').objectStore('docs').getAll();
+    req.onsuccess = () => res((req.result || []).sort((a, b) => b.date - a.date));
+    req.onerror   = () => rej(req.error);
+  });
+}
+async function docDelete(id) {
+  const db = await docsDBOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('docs', 'readwrite');
+    tx.objectStore('docs').delete(id);
+    tx.oncomplete = () => res();
+    tx.onerror    = () => rej(tx.error);
+  });
+}
+function _docIcon(type, name) {
+  if (/^image\//.test(type)) return '🖼️';
+  if (type === 'application/pdf' || /\.pdf$/i.test(name)) return '📄';
+  if (/wordprocessingml|msword/.test(type) || /\.docx?$/i.test(name)) return '📝';
+  if (/^text\//.test(type) || /\.txt$/i.test(name)) return '💬';
+  return '📎';
+}
+function _docSize(n) {
+  if (!n) return '';
+  return n < 1024*1024 ? Math.max(1, Math.round(n/1024)) + ' KB' : (n/1048576).toFixed(1) + ' MB';
+}
+async function openDocsInbox() {
+  const s = _ppModal();
+  const title = document.createElement('div');
+  title.setAttribute('style', 'font-family:var(--head);font-size:22px;color:var(--blue);margin-bottom:6px');
+  title.textContent = '📥 Shared With PaintPro';
+  s.appendChild(title);
+  let docs = [];
+  try { docs = await docAll(); } catch(_) {}
+  if (!docs.length) {
+    const e = document.createElement('p');
+    e.setAttribute('style', 'color:var(--muted);font-size:14px;line-height:1.6');
+    e.textContent = 'Nothing here yet. From any app, tap Share on a file (a bid PDF, a Word doc, a photo, even plain text) and pick PaintPro — it lands here automatically.';
+    s.appendChild(e);
+    return;
+  }
+  docs.forEach(rec => {
+    const card = document.createElement('div');
+    card.setAttribute('style', 'background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px');
+    const isText = /^text\//.test(rec.type) || /\.txt$/i.test(rec.name);
+    const head = document.createElement('div');
+    head.setAttribute('style', 'display:flex;align-items:center;gap:8px;margin-bottom:10px');
+    head.innerHTML = `<span style="font-size:22px">${_docIcon(rec.type, rec.name)}</span>
+      <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(rec.name)}</div>
+      <div style="font-size:11px;color:var(--muted)">${new Date(rec.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})} · ${_docSize(rec.size)}</div></div>`;
+    const del = document.createElement('button');
+    del.setAttribute('style', 'background:transparent;border:1px solid var(--red);border-radius:8px;color:var(--red);font-size:13px;cursor:pointer;padding:6px 10px;flex:none');
+    del.textContent = '✕';
+    del.onclick = async () => { if (!confirm('Delete "' + rec.name + '"?')) return; await docDelete(rec.id); openDocsInbox(); };
+    head.appendChild(del);
+    card.appendChild(head);
+    const row = document.createElement('div');
+    row.setAttribute('style', 'display:grid;grid-template-columns:1fr 1fr' + (isText ? ' ' : '') + ';gap:8px');
+    const btnStyle = 'height:44px;background:var(--dark);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer';
+    const open = document.createElement('button');
+    open.setAttribute('style', btnStyle);
+    open.textContent = '📂 Open';
+    open.onclick = () => {
+      const u = URL.createObjectURL(rec.blob);
+      const w = window.open(u, '_blank');
+      if (!w) showToast('Allow pop-ups to view files', 'warn');
+      setTimeout(() => URL.revokeObjectURL(u), 60000);
+    };
+    const share = document.createElement('button');
+    share.setAttribute('style', btnStyle);
+    share.textContent = 'Share / Text';
+    share.onclick = () => {
+      const f = new File([rec.blob], rec.name, { type: rec.type || 'application/octet-stream' });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) navigator.share({ files: [f] }).catch(() => {});
+      else open.onclick();
+    };
+    row.append(open, share);
+    card.appendChild(row);
+    if (isText) {
+      const wb = document.createElement('button');
+      wb.setAttribute('style', 'width:100%;height:44px;margin-top:8px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer');
+      wb.textContent = '✍️ Send as Signable Proposal';
+      wb.onclick = async () => {
+        const txt = await rec.blob.text();
+        sendWrittenBid();
+        const ta = document.getElementById('wb-text');
+        if (ta) ta.value = txt;
+      };
+      card.appendChild(wb);
+    }
+    s.appendChild(card);
+  });
 }
 
 // Ask whether the shared photo is a measurement note (→ AI scan) or a
@@ -6617,8 +6775,9 @@ async function deleteAllMyData() {
     }
   } catch (_) {}
 
-  // 2. Delete the local IndexedDB photo store and the cloud photo blobs.
+  // 2. Delete the local IndexedDB photo + shared-docs stores and the cloud photo blobs.
   try { if (window.indexedDB) indexedDB.deleteDatabase('paintpro-photos'); } catch (_) {}
+  try { if (window.indexedDB) indexedDB.deleteDatabase('paintpro-docs'); } catch (_) {}
   try {
     if (_storage && _uid) {
       await Promise.race([

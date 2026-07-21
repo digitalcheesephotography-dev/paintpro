@@ -4078,12 +4078,29 @@ async function openDocsInbox() {
   title.setAttribute('style', 'font-family:var(--head);font-size:22px;color:var(--blue);margin-bottom:6px');
   title.textContent = '📥 Shared With PaintPro';
   s.appendChild(title);
+  // Upload works even when the Android Share sheet hasn't picked the app up
+  // yet — grab the file straight from Downloads.
+  const up = document.createElement('button');
+  up.setAttribute('style', 'width:100%;height:48px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;margin-bottom:12px');
+  up.textContent = '📤 Upload a File From This Phone';
+  up.onclick = () => {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.multiple = true;
+    inp.accept = '.pdf,.txt,.doc,.docx,image/*,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    inp.onchange = async () => {
+      let n = 0;
+      for (const f of inp.files) { try { await docPut(f); n++; } catch(_) {} }
+      if (n) { showToast('📥 ' + n + (n > 1 ? ' files' : ' file') + ' saved to PaintPro'); openDocsInbox(); }
+    };
+    inp.click();
+  };
+  s.appendChild(up);
   let docs = [];
   try { docs = await docAll(); } catch(_) {}
   if (!docs.length) {
     const e = document.createElement('p');
     e.setAttribute('style', 'color:var(--muted);font-size:14px;line-height:1.6');
-    e.textContent = 'Nothing here yet. From any app, tap Share on a file (a bid PDF, a Word doc, a photo, even plain text) and pick PaintPro — it lands here automatically.';
+    e.textContent = 'Nothing here yet. Tap Upload above and pick a file from Downloads, or share a file into PaintPro from any app’s Share menu.';
     s.appendChild(e);
     return;
   }
@@ -4124,6 +4141,16 @@ async function openDocsInbox() {
     };
     row.append(open, share);
     card.appendChild(row);
+    // Fill Into App: AI reads the bid and pre-loads the Professional Proposal.
+    // Word docs can't be read by the API — share/save those as PDF instead.
+    const canImport = rec.type === 'application/pdf' || /^image\//.test(rec.type) || isText;
+    if (canImport) {
+      const imp = document.createElement('button');
+      imp.setAttribute('style', 'width:100%;height:44px;margin-top:8px;background:#0a2b0a;border:1.5px solid var(--green);border-radius:8px;color:var(--green);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer');
+      imp.textContent = '✨ Fill Into App';
+      imp.onclick = () => importBidDoc(rec);
+      card.appendChild(imp);
+    }
     if (isText) {
       const wb = document.createElement('button');
       wb.setAttribute('style', 'width:100%;height:44px;margin-top:8px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer');
@@ -4138,6 +4165,84 @@ async function openDocsInbox() {
     }
     s.appendChild(card);
   });
+}
+
+// ── Fill Into App: AI-read a bid document → prefilled Professional Proposal ──
+// Reads a bid (PDF, photo, or text) with the AI, extracts client, address,
+// scope, product, and every priced line item, fills the estimator's client
+// fields, and opens the Professional Proposal pre-loaded so it can go out
+// for signature immediately.
+const _IMPORT_BID_PROMPT = `You are reading a painting bid or proposal document for a painting contractor. Extract what is actually written - do not invent, estimate, or add anything not in the document.
+
+Return ONLY valid JSON (no explanation, no markdown fences):
+{
+ "client": "client name or empty string",
+ "address": "job address or empty string",
+ "title": "proposal title, e.g. Interior Painting Proposal",
+ "scope": "the scope of work text, condensed to a few sentences or bullet lines",
+ "about": "the about-the-product text if present, else empty string",
+ "product": "paint product name if stated, else empty string",
+ "areas": [ { "name": "room or area name", "items": [ { "label": "line item label", "amount": 528.00 } ] } ],
+ "total": 2416.00
+}
+
+Rules:
+- Every priced line item goes under its room/area. Items without a room go in an area named "Additional Services".
+- Amounts are plain numbers, no $ signs.
+- If the document shows one lump price with no breakdown, use one area named "Project Services" with one item.`;
+function _blobToB64(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(',')[1] || '');
+    r.onerror = () => rej(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+async function importBidDoc(rec) {
+  showToast('✨ Reading the bid…');
+  try {
+    let content;
+    if (rec.type === 'application/pdf') {
+      const b64 = await _blobToB64(rec.blob);
+      content = [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
+                 { type: 'text', text: _IMPORT_BID_PROMPT }];
+    } else if (/^image\//.test(rec.type)) {
+      const b64 = await _blobToB64(rec.blob);
+      content = [{ type: 'image', source: { type: 'base64', media_type: rec.type, data: b64 } },
+                 { type: 'text', text: _IMPORT_BID_PROMPT }];
+    } else {
+      const txt = await rec.blob.text();
+      content = _IMPORT_BID_PROMPT + '\n\nBID DOCUMENT TEXT:\n' + txt;
+    }
+    const res  = await callAI([{ role: 'user', content }], 'claude-sonnet-4-6', 2000);
+    const text = ((res && res.content) || []).map(b => b.text || '').join('');
+    const json = extractAIJson(text);
+    if (!json || (!(json.areas || []).length && !json.client)) { showToast('Could not read a bid out of that file', 'warn'); return; }
+    applyImportedBid(json);
+  } catch(e) {
+    showToast('⚠️ ' + (e.message || 'Import failed'), 'warn');
+  }
+}
+function applyImportedBid(json) {
+  // Fill the estimator's client fields so the rest of the app lines up
+  const cn = document.getElementById('client-name');
+  const ja = document.getElementById('job-address');
+  if (cn && json.client)  { cn.value = json.client;  cn.dispatchEvent(new Event('input',  { bubbles: true })); cn.dispatchEvent(new Event('change', { bubbles: true })); }
+  if (ja && json.address) { ja.value = json.address; ja.dispatchEvent(new Event('input',  { bubbles: true })); ja.dispatchEvent(new Event('change', { bubbles: true })); }
+  const areas = (json.areas || []).map(a => ({
+    name: String(a.name || 'Area'),
+    items: (a.items || []).map(i => ({ label: String(i.label || ''), amount: parseFloat(i.amount) || 0 })).filter(i => i.label || i.amount)
+  })).filter(a => a.items.length);
+  openProProposal({
+    client:  json.client  || '',
+    address: json.address || '',
+    title:   json.title   || 'Painting Proposal',
+    scope:   json.scope   || '',
+    about:   json.about   || '',
+    product: json.product || '',
+    areas
+  });
+  showToast('✅ Bid loaded — review it, then send');
 }
 
 // Ask whether the shared photo is a measurement note (→ AI scan) or a
@@ -4950,19 +5055,24 @@ function sendWrittenBid(){
 // Project Investment table, warranty, disclaimer) from the current job. Every
 // money figure is pre-filled from the app's math but editable, so the numbers
 // on a customer document are always under James's control before they go out.
-function openProProposal(){
-  if (!rooms.length) { showToast('Add a room / measurements first', 'warn'); return; }
-  const cs = rooms.map(calc);
-  const ex = (typeof jobExtras === 'function') ? jobExtras() : { total:0 };
-  const labTotal = cs.reduce((a,c)=>a+(c.lab||0),0) + (ex.total||0);
-  const totalGal = cs.reduce((a,c)=>a+(c.gal||0),0);
+function openProProposal(imp){
+  // `imp` = a bid imported from a document (Fill Into App): pre-set client,
+  // scope, and areas replace the ones computed from the estimator's rooms,
+  // and no rooms are required.
+  if (!imp && !rooms.length) { showToast('Add a room / measurements first', 'warn'); return; }
+  const cs = imp ? [] : rooms.map(calc);
+  const ex = (!imp && typeof jobExtras === 'function') ? jobExtras() : { total:0 };
+  const impSvc   = imp ? (imp.areas||[]).reduce((s,a)=>s+a.items.reduce((t,i)=>t+i.amount,0),0) : 0;
+  const labTotal = imp ? impSvc : cs.reduce((a,c)=>a+(c.lab||0),0) + (ex.total||0);
+  const totalGal = imp ? 0 : cs.reduce((a,c)=>a+(c.gal||0),0);
   const prodObj  = PRODUCTS.find(x => x.name === ((rooms[0] && rooms[0].product))) || { price:65 };
-  const costGal  = prodObj.price; // app stores paint COST per gallon
-  const client  = document.getElementById('client-name').value || '';
-  const address = document.getElementById('job-address').value || '';
+  const costGal  = imp ? 0 : prodObj.price; // app stores paint COST per gallon
+  const client  = (imp && imp.client)  || document.getElementById('client-name').value || '';
+  const address = (imp && imp.address) || document.getElementById('job-address').value || '';
   const isExt   = estimatorMode === 'exterior';
-  const prod    = ((rooms[0] && rooms[0].product) || '').replace(/ \(Int\)| \(Ext\)| \(Cabinets\/Trim\)/g,'').trim();
-  const defScope = bidScopeText ||
+  const prod    = imp ? (imp.product||'') : ((rooms[0] && rooms[0].product) || '').replace(/ \(Int\)| \(Ext\)| \(Cabinets\/Trim\)/g,'').trim();
+  const defTitle = (imp && imp.title) || (isExt?'Exterior':'Interior')+' Painting Proposal';
+  const defScope = (imp ? imp.scope : bidScopeText) ||
     `This proposal covers the ${isExt?'exterior':'interior'} painting as described.
 
 Our work will include:
@@ -4971,24 +5081,29 @@ Our work will include:
 - Protection of landscaping, walkways, and surrounding surfaces throughout the project
 - Application of two full coats of quality paint
 - Daily cleanup and complete removal of all project debris when the work is finished`;
-  const defAbout = prod
+  const defAbout = (imp && imp.about) || (prod
     ? (isExt
         ? `${prod} is a premium exterior finish well suited to this project. It offers excellent adhesion and coverage, resists peeling, blistering, and fading, and holds up through Central New York winters and summers for a durable, long-lasting finish.`
         : `${prod} is a quality interior finish well suited to this project. It offers excellent adhesion and smooth, even coverage, resists scuffs and stains, and wipes clean easily for a durable, great-looking finish that keeps its color over time.`)
-    : '';
+    : '');
   // Standard format: per-room itemized breakdown (walls / ceiling / trim per
-  // room, plus doors, windows, and custom charges), pre-filled from the job.
-  _proDefaultAreas = rooms.map((rm,i)=>({
-    name: (rm.name||'').trim() || (isExt ? 'Side '+(i+1) : 'Room '+(i+1)),
-    items: _proRoomItems(rm)
-  })).filter(a=>a.items.length);
-  const exItems = [];
-  if (ex.doorTotal)    exItems.push({label:'Doors ('+ex.doorCount+')', amount:ex.doorTotal});
-  if (ex.winTotal)     exItems.push({label:'Windows ('+ex.winCount+')', amount:ex.winTotal});
-  if (ex.shutterTotal) exItems.push({label:'Shutters ('+ex.shutterCount+')', amount:ex.shutterTotal});
-  if (ex.washTotal)    exItems.push({label:'Power washing', amount:ex.washTotal});
-  (ex.lineItems||[]).forEach(li=>{ if (li.amount) exItems.push({label:li.label||'Additional service', amount:li.amount}); });
-  if (exItems.length) _proDefaultAreas.push({name:'Additional Services', items:exItems});
+  // room, plus doors, windows, and custom charges), pre-filled from the job —
+  // or, for an imported bid, straight from the document.
+  if (imp) {
+    _proDefaultAreas = imp.areas || [];
+  } else {
+    _proDefaultAreas = rooms.map((rm,i)=>({
+      name: (rm.name||'').trim() || (isExt ? 'Side '+(i+1) : 'Room '+(i+1)),
+      items: _proRoomItems(rm)
+    })).filter(a=>a.items.length);
+    const exItems = [];
+    if (ex.doorTotal)    exItems.push({label:'Doors ('+ex.doorCount+')', amount:ex.doorTotal});
+    if (ex.winTotal)     exItems.push({label:'Windows ('+ex.winCount+')', amount:ex.winTotal});
+    if (ex.shutterTotal) exItems.push({label:'Shutters ('+ex.shutterCount+')', amount:ex.shutterTotal});
+    if (ex.washTotal)    exItems.push({label:'Power washing', amount:ex.washTotal});
+    (ex.lineItems||[]).forEach(li=>{ if (li.amount) exItems.push({label:li.label||'Additional service', amount:li.amount}); });
+    if (exItems.length) _proDefaultAreas.push({name:'Additional Services', items:exItems});
+  }
   const inp = (id,val,rows) => rows
     ? `<textarea id="${id}" rows="${rows}" style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;resize:vertical;margin-bottom:12px">${_esc(val)}</textarea>`
     : `<input type="text" id="${id}" value="${_esc(val)}" style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:12px"/>`;
@@ -4998,7 +5113,7 @@ Our work will include:
   s.innerHTML = `
     <div style="font-family:var(--head);font-size:22px;color:var(--blue);margin-bottom:4px">📄 Professional Proposal</div>
     <p style="color:var(--muted);font-size:13px;margin-bottom:14px;line-height:1.5">Pre-filled from this job. Edit anything, then preview / send. Numbers are yours to set.</p>
-    ${lbl('Proposal title')}${inp('pp-title', (isExt?'Exterior':'Interior')+' Painting Proposal')}
+    ${lbl('Proposal title')}${inp('pp-title', defTitle)}
     ${lbl('Prepared for')}${inp('pp-client', client)}
     ${lbl('Property address')}${inp('pp-addr', address)}
     ${lbl('Scope of Work')}${inp('pp-scope', defScope, 5)}

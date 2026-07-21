@@ -221,6 +221,13 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 - **Deposit-paid status is NOT written back to Firestore** (avoids loosening the proposal rules). James's source of truth for payment is Stripe's own dashboard + receipt email. A webhook-based status sync is the documented future enhancement.
 - One-time setup (James): create a Stripe account, add `STRIPE_SECRET_KEY` secret to the Worker in Cloudflare, ensure Proxy URL is set, turn on the switch + set a percent.
 
+### 7.9 Estimate Assistant + custom charges — built
+- **One** whole-job AI chat (`#assistant-card`, near the bottom of the estimator) replaces the old per-room AI chat box, which was removed from every room card. Talk-or-type (the phone keyboard mic covers "talk").
+- **Custom charges:** `jobLineItems = [{label, amount}]` — whole-job line items (Sheetrock, staining, power washing, etc.). `addJobLineItem()` / `removeJobLineItem()` / `renderLineItems()` (list in the assistant card with ✕ remove). They flow into totals via `jobExtras().lineItems` / `.lineItemsTotal` (added into `jobExtras().total`), so every consumer (`recalcAll`, `renderBid`, deposit, QuickBooks copy, pro proposal) picks them up automatically. `renderBid` shows each as its own row.
+- **Assistant:** `sendEstimateAssistant()` sends the chat with a system prompt containing `buildEstimateSummary()` (rooms, extras, charges, total). The model replies briefly and, when it changed something, appends a final `{"actions":[...]}` line. Two action types: `addLineItem{label,amount}` → `addJobLineItem`; `updateRoom{room,update}` → matches a room by name and calls `applyAIRoomResult` (so the one assistant can also correct any room's measurements). `renderAssistantMsgs()` / `clearEstimateAssistant()`. Uses `callAI(...,'claude-sonnet-4-6',600,system)` like the old room chat.
+- **QuickBooks copy** lists custom charges as their own lines; Project Services = `lab - lineItemsTotal` so the QuickBooks total isn't double-counted.
+- **Persistence:** `jobLineItems` and `assistantChat` are in `getJobSnapshot()` / `applyJobData()` (and reset in `startNewJob` / `clearMeasurements`). No new localStorage key — they live inside the job snapshot.
+
 ### 7.7 Backup & Restore
 - `buildBackup()` serializes all localStorage keys + IndexedDB photos into a JSON blob
 - `backupToDrive()` triggers a download of the backup JSON
@@ -337,6 +344,9 @@ IndexedDB: `paintpro-photos` database, object store `photos`, keyed by photo ID 
 
 ### Backup & restore
 `buildBackup`, `backupToDrive`, `restoreFromBackup`, `deleteAllMyData` (privacy right-to-delete: wipes local + Firestore `SYNC_KEYS` docs + `paintpro-photos` IndexedDB, double-confirmed)
+
+### Estimate Assistant & custom charges
+`addJobLineItem`, `removeJobLineItem`, `renderLineItems`, `buildEstimateSummary`, `sendEstimateAssistant`, `renderAssistantMsgs`, `clearEstimateAssistant` (whole-job AI that adds custom charges like Sheetrock and can update any room by name; replaces the removed per-room AI chat)
 
 ### Calculation & bid generation
 `calc`, `recalcAll`, `recalcRoom`, `jobExtras`, `renderBid`, `toggleBid`, `shareBid`, `saveClientFromBid`, `copyBidForQuickBooks`

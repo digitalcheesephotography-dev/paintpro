@@ -507,6 +507,22 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
       </div>
     </div>
 
+    <!-- ESTIMATE ASSISTANT + custom charges (whole job) -->
+    <div id="assistant-card" style="background:var(--card);border:1.5px solid #2baae1;border-radius:var(--r);padding:14px;margin-bottom:14px">
+      <div style="font-family:var(--head);font-size:14px;color:#2baae1;letter-spacing:1.5px;margin-bottom:6px">🤖 ESTIMATE ASSISTANT</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px">Talk or type to add extra charges to this estimate — like <em>“add $400 for Sheetrock repair in the kitchen”</em> or <em>“add power washing $300.”</em> They show on the bid and roll into the total.</div>
+      <div id="line-items-list"></div>
+      <div id="assistant-msgs" style="display:none;max-height:240px;overflow-y:auto;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="assistant-input" aria-label="Estimate assistant"
+          placeholder="add $400 for Sheetrock in the kitchen…"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendEstimateAssistant()}"
+          style="flex:1;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;padding:0 12px;height:48px;font-family:var(--font);min-width:0;outline:none"/>
+        <button onclick="sendEstimateAssistant()" aria-label="Send to assistant"
+          style="height:48px;width:52px;background:#2baae1;border:none;border-radius:8px;color:#fff;font-size:20px;cursor:pointer;flex-shrink:0;line-height:1">➤</button>
+      </div>
+    </div>
+
     <div id="notes-wrap">
       <label class="field"><span>Notes (optional)</span>
         <textarea id="notes" aria-label="Job notes" rows="3" placeholder="Prep work, surface conditions, client notes..."></textarea>
@@ -1702,6 +1718,7 @@ let bidOpen = false;
 let bidScopeText = ''; // AI-generated project description paragraph
 let bidAgentChat = []; // [{role:'user'|'assistant', text:'...'}]
 let bidAgentOpen = false;
+let assistantChat = []; // Estimate Assistant conversation [{role,text}] — whole job
 
 // Auto-save / restore — see saveActiveJob, loadActiveJob, markDirty
 const ACTIVE_JOB_KEY = 'ingersoll_active_job_v1';
@@ -1713,6 +1730,9 @@ let saveIndicatorTimer = null;
 // Whole-job extras (doors and windows priced per unit; shutters + power wash for exterior)
 let job = { doorCount:'', doorPrice:'75', winCount:'', winPrice:'50',
             shutterCount:'', shutterPrice:'25', washSF:'', washRate:'0.20' };
+// Custom whole-job charges the Estimate Assistant (or manual add) puts on the
+// bid — e.g. Sheetrock repair, staining. [{label, amount}]
+let jobLineItems = [];
 
 function updateJobField(key, val) {
   job[key] = val;
@@ -1730,11 +1750,14 @@ function jobExtras() {
   const wr  = parseFloat(job.washRate)   || 0;
   const shutterTotal = sc * sp;
   const washTotal    = wsf * wr;
+  const lineItems    = jobLineItems.map(li => ({ label: li.label, amount: parseFloat(li.amount) || 0 }));
+  const lineItemsTotal = lineItems.reduce((a, li) => a + li.amount, 0);
   return { doorCount:dc, doorPrice:dp, winCount:wc, winPrice:wp,
            doorTotal:dc*dp, winTotal:wc*wp,
            shutterCount:sc, shutterTotal,
            washSF:wsf, washTotal,
-           total: dc*dp + wc*wp + shutterTotal + washTotal };
+           lineItems, lineItemsTotal,
+           total: dc*dp + wc*wp + shutterTotal + washTotal + lineItemsTotal };
 }
 
 // ══════════════════════════════════════════════
@@ -3011,25 +3034,6 @@ function renderRoom(room, idx) {
       </button>
       <div id="${room.id}_photos_strip"></div>
 
-      <!-- AI Chat panel — opens after photo/video analysis, persists with room -->
-      <div id="${room.id}_ai_chat_wrap" style="display:${(room.aiChat&&room.aiChat.length)?'':'none'};margin-top:8px;margin-bottom:8px;border:1px solid #1e3a4a;border-radius:8px;overflow:hidden">
-        <div style="background:#091929;padding:7px 12px;display:flex;align-items:center;justify-content:space-between">
-          <span style="font-size:11px;color:#2baae1;font-weight:700;font-family:var(--font);letter-spacing:.05em">🤖 AI ASSISTANT</span>
-          <button onclick="clearAIChat('${room.id}')" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;padding:2px 8px;font-family:var(--font)">✕ Clear</button>
-        </div>
-        <div id="${room.id}_ai_chat_msgs" style="max-height:220px;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:6px;background:#0a1929">
-          ${(room.aiChat||[]).map(m=>`<div style="align-self:${m.role==='user'?'flex-end':'flex-start'};max-width:88%;padding:7px 10px;border-radius:8px;font-size:12px;line-height:1.5;font-family:var(--font);background:${m.role==='user'?'#0d2233':'#0d1f0d'};color:${m.role==='user'?'#7dd3f0':'#a3d9a3'};border:1px solid ${m.role==='user'?'#2baae1':'#2e8b1e'}">${_esc(m.text)}</div>`).join('')}
-        </div>
-        <div style="display:flex;gap:6px;padding:8px;border-top:1px solid #1e3a4a;background:#091929">
-          <input type="text" id="${room.id}_ai_chat_input"
-                 placeholder="Ask about this room or correct a measurement…"
-                 style="flex:1;background:#0d2233;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:8px 10px;font-family:var(--font);min-width:0"
-                 onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIChat('${room.id}')}"/>
-          <button onclick="sendAIChat('${room.id}')"
-                  style="height:38px;width:38px;background:#2baae1;border:none;border-radius:6px;color:#fff;font-size:16px;cursor:pointer;flex-shrink:0;line-height:1">➤</button>
-        </div>
-      </div>
-
       <!-- Done & advance -->
       <button class="next-room-btn" onclick="nextRoom('${room.id}')" aria-label="${isExt ? 'Done with this side, go to next' : 'Done with this room, go to next'}">
         ${isExt ? '✓ DONE — NEXT SIDE' : '✓ DONE — NEXT ROOM'}
@@ -3681,9 +3685,11 @@ function getJobSnapshot() {
     rooms:         rooms.map(r => { const c = JSON.parse(JSON.stringify(r)); c.photos = (r.photos||[]).map(p => ({ id:p.id })); return c; }),
     roomCount:     roomCount,
     job:           { ...job },
+    jobLineItems:  jobLineItems.map(li => ({ label: li.label, amount: li.amount })),
     estimatorMode: estimatorMode,
     bidScopeText:  bidScopeText,
     bidAgentChat:  bidAgentChat.slice(),
+    assistantChat: assistantChat.slice(),
     updatedAt:     Date.now()
   };
 }
@@ -3732,6 +3738,8 @@ function applyJobData(data) {
   roomCount = data.roomCount || rooms.length;
   // Restore job extras
   if (data.job) Object.assign(job, data.job);
+  jobLineItems = (data.jobLineItems || []).map(li => ({ label: li.label, amount: li.amount }));
+  assistantChat = data.assistantChat || [];
   setVal('job-door-count',    job.doorCount);
   setVal('job-door-price',    job.doorPrice);
   setVal('job-win-count',     job.winCount);
@@ -3751,6 +3759,8 @@ function applyJobData(data) {
   currentJobName = data.name || '';
   syncJobBadge();
   syncRatesUI();
+  renderLineItems();
+  renderAssistantMsgs();
   recalcAll();
 }
 function updateSaveIndicator(ts) {
@@ -3873,6 +3883,8 @@ function startNewJob() {
   bidScopeText = '';
   bidAgentChat = [];
   bidAgentOpen = false;
+  jobLineItems = []; assistantChat = [];
+  renderLineItems(); renderAssistantMsgs();
   job.doorCount = ''; job.winCount = '';
   job.shutterCount = ''; job.shutterPrice = '25';
   job.washSF = ''; job.washRate = '0.20';
@@ -3901,6 +3913,8 @@ function clearMeasurements() {
   bidScopeText = '';
   bidAgentChat = [];
   bidAgentOpen = false;
+  jobLineItems = []; assistantChat = [];
+  renderLineItems(); renderAssistantMsgs();
   job.doorCount = ''; job.winCount = '';
   job.shutterCount = ''; job.shutterPrice = '25';
   job.washSF = ''; job.washRate = '0.20';
@@ -4180,7 +4194,16 @@ function renderBid() {
         <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.washTotal/ex.washSF)}/sf</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.washTotal)}</td>
-      </tr>` : '');
+      </tr>` : '')
+    + (ex.lineItems || []).filter(li => (parseFloat(li.amount)||0) !== 0).map(li => `
+      <tr style="border-bottom:1px solid #e5e7eb">
+        <td style="padding:8px 6px;font-weight:700;font-size:13px">${_esc(li.label)}</td>
+        <td style="padding:8px 6px;font-size:12px;color:#555">—</td>
+        <td style="padding:8px 6px;font-size:12px">—</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right">—</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(parseFloat(li.amount)||0)}</td>
+      </tr>`).join('');
 
   document.getElementById('bid-out').innerHTML = `
     <div style="font-family:Georgia,serif;color:#111;line-height:1.6">
@@ -4602,6 +4625,10 @@ function copyBidForQuickBooks(){
   const mat   = cs.reduce((a,c)=>a+c.mat,0);
   const lab   = cs.reduce((a,c)=>a+c.lab,0) + ex.total;
   const grand = mat + lab;
+  // Custom charges become their own QuickBooks lines, so Project Services must
+  // exclude them (they're inside ex.total) to keep the total from doubling.
+  const liList = (ex.lineItems || []).filter(li => (parseFloat(li.amount)||0) !== 0);
+  const svcAmt = lab - (ex.lineItemsTotal || 0);
   if (grand <= 0){ showToast('Nothing to copy yet — fill in a room', 'warn'); return; }
   const gal    = cs.reduce((a,c)=>a+(c.gal||0),0);
   const client = (document.getElementById('client-name').value || '').trim() || 'Customer';
@@ -4621,10 +4648,12 @@ function copyBidForQuickBooks(){
   L.push('Line items:');
   L.push('1. ' + kind + ' Painting - Project Services');
   L.push('   ' + svc);
-  L.push('   Quantity 1 - Amount ' + m2(lab), '');
+  L.push('   Quantity 1 - Amount ' + m2(svcAmt), '');
   L.push('2. Paint & Materials');
   L.push('   Quality ' + (isExt ? 'exterior' : 'interior') + ' paint and supplies' + (gal > 0 ? ', ' + gal + ' gallon' + (gal === 1 ? '' : 's') : '') + '.');
   L.push('   Quantity 1 - Amount ' + m2(mat), '');
+  let ln = 2;
+  liList.forEach(li => { ln++; L.push(ln + '. ' + li.label, '   Quantity 1 - Amount ' + m2(parseFloat(li.amount)||0), ''); });
   L.push('Estimate total: ' + m2(grand));
   L.push('Note to customer: Estimate valid for 30 days. 1-Year Workmanship Warranty included.');
   let payAmt = grand, payWhat = 'this estimate';
@@ -6260,6 +6289,121 @@ Only include fields that changed. Omit the update line entirely if nothing chang
     renderAIChatMsgs(roomId);
   } finally {
     if (inputEl) { inputEl.disabled = false; inputEl.focus(); }
+  }
+}
+
+// ══════════════════════════════════════════════
+// ESTIMATE ASSISTANT + CUSTOM CHARGES
+// ══════════════════════════════════════════════
+
+// Custom whole-job charges (Sheetrock, staining, power washing, etc.). They
+// render on the bid and flow into the total via jobExtras().lineItemsTotal.
+function addJobLineItem(label, amount){
+  const amt = Math.round((parseFloat(amount) || 0) * 100) / 100;
+  const lbl = String(label || '').trim().slice(0, 80) || 'Additional charge';
+  jobLineItems.push({ label: lbl, amount: amt });
+  renderLineItems(); recalcAll(); markDirty();
+  return true;
+}
+function removeJobLineItem(i){
+  if (i >= 0 && i < jobLineItems.length){ jobLineItems.splice(i, 1); renderLineItems(); recalcAll(); markDirty(); }
+}
+function renderLineItems(){
+  const el = document.getElementById('line-items-list');
+  if (!el) return;
+  if (!jobLineItems.length){ el.innerHTML = ''; return; }
+  el.innerHTML = jobLineItems.map((li, i) =>
+    `<div style="display:flex;align-items:center;gap:8px;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px">
+       <span style="font-size:13px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${_esc(li.label)}</span>
+       <span style="font-size:14px;font-weight:700;color:var(--green);white-space:nowrap">${fmt(parseFloat(li.amount) || 0)}</span>
+       <button onclick="removeJobLineItem(${i})" aria-label="Remove charge" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:0 2px;line-height:1">✕</button>
+     </div>`).join('');
+}
+
+// Plain-language summary of the whole estimate, given to the assistant as context.
+function buildEstimateSummary(){
+  const cs = rooms.map(calc);
+  const ex = jobExtras();
+  const roomLines = rooms.length
+    ? rooms.map((r,i) => { const c = cs[i]; return `- ${r.name || 'Room ' + (i+1)} (${r.mode}): ${c.valid ? c.totalSF.toFixed(0) + ' sf, ' + fmt(c.total) : 'not filled in yet'}`; }).join('\n')
+    : '(no rooms yet)';
+  const liLines = jobLineItems.length ? jobLineItems.map(li => `- ${li.label}: ${fmt(parseFloat(li.amount)||0)}`).join('\n') : '(none)';
+  const mat = cs.reduce((a,c)=>a+c.mat,0);
+  const lab = cs.reduce((a,c)=>a+c.lab,0) + ex.total;
+  return `Mode: ${estimatorMode}\nRooms:\n${roomLines}\nDoors: ${ex.doorCount}, Windows: ${ex.winCount}${ex.shutterCount ? ', Shutters: ' + ex.shutterCount : ''}\nCustom charges:\n${liLines}\nCurrent estimate total: ${fmt(mat + lab)}`;
+}
+function renderAssistantMsgs(){
+  const box = document.getElementById('assistant-msgs');
+  if (!box) return;
+  if (!assistantChat.length){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'flex';
+  box.innerHTML = assistantChat.map(m =>
+    `<div style="align-self:${m.role==='user'?'flex-end':'flex-start'};max-width:90%;padding:8px 11px;border-radius:8px;font-size:13px;line-height:1.5;font-family:var(--font);background:${m.role==='user'?'#0d2233':'#0d1f0d'};color:${m.role==='user'?'#7dd3f0':'#a3d9a3'};border:1px solid ${m.role==='user'?'#2baae1':'#2e8b1e'}">${_esc(m.text)}</div>`
+  ).join('');
+  box.scrollTop = box.scrollHeight;
+}
+function clearEstimateAssistant(){ assistantChat = []; renderAssistantMsgs(); markDirty(); }
+
+async function sendEstimateAssistant(){
+  const inputEl = document.getElementById('assistant-input');
+  const text = inputEl && inputEl.value.trim();
+  if (!text) return;
+  inputEl.value = ''; inputEl.disabled = true;
+  assistantChat.push({ role: 'user', text });
+  renderAssistantMsgs();
+
+  const roomNames = rooms.map(r => r.name).filter(Boolean).join(', ') || '(none named yet)';
+  const system = `You are the Estimate Assistant for a painting contractor's job estimate. You help add extra charges (Sheetrock/drywall repair, power washing, staining, trim, etc.) and can adjust a room's measurements.
+
+Current estimate:
+${buildEstimateSummary()}
+Rooms you can target by name: ${roomNames}
+
+Be brief and practical. When the user asks to add or change something, DO it and confirm in ONE short sentence, then put a JSON action block on its own final line — no markdown, no code fences:
+{"actions":[{"type":"addLineItem","label":"Sheetrock repair - kitchen","amount":400}]}
+Action types:
+- {"type":"addLineItem","label":"<short label>","amount":<dollars, number>} — add a charge to the estimate.
+- {"type":"updateRoom","room":"<room name>","update":{"height":9,"walls":[12,10,12,10],"floorLength":14,"floorWidth":12,"doors":2,"windows":3,"surfaceNotes":"..."}} — change a room's numbers (only include fields that changed).
+Only include the JSON line when you actually changed something. If the user just asks a question, answer briefly with NO JSON.`;
+
+  const history = assistantChat.slice(-12);
+  const apiMessages = [];
+  if (history[0] && history[0].role === 'assistant') apiMessages.push({ role: 'user', content: 'Help with this estimate.' });
+  history.forEach(m => apiMessages.push({ role: m.role, content: m.text }));
+
+  try {
+    const data = await callAI(apiMessages, 'claude-sonnet-4-6', 600, system);
+    let responseText = (data.content && data.content[0] && data.content[0].text) || '…';
+    // Pull a trailing {"actions":[...]} line if present (tolerate ``` fences).
+    const lines = responseText.split('\n').map(l => l.trim()).filter(l => l && !/^```/.test(l));
+    const last = lines.at(-1) || '';
+    let applied = 0;
+    if (last.startsWith('{') && last.indexOf('"actions"') !== -1) {
+      try {
+        const parsed = JSON.parse(last);
+        if (Array.isArray(parsed.actions)) {
+          parsed.actions.forEach(a => {
+            if (a.type === 'addLineItem' && (a.amount || a.label)) { addJobLineItem(a.label, a.amount); applied++; }
+            else if (a.type === 'updateRoom' && a.room && a.update) {
+              const want = String(a.room).toLowerCase().trim();
+              const rm = rooms.find(r => (r.name||'').toLowerCase().trim() === want)
+                      || rooms.find(r => (r.name||'').toLowerCase().indexOf(want) !== -1);
+              if (rm) { applyAIRoomResult(rm.id, a.update, '', true); applied++; }
+            }
+          });
+        }
+        responseText = responseText.slice(0, responseText.lastIndexOf(last)).replace(/```(?:json)?\s*$/, '').trim() || (applied ? '✓ Done.' : responseText);
+      } catch(_) { /* leave text as-is if the JSON doesn't parse */ }
+    }
+    assistantChat.push({ role: 'assistant', text: responseText });
+    renderAssistantMsgs();
+    if (applied) recalcAll();
+    markDirty();
+  } catch(e){
+    assistantChat.push({ role: 'assistant', text: '⚠️ ' + e.message });
+    renderAssistantMsgs();
+  } finally {
+    if (inputEl){ inputEl.disabled = false; inputEl.focus(); }
   }
 }
 

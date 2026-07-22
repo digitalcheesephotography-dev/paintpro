@@ -393,7 +393,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   <button class="tab-btn active" id="tab-estimate" onclick="switchTab('estimate')" aria-label="Estimator tab">📐 ESTIMATE</button>
   <button class="tab-btn" id="tab-contacts" onclick="switchTab('contacts')" aria-label="Clients tab">👥 CLIENTS<span id="followup-badge" style="display:none;background:#c0392b;color:#fff;border-radius:10px;font-size:10px;padding:2px 6px;margin-left:5px;vertical-align:middle;line-height:1.4"></span></button>
   <button class="tab-btn" id="tab-apt" onclick="switchTab('apt')" aria-label="Apt Pricing tab">🏢 APT</button>
-  <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')" aria-label="Settings tab" style="font-size:20px;min-width:54px;padding:0 8px">⚙️</button>
+  <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')" aria-label="Menu tab" style="font-size:20px;min-width:54px;padding:0 8px">☰</button>
 </div>
 
 <main id="estimator-section">
@@ -939,6 +939,19 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 
 <!-- SETTINGS SECTION -->
 <div id="settings-section" style="display:none;padding:16px 14px;max-width:600px;margin:0 auto">
+
+  <!-- MENU: everyday work actions up top, one tap each -->
+  <div id="menu-quick-actions" style="margin-bottom:18px">
+    <div style="font-family:var(--head);font-size:26px;color:var(--blue);letter-spacing:1.5px;margin-bottom:12px">☰ MENU</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button onclick="openJobsModal()"      style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">📁 Jobs</button>
+      <button onclick="openProposalsModal()" style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">📄 Proposals &amp; Signatures</button>
+      <button onclick="openDocsInbox()"      style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">📥 Shared Files</button>
+      <button onclick="sendWrittenBid()"     style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">✍️ Send a Written Bid</button>
+    </div>
+    <div style="font-family:var(--head);font-size:19px;color:var(--muted);letter-spacing:1.5px;margin:18px 0 4px">⚙ SETTINGS</div>
+    <div style="font-size:12px;color:var(--muted)">Tap any section below to open it.</div>
+  </div>
 
   <!-- Refresh / Update the app -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
@@ -2362,6 +2375,7 @@ function _bootAppInner() {
   migratePhotosToIDB().then(backfillPhotos);
   syncRatesUI();
   syncJobBadge();
+  buildSettingsAccordion();
 
   // Wire auto-save for text fields that don't already trigger recalcAll
   ['client-name','job-address','notes'].forEach(id => {
@@ -5704,6 +5718,38 @@ function savePrintSecret() {
 // ══════════════════════════════════════════════
 // TABS
 // ══════════════════════════════════════════════
+// Collapse every settings card into a tap-to-open section. Runs once at boot:
+// each card's first child (its title row) becomes the always-visible header
+// with a chevron; everything after it hides until tapped. Keeps the section
+// markup untouched so status text and inputs inside still update normally.
+function buildSettingsAccordion() {
+  const sec = document.getElementById('settings-section');
+  if (!sec || sec.dataset.accordion) return;
+  sec.dataset.accordion = '1';
+  [...sec.children].forEach(card => {
+    if (card.tagName !== 'DIV' || card.id === 'menu-quick-actions') return;
+    const header = card.firstElementChild;
+    if (!header || card.children.length < 2) return;
+    const body = document.createElement('div');
+    while (header.nextSibling) body.appendChild(header.nextSibling);
+    card.appendChild(body);
+    body.style.display = 'none';
+    const chev = document.createElement('span');
+    chev.textContent = '▸';
+    chev.setAttribute('style', 'float:right;color:var(--muted);font-size:16px;transition:transform .15s;margin-top:2px');
+    header.appendChild(chev);
+    header.style.cursor = 'pointer';
+    header.style.minHeight = '28px';
+    header.onclick = () => {
+      const opening = body.style.display === 'none';
+      body.style.display = opening ? 'block' : 'none';
+      body.style.marginTop = opening ? '10px' : '';
+      chev.style.transform = opening ? 'rotate(90deg)' : '';
+    };
+    card.style.padding = '14px 18px';
+  });
+}
+
 function switchTab(tab) {
   document.getElementById('estimator-section').style.display = tab==='estimate' ? '' : 'none';
   document.getElementById('contacts-section').classList.toggle('active', tab==='contacts');

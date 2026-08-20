@@ -1833,6 +1833,12 @@ const SYNC_KEYS = [
   'ingersoll_apt_pricing_v1',
   'ingersoll_rates_v1',
   'ingersoll_jobs_v1',
+  // The Anthropic API key syncs with the account so it survives a reinstall and
+  // comes back on sign-in (no more re-pasting to use the AI). It lives under
+  // users/{uid}/data — readable only by the owner's login (see firestore.rules).
+  // Still excluded from BACKUP_KEYS: a backup JSON is an exportable/shareable
+  // file, so the secret stays out of it.
+  'ingersoll_anthropic_key_v1',
 ];
 
 let _db = null;        // Firestore instance (null = local-only mode)
@@ -2019,7 +2025,8 @@ function saveAnthropicKey() {
     return;
   }
   localStorage.setItem('ingersoll_anthropic_key_v1', key);
-  if (st) { st.textContent = '✓ Key saved — AI photo estimator is ready'; st.style.color = 'var(--green)'; }
+  const synced = !!(_db && _uid);
+  if (st) { st.textContent = synced ? '✓ Key saved to your account — it comes back automatically after any reinstall' : '✓ Key saved — AI photo estimator is ready'; st.style.color = 'var(--green)'; }
   showToast('✓ API key saved');
 }
 
@@ -2201,6 +2208,14 @@ function reloadFromSync(key) {
       case 'ingersoll_rates_v1':       rates = loadRates();    syncRatesUI(); break;
       case 'ingersoll_ext_rates_v1':   extRates = loadExtRates(); syncRatesUI(); break;
       case 'ingersoll_jobs_v1':        renderJobsList();  break;
+      case 'ingersoll_anthropic_key_v1': {
+        // Key arrived from the account (e.g. after a reinstall + sign-in) — the
+        // AI reads it straight from localStorage, so it just works now; mirror it
+        // into the Settings box if that field is on screen.
+        const kEl = document.getElementById('settings-anthropic-key');
+        if (kEl && !kEl.value) kEl.value = localStorage.getItem('ingersoll_anthropic_key_v1') || '';
+        break;
+      }
     }
   } catch(e) { console.warn('[Sync] reloadFromSync', key, e); }
 }

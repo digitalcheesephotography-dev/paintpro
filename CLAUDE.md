@@ -330,6 +330,7 @@ Exterior: `front side` / `left side` / `name it garage` / `call it back`
 | `ingersoll_emailjs_v1` | EmailJS config {serviceId, templateId, publicKey} for auto-emailing signed-proposal copies (device-local) |
 | `ingersoll_deposit_v1` | Online-deposit config {enabled, pct} for Stripe deposit collection on signed proposals (device-local) |
 | `ingersoll_qb_paylink_v1` | Reusable QuickBooks payment link URL for the 💳 Pay by Card (QuickBooks) button (device-local) |
+| `ingersoll_anthropic_key_v1` | Anthropic API key for the AI features. **In `SYNC_KEYS`** — mirrored to `users/{uid}/data` so it survives a reinstall and returns on sign-in (owner-only per firestore.rules). Still excluded from `BACKUP_KEYS` so it never lands in an exportable backup file. |
 
 **Client e-signature proposals:** "✍️ Send for Signature" on a bid writes it to Firestore `proposals/{randomId}` (`createProposal`) and shows a shareable link. The homeowner opens `proposal.html?id=…` (standalone, no login — public read by unguessable capability ID), reviews, types their name + draws a signature, and accepts; the doc flips to `status:'accepted'` with the signature PNG. The app watches sent proposals (`proposalWatch` / `watchAllProposals` in `setupFirestoreSync`) and toasts when signed; `openProposalsModal` lists them. Rules for the `proposals` collection are in `firestore.rules` (public read, owner-only create/delete, one-time constrained client accept) — must be published in the console.
 

@@ -357,6 +357,9 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
               style="width:100%;background:#2baae1;color:#fff;border:none;border-radius:8px;height:52px;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;cursor:pointer">
         SIGN IN
       </button>
+      <div style="text-align:center;margin-top:14px">
+        <a href="#" onclick="resetPassword();return false;" style="color:#2baae1;font-size:14px;text-decoration:none">Forgot password?</a>
+      </div>
     </div>
     <div style="font-size:12px;color:#6b7a8d;text-align:center;margin-top:14px">Remembered on this device — won't ask again</div>
   </div>
@@ -1962,6 +1965,33 @@ async function signIn() {
     };
     errEl.textContent = msgs[e.code] || ('Sign in failed: ' + (e.message || e.code));
     errEl.style.display = 'block';
+  }
+}
+
+// Send a Firebase password-reset email to the address in the email box. Lets a
+// locked-out user recover without any admin help — their synced data is safe
+// under their account and returns once they set a new password and sign in.
+async function resetPassword() {
+  const email = (document.getElementById('auth-email').value || '').trim();
+  const errEl = document.getElementById('auth-error');
+  errEl.style.display = 'block';
+  const show = (msg, ok) => {
+    errEl.textContent = msg;
+    errEl.style.color = ok ? '#7bd88f' : '#e57373';
+    errEl.style.background = ok ? 'rgba(46,139,30,.15)' : 'rgba(192,57,43,.15)';
+  };
+  if (!email) { show('Type your email in the box above first, then tap "Forgot password?" — we\'ll email you a reset link.', false); return; }
+  try {
+    await firebase.auth().sendPasswordResetEmail(email);
+    show('Reset link sent to ' + email + '. Check your inbox (and spam), set a new password, then come back and sign in.', true);
+  } catch(e) {
+    const msgs = {
+      'auth/user-not-found':         'No account found with that email. Double-check the address.',
+      'auth/invalid-email':          'That does not look like a valid email address.',
+      'auth/too-many-requests':      'Too many attempts. Wait a few minutes and try again.',
+      'auth/network-request-failed': 'No internet connection. Check your signal.',
+    };
+    show(msgs[e.code] || ('Could not send reset email: ' + (e.message || e.code)), false);
   }
 }
 

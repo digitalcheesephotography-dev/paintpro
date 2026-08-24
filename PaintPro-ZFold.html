@@ -2343,6 +2343,7 @@ function _bootAppInner() {
   syncRatesUI();
   syncJobBadge();
   buildSettingsAccordion();
+  syncBtBarCompact(false);   // start compact — no laser paired at boot
 
   // Wire auto-save for text fields that don't already trigger recalcAll
   ['client-name','job-address','notes'].forEach(id => {
@@ -2781,6 +2782,16 @@ function setBtnState(state) {
   if      (state === 'connecting') lbl.textContent = 'Connecting…';
   else if (state === 'connected')  lbl.textContent = 'Disconnect';
   else                             lbl.textContent = 'Connect DISTO';
+  syncBtBarCompact(state === 'connected');
+}
+
+// The bottom bar was eating 21% of the phone screen even with no laser
+// connected, mostly from the two routing dropdowns. Those only mean anything
+// while a DISTO is paired (and every field now has its own 📐 shoot button
+// anyway), so hide them until connected and give the space back to measuring.
+function syncBtBarCompact(connected) {
+  const sel = document.querySelector('.bt-selects');
+  if (sel) sel.style.display = connected ? '' : 'none';
 }
 
 function setStatus(cls, txt) {

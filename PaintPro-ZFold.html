@@ -216,12 +216,20 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 #toast.err{background:var(--red)}
 #toast.warn{background:var(--amber);color:#000}
 
-/* RESPONSIVE — Z Fold 5 unfolded */
-@media(min-width:600px){
+/* RESPONSIVE — Z Fold 5 unfolded.
+   The two-column split only earns its keep when there is a bid to show on the
+   right. Splitting unconditionally left the estimator squeezed into the left
+   half with a permanently blank right half (and made everything look tiny).
+   So: single centred column by default, second column only once a bid is open.
+   Breakpoint raised to 820px so a folded/cover screen never triggers it. */
+@media(min-width:820px){
   body{font-size:15px}
-  main{display:grid;grid-template-columns:1fr 1fr;column-gap:16px;padding:16px 16px 0;align-items:start}
-  .col-left{grid-column:1}
-  .col-right{grid-column:2;position:sticky;top:70px}
+  main{display:grid;grid-template-columns:minmax(0,1fr);column-gap:16px;
+       padding:16px 16px 0;align-items:start;max-width:760px;margin:0 auto}
+  main.has-bid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);max-width:1200px}
+  .col-left{grid-column:1;min-width:0}
+  .col-right{min-width:0}
+  main.has-bid .col-right{grid-column:2;position:sticky;top:70px}
   .prod-row{grid-template-columns:1fr 100px}
   .tot-val{font-size:26px}
 }
@@ -4607,6 +4615,8 @@ function toggleBid() {
   bidOpen=!bidOpen;
   document.getElementById('gen-btn').textContent=bidOpen?'HIDE PROPOSAL':'GENERATE PROPOSAL';
   document.getElementById('bid-out').classList.toggle('visible',bidOpen);
+  // Only give up half a wide screen to the bid column once there IS a bid.
+  document.querySelector('main')?.classList.toggle('has-bid', bidOpen);
   if(bidOpen) renderBid();
 }
 

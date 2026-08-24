@@ -3990,7 +3990,77 @@ function checkBidDeepLink() {
   return true;
 }
 
+// Deep link: add clients to the Clients list from a link.
+//   ?clients=<url-safe base64 of [{name,phone,address,email,status,estimate,notes}]>
+// Always MERGES — never replaces. Existing names are skipped, and nothing is
+// written until the confirmation sheet is tapped, so a stray link can't
+// silently rewrite the client list.
+function checkClientsDeepLink() {
+  const p = new URLSearchParams(location.search);
+  const raw = p.get('clients');
+  if (!raw) return false;
+  let list = [];
+  try {
+    const norm = raw.replace(/-/g, '+').replace(/_/g, '/');
+    const bin  = atob(norm + '==='.slice((norm.length + 3) % 4));
+    list = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))));
+  } catch (_) { return false; }
+  if (!Array.isArray(list) || !list.length) return false;
+  try { history.replaceState(null, '', location.pathname); } catch (_) {}
+  showClientImport(list);
+  return true;
+}
+
+function showClientImport(incoming) {
+  const norm = v => String(v || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const existing = loadContacts();
+  const have = new Set(existing.map(c => norm(c.name)));
+  const fresh = incoming.filter(c => c && c.name && !have.has(norm(c.name)));
+  const dupes = incoming.length - fresh.length;
+
+  const s = _ppModal();
+  const t = document.createElement('div');
+  t.setAttribute('style', 'font-family:var(--head);font-size:22px;color:var(--blue);margin-bottom:6px');
+  t.textContent = '👥 Add to Clients';
+  const sub = document.createElement('p');
+  sub.setAttribute('style', 'color:var(--muted);font-size:13px;line-height:1.5;margin-bottom:14px');
+  sub.textContent = fresh.length
+    ? `${fresh.length} new client${fresh.length>1?'s':''} to add.${dupes ? ` ${dupes} already in your list — those are skipped.` : ''} Nothing is changed until you tap Add.`
+    : 'Everyone in this link is already in your Clients list. Nothing to add.';
+  s.append(t, sub);
+
+  fresh.forEach(c => {
+    const row = document.createElement('div');
+    row.setAttribute('style', 'background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px');
+    row.innerHTML = `<div style="font-weight:700;font-size:14px">${_esc(c.name)}</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5">${[c.address, c.phone, c.email].filter(Boolean).map(_esc).join(' · ') || 'No contact details'}</div>
+      ${c.estimate ? `<div style="font-size:12px;color:var(--green);font-weight:700;margin-top:2px">${_esc(String(c.estimate))}</div>` : ''}`;
+    s.appendChild(row);
+  });
+
+  if (!fresh.length) return;
+  const btn = document.createElement('button');
+  btn.setAttribute('style', 'width:100%;height:52px;margin-top:8px;background:var(--green);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer');
+  btn.textContent = `➕ Add ${fresh.length} Client${fresh.length>1?'s':''}`;
+  btn.onclick = () => {
+    const contacts = loadContacts();
+    const today = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    fresh.forEach(c => contacts.push({
+      name: c.name, phone: c.phone || '', address: c.address || '', email: c.email || '',
+      status: c.status || 'pending', estimate: c.estimate || '',
+      estimateDate: c.estimateDate || today, followUpDate: c.followUpDate || null,
+      notes: c.notes || '', gpsLat: null, gpsLng: null, updatedAt: Date.now(),
+    }));
+    saveContacts(contacts);
+    _ppCloseModals();
+    switchTab('contacts'); switchSubnav('clients'); renderContacts();
+    showToast(`✓ Added ${fresh.length} client${fresh.length>1?'s':''}`);
+  };
+  s.appendChild(btn);
+}
+
 async function checkSharedFile() {
+  if (checkClientsDeepLink()) return;
   if (checkBidDeepLink()) return;
   if (!/[?&]shared=1\b/.test(location.search)) return;
   // Clean the URL so a reload or back-nav doesn't re-trigger the pickup

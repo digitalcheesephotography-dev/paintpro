@@ -958,8 +958,14 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
       <button onclick="openDocsInbox()"      style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">📥 Shared Files</button>
       <button onclick="sendWrittenBid()"     style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">✍️ Send a Written Bid</button>
     </div>
-    <div style="font-family:var(--head);font-size:19px;color:var(--muted);letter-spacing:1.5px;margin:18px 0 4px">⚙ SETTINGS</div>
-    <div style="font-size:12px;color:var(--muted)">Tap any section below to open it.</div>
+    <!-- Setup status — shows at a glance what still needs connecting -->
+    <div id="setup-status" style="margin-top:16px"></div>
+
+    <div style="font-family:var(--head);font-size:19px;color:var(--muted);letter-spacing:1.5px;margin:18px 0 8px">⚙ SETTINGS</div>
+    <input type="text" id="settings-search" placeholder="🔍 Search settings (try: key, deposit, backup)"
+           aria-label="Search settings" autocomplete="off" oninput="filterSettings(this.value)"
+           style="width:100%;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;outline:none;margin-bottom:4px"/>
+    <div id="settings-no-match" style="display:none;color:var(--muted);font-size:13px;padding:10px 2px">No settings match that. Try a shorter word.</div>
   </div>
 
   <!-- Refresh / Update the app -->
@@ -5854,12 +5860,138 @@ function savePrintSecret() {
 // each card's first child (its title row) becomes the always-visible header
 // with a chevron; everything after it hides until tapped. Keeps the section
 // markup untouched so status text and inputs inside still update normally.
+// Menu cards were one flat, arbitrary list of 15 collapsed boxes — one-time
+// setup sat next to daily tools with no grouping, so nothing was findable.
+// Each card is sorted into a named group; anything unmatched falls to the end
+// so a newly-added card is never lost.
+const SETTINGS_GROUPS = [
+  { name: '🔧 SET UP (ONE TIME)', match: [/AI Photo|Estimator/i, /Deposit/i, /Email Client/i, /Print Hub/i] },
+  { name: '🧰 TOOLS',             match: [/Proposals/i, /Shared With/i, /Visualizer/i, /HearSay/i] },
+  { name: '🔐 ACCOUNT & DATA',    match: [/Account Vault/i, /Account/i, /App Lock/i, /Backup/i, /Privacy/i] },
+  { name: 'ℹ️ APP',               match: [/About/i] },
+];
+function _settingsCardTitle(card) {
+  const h = card.firstElementChild;
+  return h ? h.textContent.replace(/▸/g, '').replace(/\s+/g, ' ').trim() : '';
+}
+function organizeSettingsMenu() {
+  const sec = document.getElementById('settings-section');
+  if (!sec || sec.dataset.organized) return;
+  sec.dataset.organized = '1';
+  const qa = document.getElementById('menu-quick-actions');
+  const cards = [...sec.children].filter(c => c.tagName === 'DIV' && c !== qa);
+  // Refresh stays pinned at the top, ungrouped — it's the "something looks
+  // wrong, fix it" button and needs to be the first thing in reach.
+  const pinned = cards.filter(c => /Refresh App/i.test(_settingsCardTitle(c)));
+  const rest   = cards.filter(c => !pinned.includes(c));
+  const used = new Set();
+  const buckets = SETTINGS_GROUPS.map(g => ({
+    name: g.name,
+    cards: g.match.flatMap(rx => rest.filter(c => !used.has(c) && rx.test(_settingsCardTitle(c)) && (used.add(c), true))),
+  }));
+  const leftovers = rest.filter(c => !used.has(c));
+  if (leftovers.length) buckets.push({ name: '⋯ MORE', cards: leftovers });
+
+  const frag = document.createDocumentFragment();
+  pinned.forEach(c => frag.appendChild(c));
+  buckets.forEach(bk => {
+    if (!bk.cards.length) return;
+    const h = document.createElement('div');
+    h.className = 'settings-group-head';
+    h.setAttribute('style', 'font-family:var(--head);font-size:15px;color:var(--muted);letter-spacing:1.6px;margin:20px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border)');
+    h.textContent = bk.name;
+    frag.appendChild(h);
+    bk.cards.forEach(c => frag.appendChild(c));
+  });
+  sec.appendChild(frag);
+}
+
+// Live filter across every menu card — type "key", "deposit", "backup" and only
+// matching cards stay. Solves "if you don't know where it is, you can't find it."
+function filterSettings(q) {
+  const sec = document.getElementById('settings-section');
+  if (!sec) return;
+  const term = (q || '').trim().toLowerCase();
+  const qa = document.getElementById('menu-quick-actions');
+  const cards = [...sec.children].filter(c => c.tagName === 'DIV' && c !== qa && !c.classList.contains('settings-group-head'));
+  cards.forEach(c => {
+    const hit = !term || c.textContent.toLowerCase().includes(term);
+    c.style.display = hit ? '' : 'none';
+  });
+  // Hide a group heading when everything under it is filtered out.
+  [...sec.querySelectorAll('.settings-group-head')].forEach(h => {
+    let n = h.nextElementSibling, any = false;
+    while (n && !n.classList.contains('settings-group-head')) {
+      if (n.tagName === 'DIV' && n.style.display !== 'none') { any = true; break; }
+      n = n.nextElementSibling;
+    }
+    h.style.display = any ? '' : 'none';
+  });
+  const none = document.getElementById('settings-no-match');
+  if (none) none.style.display = (term && !cards.some(c => c.style.display !== 'none')) ? 'block' : 'none';
+}
+
+// Find a menu card by its title, expand it, and scroll it into view. Lets the
+// setup strip take you straight to the thing that needs fixing.
+function openSettingsCard(titleRx) {
+  const sec = document.getElementById('settings-section');
+  if (!sec) return;
+  const card = [...sec.children].find(c =>
+    c.tagName === 'DIV' && !c.classList.contains('settings-group-head') &&
+    c.id !== 'menu-quick-actions' && titleRx.test(_settingsCardTitle(c)));
+  if (!card) return;
+  const search = document.getElementById('settings-search');
+  if (search && search.value) { search.value = ''; filterSettings(''); }
+  const header = card.firstElementChild;
+  const body = card.children[1];
+  if (header && body && body.style.display === 'none') header.click();
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  card.style.transition = 'border-color .2s';
+  const prev = card.style.borderColor;
+  card.style.borderColor = 'var(--blue)';
+  setTimeout(() => { card.style.borderColor = prev; }, 1600);
+}
+
+// "Is this thing ready to use?" at a glance — the answer to needing it to work
+// right away. Only shows rows that matter; green when done, tappable when not.
+function renderSetupStatus() {
+  const el = document.getElementById('setup-status');
+  if (!el) return;
+  const signedIn = !!(typeof _uid !== 'undefined' && _uid);
+  const hasKey   = !!(localStorage.getItem('ingersoll_anthropic_key_v1') || '').trim();
+  const rows = [
+    { ok: signedIn, okText: 'Signed in — your data syncs',
+      badText: 'Not signed in — tap to sign in so your work saves',
+      act: () => { if (typeof signOut === 'function' && !signedIn) location.reload(); } },
+    { ok: hasKey, okText: 'AI connected — photo scan & assistant ready',
+      badText: 'AI not connected — tap to add your key',
+      act: () => openSettingsCard(/AI Photo|Estimator/i) },
+  ];
+  const allGood = rows.every(r => r.ok);
+  el.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.setAttribute('style', `background:var(--panel);border:1.5px solid ${allGood ? 'var(--green)' : 'var(--amber)'};border-radius:12px;padding:12px 14px`);
+  const head = document.createElement('div');
+  head.setAttribute('style', `font-family:var(--head);font-size:15px;letter-spacing:1.2px;color:${allGood ? 'var(--green)' : 'var(--amber)'};margin-bottom:8px`);
+  head.textContent = allGood ? '✓ EVERYTHING CONNECTED' : '⚠ NEEDS SETUP';
+  wrap.appendChild(head);
+  rows.forEach(r => {
+    const row = document.createElement('div');
+    row.setAttribute('style', `display:flex;align-items:center;gap:8px;font-size:13px;line-height:1.4;padding:6px 0;color:${r.ok ? 'var(--text)' : 'var(--amber)'};${r.ok ? '' : 'cursor:pointer'}`);
+    row.innerHTML = `<span style="font-size:15px;flex:none">${r.ok ? '✅' : '⚠️'}</span><span>${r.ok ? r.okText : r.badText}</span>`;
+    if (!r.ok) row.onclick = r.act;
+    wrap.appendChild(row);
+  });
+  el.appendChild(wrap);
+}
+
 function buildSettingsAccordion() {
   const sec = document.getElementById('settings-section');
   if (!sec || sec.dataset.accordion) return;
+  organizeSettingsMenu();
   sec.dataset.accordion = '1';
   [...sec.children].forEach(card => {
-    if (card.tagName !== 'DIV' || card.id === 'menu-quick-actions') return;
+    if (card.tagName !== 'DIV' || card.id === 'menu-quick-actions' || card.classList.contains('settings-group-head')) return;
     const header = card.firstElementChild;
     if (!header || card.children.length < 2) return;
     const body = document.createElement('div');
@@ -5896,6 +6028,7 @@ function switchTab(tab) {
   if(tab==='apt') { aptRender(); renderSupplies(); }
   if(tab==='settings') {
     renderLockSettings();
+    renderSetupStatus();
     syncDepositUI();
     const ej = loadEmailjsConfig();
     if (ej) {

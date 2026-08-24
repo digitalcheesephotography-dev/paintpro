@@ -4039,7 +4039,32 @@ function clearMeasurements() {
 // The service worker stashed the file(s) in the 'paintpro-shared' cache and
 // redirected here with ?shared=1. A single photo keeps the existing photo
 // choice flow; documents (PDF, Word, text) go to the Shared Files inbox.
+// Deep link: open the app straight into the signable-proposal composer with a
+// bid already loaded. Lets a Claude chat hand over a finished estimate as one
+// tappable link — no copying, no menus.
+//   ?bid=<uri-encoded text>[&client=Name]     plain text
+//   ?bid64=<base64 text>[&client=Name]        survives messaging apps better
+function checkBidDeepLink() {
+  const p = new URLSearchParams(location.search);
+  let text = p.get('bid') || '';
+  const b64 = p.get('bid64');
+  if (!text && b64) {
+    try {
+      // URL-safe base64 → text, UTF-8 aware
+      const norm = b64.replace(/-/g, '+').replace(/_/g, '/');
+      const bin  = atob(norm + '==='.slice((norm.length + 3) % 4));
+      text = new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
+    } catch (_) { text = ''; }
+  }
+  if (!text || text.trim().length < 20) return false;
+  // Clean the URL so a reload doesn't re-open the composer with stale text.
+  try { history.replaceState(null, '', location.pathname); } catch (_) {}
+  sendWrittenBid(text, p.get('client') || '');
+  return true;
+}
+
 async function checkSharedFile() {
+  if (checkBidDeepLink()) return;
   if (!/[?&]shared=1\b/.test(location.search)) return;
   // Clean the URL so a reload or back-nav doesn't re-trigger the pickup
   try { history.replaceState(null, '', location.pathname); } catch(_) {}
@@ -4057,9 +4082,13 @@ async function checkSharedFile() {
         await cache.delete(fm.key);
         if (blob && blob.size) files.push(new File([blob], fm.name || 'shared', { type: fm.type || blob.type || '' }));
       }
-      // Text-only share (a bid pasted from a chat, a link) → save as a .txt doc
+      // Text-only share — almost always a bid copied out of a Claude chat.
+      // Long text goes STRAIGHT to the signable-proposal composer instead of
+      // being buried in the inbox. A short share (a link, a stray line) still
+      // just gets filed as a .txt.
       if (!files.length && (meta.text || meta.url || meta.title)) {
         const txt = [meta.title, meta.text, meta.url].filter(Boolean).join('\n\n');
+        if ((meta.text || '').trim().length >= 120) { sendWrittenBid(txt); return; }
         const nm  = ((meta.title || 'Shared text').replace(/[\\/:*?"<>|]/g, '').slice(0, 60) || 'Shared text') + '.txt';
         files.push(new File([new Blob([txt], { type: 'text/plain' })], nm, { type: 'text/plain' }));
       }
@@ -5239,7 +5268,29 @@ function _bidTextToHtml(text){
 }
 
 // Send an outside/written bid (e.g. one drafted in a Claude chat) for signature.
-function sendWrittenBid(){
+// Pull a likely client name out of a pasted bid so the composer arrives filled
+// in. Matches the headings our own proposals use ("Prepared For:", "Estimate
+// for X", "Customer: X"). Returns '' when nothing looks like a name.
+function _guessClientFromBid(text){
+  const t = String(text || '');
+  const pats = [
+    /prepared\s+for\s*:?\s*\n?\s*([^\n,]{2,60})/i,
+    /^\s*(?:customer|client)\s*:\s*([^\n,]{2,60})/im,
+    /estimate\s+for\s*:?\s*([^\n,]{2,60})/i,
+    /proposal\s+for\s*:?\s*([^\n,]{2,60})/i,
+  ];
+  for (const rx of pats) {
+    const m = t.match(rx);
+    if (m && m[1]) {
+      const name = m[1].trim().replace(/[."']+$/, '');
+      // Skip lines that are clearly not a person (dates, money, headings)
+      if (!/^\d/.test(name) && !/\$/.test(name) && name.split(/\s+/).length <= 5) return name;
+    }
+  }
+  return '';
+}
+
+function sendWrittenBid(prefillText, prefillClient){
   const s = _ppModal();
   const wrap = document.createElement('div');
   wrap.innerHTML = `
@@ -5253,6 +5304,18 @@ function sendWrittenBid(){
     <input type="text" id="wb-total" inputmode="decimal" placeholder="e.g. 4200" style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:12px"/>` : ''}
     <button id="wb-send" style="width:100%;height:52px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">✍️ Create Signable Proposal</button>`;
   s.appendChild(wrap);
+  // Arriving from a share / deep link — fill it in and jump straight to the
+  // send button so it's one tap from a Claude chat to a signable proposal.
+  if (prefillText) {
+    const ta = wrap.querySelector('#wb-text');
+    ta.value = String(prefillText).trim();
+    const cl = wrap.querySelector('#wb-client');
+    cl.value = (prefillClient || _guessClientFromBid(prefillText) || '').trim();
+    const sendBtn = wrap.querySelector('#wb-send');
+    sendBtn.textContent = '✍️ Create Signable Proposal';
+    setTimeout(() => { try { sendBtn.scrollIntoView({ behavior:'smooth', block:'center' }); } catch(_){} }, 150);
+    showToast('📥 Bid loaded — check the name, then tap Create');
+  }
   wrap.querySelector('#wb-send').onclick = () => {
     const client = wrap.querySelector('#wb-client').value.trim();
     const text   = wrap.querySelector('#wb-text').value.trim();

@@ -230,6 +230,13 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 - **QuickBooks copy** lists custom charges as their own lines; Project Services = `lab - lineItemsTotal` so the QuickBooks total isn't double-counted.
 - **Persistence:** `jobLineItems` and `assistantChat` are in `getJobSnapshot()` / `applyJobData()` (and reset in `startNewJob` / `clearMeasurements`). No new localStorage key — they live inside the job snapshot.
 
+### 7.11 Claude chat → signable proposal (one tap) — built
+Three ways a bid written in a Claude chat reaches the app, all landing in `sendWrittenBid(prefillText, prefillClient)`:
+- **Deep link** — `checkBidDeepLink()` (runs before `checkSharedFile`) reads `?bid=<uri-encoded>` or `?bid64=<url-safe base64>` plus optional `&client=`, opens the composer prefilled, and `history.replaceState`s the URL clean so a reload can't re-fire it. Base64 form survives messaging apps that mangle long query strings.
+- **Share sheet text** — a text-only share whose body is ≥120 chars is treated as a bid and goes STRAIGHT to the composer; anything shorter (a link, a stray line) still files to the docs inbox as before.
+- **Manual** — 📥 BRING IN A BID → Paste Text From Claude.
+`_guessClientFromBid()` pulls the client name from "Prepared For:", "Customer/Client:", "Estimate for", or "Proposal for" headings (rejects lines starting with a digit, containing `$`, or >5 words) so the composer arrives filled in.
+
 ### 7.10 Share into PaintPro (Android share target) — built
 - PaintPro appears in the Android Share sheet (installed PWA) for **photos, PDFs, Word docs, and plain text** — `share_target` in `manifest.json` (`shared_files` param + title/text/url).
 - `sw.js` intercepts the POST to `./share-target`, stashes every file in the `paintpro-shared` cache (`shared-file-0…n` + a `shared-meta` JSON index), and 303-redirects to the app with `?shared=1`. It also reads the legacy `shared_image` field in case Android still holds the old image-only manifest.

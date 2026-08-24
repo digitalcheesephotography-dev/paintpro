@@ -395,7 +395,6 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 <div id="tab-bar">
   <button class="tab-btn active" id="tab-estimate" onclick="switchTab('estimate')" aria-label="Estimator tab">📐 ESTIMATE</button>
   <button class="tab-btn" id="tab-contacts" onclick="switchTab('contacts')" aria-label="Clients tab">👥 CLIENTS<span id="followup-badge" style="display:none;background:#c0392b;color:#fff;border-radius:10px;font-size:10px;padding:2px 6px;margin-left:5px;vertical-align:middle;line-height:1.4"></span></button>
-  <button class="tab-btn" id="tab-apt" onclick="switchTab('apt')" aria-label="Apt Pricing tab">🏢 APT</button>
   <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')" aria-label="Menu tab" style="font-size:20px;min-width:54px;padding:0 8px">☰</button>
 </div>
 
@@ -1072,32 +1071,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <button onclick="signOut()" style="background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:14px;padding:10px 18px;cursor:pointer">Sign Out</button>
   </div>
 
-  <!-- Print Hub -->
-  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
-    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🖨️ Print Hub</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">
-      Send bids to your home printer wirelessly. The hub script must be running on the home PC.
-    </div>
-    <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-family:var(--font)">
-      Encryption Key <span style="color:var(--muted)">(encrypts bids in transit — optional but recommended)</span>
-    </label>
-    <div style="display:flex;gap:8px;margin-bottom:6px">
-      <input type="password" id="settings-print-secret" placeholder="64-char hex key — tap Generate to create one"
-             style="flex:1;height:44px;background:var(--dark);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:13px;padding:0 12px"
-             onchange="savePrintSecret()"/>
-      <button onclick="generatePrintSecret()"
-              style="height:44px;padding:0 14px;background:var(--dark);border:1px solid var(--blue);border-radius:8px;color:var(--blue);font-family:var(--font);font-size:13px;white-space:nowrap;cursor:pointer">
-        Generate
-      </button>
-    </div>
-    <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:14px">
-      Tap <strong>Generate</strong>, then paste the same key into <code style="color:var(--blue)">PRINT_SECRET</code> in <code style="color:var(--blue)">print_hub.py</code>. Without a key, bids are sent as plain text.
-    </div>
-    <a href="https://digitalcheesephotography-dev.github.io/paintpro/printer-setup.html"
-       style="display:inline-block;background:var(--dark);border:1px solid var(--border);border-radius:8px;color:var(--blue);font-family:var(--font);font-size:14px;padding:10px 18px;text-decoration:none">
-      Printer Setup Page →
-    </a>
-  </div>
+
 
   <!-- App Info -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
@@ -4822,10 +4796,6 @@ function renderBid() {
         style="width:100%;height:50px;margin-top:10px;background:#f59e0b;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer">
         📧 Email to Client
       </button>
-      <button onclick="printAtHome()"
-        style="width:100%;height:50px;margin-top:10px;background:#6b7a8d;color:#fff;border:none;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer">
-        🖨️ Send to Home Printer
-      </button>
       <button id="ai-scope-btn-bid" onclick="writeBidScope()" class="no-print"
         style="width:100%;height:50px;margin-top:10px;background:#0d1e33;border:1.5px solid #2baae1;color:#2baae1;border-radius:8px;font-family:Georgia,serif;font-size:14px;cursor:pointer">
         🤖 ${bidScopeText ? 'Rewrite Project Description' : 'AI Write Project Description'}
@@ -5865,7 +5835,7 @@ function savePrintSecret() {
 // Each card is sorted into a named group; anything unmatched falls to the end
 // so a newly-added card is never lost.
 const SETTINGS_GROUPS = [
-  { name: '🔧 SET UP (ONE TIME)', match: [/AI Photo|Estimator/i, /Email Client/i, /Print Hub/i] },
+  { name: '🔧 SET UP (ONE TIME)', match: [/AI Photo|Estimator/i, /Email Client/i] },
   { name: '🧰 TOOLS',             match: [/Visualizer/i] },
   { name: '🔐 ACCOUNT & DATA',    match: [/Account Vault/i, /Account/i, /App Lock/i, /Backup/i, /Privacy/i] },
   { name: 'ℹ️ APP',               match: [/About/i] },
@@ -6017,12 +5987,12 @@ function buildSettingsAccordion() {
 function switchTab(tab) {
   document.getElementById('estimator-section').style.display = tab==='estimate' ? '' : 'none';
   document.getElementById('contacts-section').classList.toggle('active', tab==='contacts');
-  document.getElementById('apt-section').style.display = tab==='apt' ? 'block' : 'none';
+  { const el=document.getElementById('apt-section'); if(el) el.style.display = tab==='apt' ? 'block' : 'none'; }
   document.getElementById('settings-section').style.display = tab==='settings' ? 'block' : 'none';
   document.getElementById('bt-bar').style.display = tab==='estimate' ? '' : 'none';
   document.getElementById('tab-estimate').classList.toggle('active', tab==='estimate');
   document.getElementById('tab-contacts').classList.toggle('active', tab==='contacts');
-  document.getElementById('tab-apt').classList.toggle('active', tab==='apt');
+  { const el=document.getElementById('tab-apt'); if(el) el.classList.toggle('active', tab==='apt'); }
   document.getElementById('tab-settings').classList.toggle('active', tab==='settings');
   if(tab==='contacts') { renderContacts(); switchSubnav('clients'); showFollowupAlert(updateFollowupBadge()); }
   if(tab==='apt') { aptRender(); renderSupplies(); }

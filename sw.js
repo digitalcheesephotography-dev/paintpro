@@ -4,7 +4,7 @@
 // Bump CACHE version only when the service worker logic itself changes — not for
 // routine HTML edits (those are handled by network-first already).
 
-const CACHE = 'paintpro-v10';
+const CACHE = 'paintpro-v11';
 
 // Cache that briefly holds a file shared in from the Android share sheet,
 // handed off to the app on the next page load. Kept separate so the app-shell
@@ -20,10 +20,6 @@ const APP_SHELL = [
   './icon-maskable-512.png',
   './apple-touch-icon.png',
   './favicon-32.png',
-  // HearSay shares this worker (its own worker was removed — it wiped this cache).
-  // Cached so HearSay still works offline; kept last so a fetch miss here can't
-  // block the core PaintPro shell from installing.
-  './hearsay.html',
 ];
 
 // Pre-cache the app shell on install so the app works offline immediately

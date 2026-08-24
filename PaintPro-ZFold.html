@@ -395,7 +395,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 <div id="tab-bar">
   <button class="tab-btn active" id="tab-estimate" onclick="switchTab('estimate')" aria-label="Estimator tab">📐 ESTIMATE</button>
   <button class="tab-btn" id="tab-contacts" onclick="switchTab('contacts')" aria-label="Clients tab">👥 CLIENTS<span id="followup-badge" style="display:none;background:#c0392b;color:#fff;border-radius:10px;font-size:10px;padding:2px 6px;margin-left:5px;vertical-align:middle;line-height:1.4"></span></button>
-  <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')" aria-label="Menu tab" style="font-size:20px;min-width:54px;padding:0 8px">☰</button>
+  <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')" aria-label="Menu tab" style="font-size:20px;min-width:54px;padding:0 8px">☰<span id="proposal-badge" style="display:none;background:#f59e0b;color:#111;border-radius:10px;font-size:10px;font-weight:700;padding:2px 5px;margin-left:2px;vertical-align:middle;line-height:1.4"></span></button>
 </div>
 
 <main id="estimator-section">
@@ -5164,6 +5164,7 @@ async function _sendProposal(bodyHtml, client, address, totalForDeposit){
   list.unshift({ id, client:doc.client, address:doc.address, createdAt:doc.createdAt, status:'sent', url, signerName:'', acceptedAt:0, signatureDataUrl:'', deposit: depositInfo });
   proposalsSave(list);
   proposalWatch(id);
+  updateProposalBadge();
   showProposalLinkModal(url, doc.client, depositInfo);
 }
 
@@ -5568,7 +5569,13 @@ function openProposalsModal(){
     const meta = document.createElement('div'); meta.setAttribute('style','font-size:12px;color:var(--muted);margin-bottom:8px');
     meta.textContent = accepted
       ? `Signed by ${pr.signerName || 'client'} · ${pr.acceptedAt ? new Date(pr.acceptedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : ''}`
-      : `Sent ${new Date(pr.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;
+      : (() => {
+          const days = Math.floor((Date.now() - (pr.createdAt || Date.now())) / 86400000);
+          const when = new Date(pr.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+          const age  = days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
+          if (days >= 3) meta.style.color = 'var(--amber)';
+          return `Sent ${when} · ${age}${days >= 3 ? ' — worth a nudge' : ''}`;
+        })();
     card.append(head, meta);
     if (pr.deposit && pr.deposit.amount) {
       const dep = document.createElement('div'); dep.setAttribute('style','font-size:12px;color:#5cc24e;margin-bottom:8px;font-weight:700');
@@ -5610,11 +5617,64 @@ function proposalWatch(id){
         list[idx].acceptedAt = d.acceptedAt || Date.now();
         list[idx].signatureDataUrl = d.signatureDataUrl || '';
         proposalsSave(list);
+        // A signature is a won job — move the matching client to Scheduled so
+        // the Clients list reflects reality without James re-keying it.
+        _markClientSigned(list[idx].client, list[idx].acceptedAt);
+        updateProposalBadge();
         showToast(`✅ ${list[idx].client || 'Client'} accepted & signed the proposal!`);
       }
     }
   }, () => {});
 }
+// Flip the matching client to Scheduled when their proposal is signed, and
+// stamp a note. Name match is case/space-insensitive; if there's no matching
+// client (or they're already further along) nothing changes.
+function _markClientSigned(clientName, whenTs){
+  // Names get typed inconsistently ("Tom  Skeffington", trailing spaces, caps),
+  // so collapse all whitespace before comparing — not just trim the ends.
+  const norm = v => String(v || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const want = norm(clientName);
+  if (!want) return;
+  try {
+    const contacts = loadContacts();
+    const i = contacts.findIndex(c => norm(c.name) === want);
+    if (i < 0) return;
+    const c = contacts[i];
+    if (c.status === 'completed' || c.status === 'inprogress') return; // don't walk it backwards
+    c.status = 'scheduled';
+    c.followUpDate = null; // signed — no longer needs chasing
+    const when = new Date(whenTs || Date.now()).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const stamp = `✅ Signed proposal ${when}`;
+    if (!String(c.notes || '').includes('✅ Signed proposal')) {
+      c.notes = c.notes ? (c.notes + '\n' + stamp) : stamp;
+    }
+    c.updatedAt = Date.now();
+    saveContacts(contacts);
+    if (typeof renderContacts === 'function') renderContacts();
+    if (typeof updateFollowupBadge === 'function') updateFollowupBadge();
+  } catch(e){ console.warn('[Proposal] client update failed', e); }
+}
+
+// How many sent proposals are still unsigned, and how many have gone stale.
+// Unsigned proposals are money on the table — surface them like follow-ups.
+function pendingProposals(){
+  const now = Date.now();
+  return proposalsLoad()
+    .filter(p => p.status !== 'accepted')
+    .map(p => ({ ...p, days: Math.floor((now - (p.createdAt || now)) / 86400000) }));
+}
+function updateProposalBadge(){
+  const pend  = pendingProposals();
+  const stale = pend.filter(p => p.days >= 3);
+  const badge = document.getElementById('proposal-badge');
+  if (badge) {
+    badge.textContent   = stale.length || '';
+    badge.style.display = stale.length ? 'inline-block' : 'none';
+    badge.title = stale.length ? `${stale.length} proposal(s) unsigned for 3+ days` : '';
+  }
+  return pend;
+}
+
 function watchAllProposals(){ proposalsLoad().filter(p => p.status !== 'accepted').forEach(p => proposalWatch(p.id)); }
 
 function saveBidPDF() {
@@ -5993,6 +6053,7 @@ function switchTab(tab) {
   { const el=document.getElementById('tab-apt'); if(el) el.classList.toggle('active', tab==='apt'); }
   document.getElementById('tab-settings').classList.toggle('active', tab==='settings');
   if(tab==='contacts') { renderContacts(); switchSubnav('clients'); showFollowupAlert(updateFollowupBadge()); }
+  updateProposalBadge();
   if(tab==='apt') { aptRender(); renderSupplies(); }
   if(tab==='settings') {
     renderLockSettings();

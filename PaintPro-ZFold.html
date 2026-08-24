@@ -956,7 +956,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
       <button onclick="openJobsModal()"      style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">📁 Jobs</button>
       <button onclick="openProposalsModal()" style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">📄 Proposals &amp; Signatures</button>
       <button onclick="openDocsInbox()"      style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">📥 Shared Files</button>
-      <button onclick="sendWrittenBid()"     style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">✍️ Send a Written Bid</button>
+      <button onclick="openBringInBid()"     style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">📥 Bring In a Bid</button>
     </div>
     <!-- Setup status — shows at a glance what still needs connecting -->
     <div id="setup-status" style="margin-top:16px"></div>
@@ -1172,25 +1172,9 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div id="delete-data-status" style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px"></div>
   </div>
 
-  <!-- Proposals & Signatures -->
-  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
-    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">✍️ Proposals &amp; Signatures</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.5">See proposals you've sent and their signed status, or send a bid you wrote anywhere (like one from a Claude chat) as a signable proposal.</div>
-    <button onclick="openProposalsModal()"
-            style="width:100%;height:50px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">
-      📄 Open Proposals &amp; Send a Written Bid
-    </button>
-  </div>
 
-  <!-- Shared Files inbox -->
-  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
-    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">📥 Shared With PaintPro</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.5">Files shared into the app from your phone's Share menu — bid PDFs, Word docs, text. Tap Share on any file, pick PaintPro, and it lands here.</div>
-    <button onclick="openDocsInbox()"
-            style="width:100%;height:50px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">
-      📥 Open Shared Files
-    </button>
-  </div>
+
+
 
   <!-- Auto-email client a copy on signing (EmailJS) -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
@@ -1223,44 +1207,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     </div>
   </div>
 
-  <!-- Collect a deposit online (Stripe) -->
-  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
-    <div style="font-family:var(--head);font-size:20px;color:var(--green);margin-bottom:4px">💳 Collect a Deposit Online</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">
-      When a customer signs a proposal, show them a <strong style="color:var(--text)">Pay Deposit</strong> button. They pay by card on Stripe's secure page (their card never touches this app), and the money goes to your bank. You keep a set percent of the job total as the deposit.
-    </div>
-    <label style="display:flex;align-items:center;gap:10px;font-size:15px;color:var(--text);margin-bottom:12px;cursor:pointer">
-      <input type="checkbox" id="deposit-enabled" style="width:22px;height:22px;accent-color:var(--green)"/>
-      Offer an online deposit on signed proposals
-    </label>
-    <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Deposit percent of job total</label>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-      <input type="text" id="deposit-pct" inputmode="decimal" placeholder="25"
-             style="width:100px;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:16px;text-align:right"/>
-      <span style="font-size:18px;color:var(--muted)">%</span>
-    </div>
-    <div style="border-top:1px solid var(--border);margin:16px 0 12px"></div>
-    <div style="font-size:14px;color:var(--text);font-weight:700;margin-bottom:4px">Pay by Card with QuickBooks (optional)</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:10px;line-height:1.5">
-      Paste your reusable QuickBooks payment link here. It adds a <strong style="color:var(--text)">💳 Pay by Card (QuickBooks)</strong> button to your bids so a customer can pay on the spot, straight into your QuickBooks. Get the link in QuickBooks under <em>Get paid → Payment links</em> (QuickBooks Payments must be on).
-    </div>
-    <input type="text" id="qb-paylink" inputmode="url" placeholder="https://…intuit.com/pay/…" autocomplete="off"
-           style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:12px"/>
-    <button onclick="saveDepositConfig()"
-            style="width:100%;height:50px;background:var(--green);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">
-      Save Payment Settings
-    </button>
-    <div id="deposit-status" style="font-size:13px;color:var(--muted);text-align:center;margin-top:10px"></div>
-    <div style="font-size:12px;color:var(--muted);line-height:1.7;background:var(--dark);border-radius:8px;padding:10px 12px;margin-top:10px">
-      <strong style="color:var(--text)">One-time setup (~20 min):</strong><br>
-      1. Create a free account at <strong style="color:var(--blue)">stripe.com</strong> and verify your business (add your bank for payouts).<br>
-      2. In Stripe → <em>Developers → API keys</em>, copy your <em>Secret key</em> (starts with <code>sk_live_</code>).<br>
-      3. In Cloudflare → your Worker → <em>Settings → Variables</em>, add a <strong style="color:var(--text)">Secret</strong> named <code>STRIPE_SECRET_KEY</code> and paste the key. Deploy.<br>
-      4. Make sure your <em>Proxy URL</em> is set in the AI Settings card above — the Pay button uses the same Worker.<br>
-      5. Turn on the switch above, set your percent, and Save. Test with a real signed proposal (Stripe has a test mode too).<br>
-      <strong style="color:var(--text)">Fees:</strong> Stripe charges about 2.9% + 30¢ per card payment. No monthly fee.
-    </div>
-  </div>
+
 
   <!-- Color Visualizer -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
@@ -5918,8 +5865,8 @@ function savePrintSecret() {
 // Each card is sorted into a named group; anything unmatched falls to the end
 // so a newly-added card is never lost.
 const SETTINGS_GROUPS = [
-  { name: '🔧 SET UP (ONE TIME)', match: [/AI Photo|Estimator/i, /Deposit/i, /Email Client/i, /Print Hub/i] },
-  { name: '🧰 TOOLS',             match: [/Proposals/i, /Shared With/i, /Visualizer/i] },
+  { name: '🔧 SET UP (ONE TIME)', match: [/AI Photo|Estimator/i, /Email Client/i, /Print Hub/i] },
+  { name: '🧰 TOOLS',             match: [/Visualizer/i] },
   { name: '🔐 ACCOUNT & DATA',    match: [/Account Vault/i, /Account/i, /App Lock/i, /Backup/i, /Privacy/i] },
   { name: 'ℹ️ APP',               match: [/About/i] },
 ];

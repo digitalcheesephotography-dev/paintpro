@@ -4521,6 +4521,16 @@ Rules:
 }
 
 function recalcRoom(id) {
+  paintRoomSummary(id);
+  recalcAll();
+}
+
+// Repaint one room's mini-summary and its collapsed-header badge. Split out of
+// recalcRoom so recalcAll can refresh every room WITHOUT recursing (recalcRoom
+// calls recalcAll). Before this split, badges only updated for the room being
+// edited, so loading a saved job or changing global rates left every collapsed
+// card blank.
+function paintRoomSummary(id) {
   const room=rooms.find(r=>r.id===id); if(!room) return;
   const c=calc(room), el=document.getElementById(`${id}_sum`);
   const badge=document.getElementById(`${id}_sfbadge`);
@@ -4534,18 +4544,23 @@ function recalcRoom(id) {
       document.getElementById(`${id}_smat`).textContent=fmt(c.mat);
       document.getElementById(`${id}_slab`).textContent=fmt(c.lab);
     }
-    // Header badge — always visible even when collapsed
+    // Header badge — always visible even when collapsed. Shows sf AND the
+    // room's price, so a house full of closed cards can be scanned at a
+    // glance without opening each one.
     if(badge){
       badge.style.display='inline-block';
-      badge.textContent=c.totalSF.toFixed(0)+' sf';
+      const sf = c.totalSF > 0 ? c.totalSF.toFixed(0)+' sf' : '';
+      badge.textContent = sf ? `${sf} · ${fmt(c.total)}` : fmt(c.total);
     }
   } else {
     if(el) el.style.display='none';
     if(badge) badge.style.display='none';
   }
-  recalcAll();
 }
 function recalcAll() {
+  // Keep every room's badge/summary in step — including collapsed cards after
+  // loading a saved job or changing global rates.
+  rooms.forEach(r => paintRoomSummary(r.id));
   const cs=rooms.map(calc);
   const ex = jobExtras();
   const any = cs.some(c=>c.valid) || ex.doorCount>0 || ex.winCount>0 || ex.shutterCount>0 || ex.washSF>0;

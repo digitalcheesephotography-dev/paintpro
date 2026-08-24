@@ -573,11 +573,9 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   <!-- Sub-nav -->
   <div style="display:flex;border-bottom:1px solid var(--border);margin-bottom:14px;background:var(--panel)">
     <button class="subnav-btn active" id="subnav-clients" onclick="switchSubnav('clients')" aria-label="Clients list">👥 Clients</button>
-    <button class="subnav-btn" id="subnav-projects" onclick="switchSubnav('projects')" aria-label="Projects list">📋 Projects</button>
     <button class="subnav-btn" id="subnav-materials" onclick="switchSubnav('materials')" aria-label="Materials lists">
         🛒 Materials
       </button>
-      <button class="subnav-btn" id="subnav-notes" onclick="switchSubnav('notes')" aria-label="Notes list">📝 Notes</button>
   </div>
 
   <!-- CLIENTS sub-section -->
@@ -7722,9 +7720,13 @@ function checkFollowupNotifications() {
 
 // ── Sub-nav switching ─────────────────────────
 function switchSubnav(sub) {
+  // Projects and Notes were retired from the sub-nav; their panes and data are
+  // still here, so guard every lookup rather than assume the button exists.
   ['clients','projects','notes','materials'].forEach(s => {
-    document.getElementById('sub-'+s).style.display = s===sub ? 'block' : 'none';
-    document.getElementById('subnav-'+s).classList.toggle('active', s===sub);
+    const pane = document.getElementById('sub-'+s);
+    if (pane) pane.style.display = s===sub ? 'block' : 'none';
+    const btn = document.getElementById('subnav-'+s);
+    if (btn) btn.classList.toggle('active', s===sub);
   });
   if(sub==='projects') renderProjects();
   if(sub==='notes') renderNotes();
@@ -8408,8 +8410,6 @@ function processVoiceCommand(transcript, measureOnly = false) {
   if (!measureOnly) {
     if (/estimat|measure/i.test(t)&&!/add/i.test(t))         { switchTab('estimate');                          return showToast('📐 Estimator'); }
     if (/\bcontact|client/i.test(t)&&!/add|new/i.test(t))    { switchTab('contacts');switchSubnav('clients');  return showToast('👥 Clients'); }
-    if (/\bproject/i.test(t)&&!/add|new/i.test(t))           { switchTab('contacts');switchSubnav('projects'); return showToast('📋 Projects'); }
-    if (/\bnote/i.test(t)&&!/add|new/i.test(t))              { switchTab('contacts');switchSubnav('notes');    return showToast('📝 Notes'); }
     if (/\bmaterial|shopping|supply list|supplies list/i.test(t)&&!/add|new/i.test(t)) { switchTab('contacts');switchSubnav('materials'); return showToast('🛒 Materials'); }
     if (/pricing|apartment|apt/i.test(t))                    { switchTab('apt');                               return showToast('🏢 Apt Pricing'); }
     if (/add room|new room|add side|new side/i.test(t))       { switchTab('estimate');addRoom();                return showToast(estimatorMode==='exterior'?'Side added':'Room added'); }
@@ -8418,8 +8418,6 @@ function processVoiceCommand(transcript, measureOnly = false) {
     if (/generate|bid|proposal/i.test(t))                    { switchTab('estimate');if(!bidOpen)toggleBid(); return showToast('Proposal generated'); }
     if (/connect|bluetooth/i.test(t))                        { connectBT();                                    return; }
     if (/add client|add contact|new client/i.test(t))        { switchTab('contacts');switchSubnav('clients');openContactModal(null); return; }
-    if (/add project|new project/i.test(t))                  { switchTab('contacts');switchSubnav('projects');openProjectModal(null); return; }
-    if (/add note|new note/i.test(t))                        { switchTab('contacts');switchSubnav('notes');openNoteModal(null); return; }
     if (/add material|new material|add shopping|new shopping|add list|new list/i.test(t)) { switchTab('contacts');switchSubnav('materials');openMaterialsModal(null); return; }
   }
 

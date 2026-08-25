@@ -5190,29 +5190,78 @@ async function createProposal(){
 // Build a QuickBooks-ready estimate block from the current job and copy it, so
 // James can paste it into a normal Claude chat (with the QuickBooks connector)
 // and have the estimate entered in his books with no re-typing. Figures match
-// the on-screen bid exactly: Project Services = labor + door/window extras,
-// Paint & Materials = the bid's materials line, total = the bid total.
+// the on-screen bid exactly: every row the bid shows (sides/rooms, doors,
+// windows, shutters, power washing, custom charges, paint) becomes its own
+// QuickBooks line, and the descriptions are built from the real job data — an
+// exterior estimate only promises power washing when washing was actually
+// priced, and only names the surfaces and coats the room cards say were done.
+
+// Square footage of a {l,w} section list (soffits, porch ceilings, decks).
+const _qbSectSF  = a => (a||[]).reduce((s,x)=>s+(parseFloat(x.l)||0)*(parseFloat(x.w)||0), 0);
+// "a" / "a and b" / "a, b and c"
+const _qbList    = a => a.length < 2 ? (a[0]||'') : a.slice(0,-1).join(', ') + ' and ' + a[a.length-1];
+// Product name without its shelf tag, e.g. "BM Woodluxe Solid (Ext)" -> "BM
+// Woodluxe Solid". Blank for Custom Product so the generic wording is used.
+const _qbProduct = n => /custom/i.test(n||'') ? '' : String(n||'').replace(/\s*\([^)]*\)\s*$/,'').trim();
+const _qbNum     = n => Math.round(n).toLocaleString('en-US');
+
 function copyBidForQuickBooks(){
-  if (!rooms.length){ showToast('Add a room / measurements first', 'warn'); return; }
-  const cs    = rooms.map(calc);
-  const ex    = jobExtras();
-  const mat   = cs.reduce((a,c)=>a+c.mat,0);
-  const lab   = cs.reduce((a,c)=>a+c.lab,0) + ex.total;
-  const grand = mat + lab;
-  // Custom charges become their own QuickBooks lines, so Project Services must
-  // exclude them (they're inside ex.total) to keep the total from doubling.
-  const liList = (ex.lineItems || []).filter(li => (parseFloat(li.amount)||0) !== 0);
-  const svcAmt = lab - (ex.lineItemsTotal || 0);
-  if (grand <= 0){ showToast('Nothing to copy yet — fill in a room', 'warn'); return; }
+  const cs      = rooms.map(calc);
+  const ex      = jobExtras();
+  const mat     = cs.reduce((a,c)=>a+c.mat,0);
+  const roomLab = cs.reduce((a,c)=>a+c.lab,0);
+  const grand   = mat + roomLab + ex.total;
+  // A wash-only or extras-only job is real work (a house wash with no
+  // painting), so the only thing that blocks a copy is an empty estimate.
+  if (grand <= 0){ showToast('Nothing to copy yet — measure a side or add a charge', 'warn'); return; }
+  const isExt  = estimatorMode === 'exterior';
+  const kind   = isExt ? 'Exterior' : 'Interior';
   const gal    = cs.reduce((a,c)=>a+(c.gal||0),0);
   const client = (document.getElementById('client-name').value || '').trim() || 'Customer';
   const addr   = (document.getElementById('job-address').value || '').trim();
-  const isExt  = estimatorMode === 'exterior';
-  const kind   = isExt ? 'Exterior' : 'Interior';
-  const names  = rooms.filter((r,i)=>cs[i].valid).map(r=>(r.name||'').trim()).filter(Boolean).join(', ');
-  const svc = isExt
-    ? 'Power washing, surface preparation, protection of landscaping and surrounding areas, two full coats of quality exterior paint, and complete cleanup.'
-    : 'Surface preparation, minor wall repair, protection of floors and furniture, two full coats of quality interior paint, and complete cleanup.';
+  const done   = rooms.filter((r,i)=>cs[i].valid);
+  const doneCs = cs.filter(c=>c.valid);
+  const names  = done.map(r=>(r.name||'').trim()).filter(Boolean).join(', ');
+
+  // What was actually painted, read off the room cards — no boilerplate. Kept
+  // in a fixed order so the sentence reads the same way on every estimate.
+  const hit = {};
+  done.forEach(r => {
+    if (isExt){
+      if (r.surfaces.walls)  hit.siding = 1;
+      if (_qbSectSF(r.soffitSections) > 0) hit.soffits = 1;
+      if (r.surfaces.ceiling && _qbSectSF(r.porchCeilSections) > 0) hit['porch ceilings'] = 1;
+      if (r.surfaces.floor   && _qbSectSF(r.deckSections)      > 0) hit.decks = 1;
+      if (r.surfaces.trim)   hit.trim = 1;
+    } else {
+      if (r.surfaces.walls)   hit.walls = 1;
+      if (r.surfaces.ceiling) hit.ceilings = 1;
+      if (r.surfaces.floor)   hit.floors = 1;
+      if (r.surfaces.trim)    hit.trim = 1;
+    }
+  });
+  const surf = (isExt ? ['siding','soffits','porch ceilings','decks','trim']
+                      : ['walls','ceilings','floors','trim']).filter(s => hit[s]);
+  const coats    = done.reduce((m,r)=>Math.max(m, parseInt(r.coats)||1), 1);
+  const coatWord = ['','one full coat','two full coats','three full coats'][coats] || (coats + ' full coats');
+  const prods = [];
+  done.forEach(r => { const p = _qbProduct(r.product); if (p && !prods.includes(p)) prods.push(p); });
+  const generic   = 'quality ' + (isExt ? 'exterior' : 'interior') + ' paint';
+  const paintWord = prods.length === 1 ? prods[0] : generic;
+  const painted   = surf.length  ? _qbList(surf)  : (isExt ? 'the exterior' : 'the interior');
+  // An AI-written project description, when there is one, is what the bid and
+  // the proposal show — so the books get the same words the customer reads.
+  const svc = (bidScopeText || '').trim() || (isExt
+    ? 'Surface preparation, protection of landscaping and surrounding areas, ' + coatWord + ' of ' + paintWord + ' on ' + painted + ', and complete cleanup.'
+    : 'Surface preparation, minor wall repair, protection of floors and furniture, ' + coatWord + ' of ' + paintWord + ' on ' + painted + ', and complete cleanup.');
+  // Per-side square footage documents the scope without ever putting a labor
+  // rate or a per-side price in the books (Project Services stays one number).
+  const sideLines = done.map((r,i)=>{
+    const sf = doneCs[i].totalSF > 0 ? ' - ' + _qbNum(doneCs[i].totalSF) + ' sq ft' : '';
+    return '  ' + ((r.name||'').trim() || (isExt ? 'Side' : 'Room')) + sf;
+  });
+  const sideBlock = sideLines.length ? [(isExt ? 'Sides' : 'Rooms') + ' included:'].concat(sideLines) : [];
+
   const m2 = n => '$' + n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const L = [];
   L.push('Create a QuickBooks estimate for the following painting job.','');
@@ -5220,16 +5269,28 @@ function copyBidForQuickBooks(){
   if (addr) L.push('Billing address: ' + addr);
   L.push('Job: ' + kind + ' painting' + (names ? ' - ' + names : ''), '');
   L.push('Line items:');
-  L.push('1. ' + kind + ' Painting - Project Services');
-  L.push('   ' + svc);
-  L.push('   Quantity 1 - Amount ' + m2(svcAmt), '');
-  L.push('2. Paint & Materials');
-  L.push('   Quality ' + (isExt ? 'exterior' : 'interior') + ' paint and supplies' + (gal > 0 ? ', ' + gal + ' gallon' + (gal === 1 ? '' : 's') : '') + '.');
-  L.push('   Quantity 1 - Amount ' + m2(mat), '');
-  let ln = 2;
-  liList.forEach(li => { ln++; L.push(ln + '. ' + li.label, '   Quantity 1 - Amount ' + m2(parseFloat(li.amount)||0), ''); });
+  let ln = 0;
+  const item = (label, desc, amount) => {
+    L.push((++ln) + '. ' + label);
+    [].concat(desc).filter(Boolean).forEach(d => String(d).split('\n').forEach(x => L.push('   ' + x)));
+    L.push('   Quantity 1 - Amount ' + m2(amount), '');
+  };
+  const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
+
+  if (roomLab > 0) item(kind + ' Painting - Project Services', [svc].concat(sideBlock), roomLab);
+  if (mat > 0) item('Paint & Materials',
+    'Paint and supplies' + (prods.length ? ' (' + prods.join(', ') + ')' : '')
+    + (gal > 0 ? ', ' + plural(gal, 'gallon') : '') + '.', mat);
+  if (ex.washTotal > 0) item('Power Washing',
+    'Power washing of ' + _qbNum(ex.washSF) + ' sq ft of exterior surfaces.', ex.washTotal);
+  if (ex.doorTotal > 0)    item('Doors',    'Painting of ' + plural(ex.doorCount, 'door') + '.', ex.doorTotal);
+  if (ex.winTotal > 0)     item('Windows',  'Painting of ' + plural(ex.winCount, 'window') + '.', ex.winTotal);
+  if (ex.shutterTotal > 0) item('Shutters', 'Painting of ' + plural(ex.shutterCount, 'shutter') + '.', ex.shutterTotal);
+  (ex.lineItems || []).forEach(li => { if (li.amount) item(li.label, '', li.amount); });
+
   L.push('Estimate total: ' + m2(grand));
-  L.push('Note to customer: Estimate valid for 30 days. 1-Year Workmanship Warranty included.');
+  L.push('Note to customer: Estimate valid for 30 days. 1-Year Workmanship Warranty included.'
+    + (isExt ? ' Exterior work is weather dependent, so the schedule may shift with rain or temperature.' : ''));
   let payAmt = grand, payWhat = 'this estimate';
   if (typeof depositEnabled === 'function' && depositEnabled()){
     const pct = (loadDepositConfig() || {}).pct || 25;
@@ -5238,9 +5299,9 @@ function copyBidForQuickBooks(){
   }
   L.push('', 'Also create a QuickBooks Pay-Now payment link for ' + payWhat + ' (' + m2(payAmt) + ') and give me the link so I can text it to the customer.');
   const text = L.join('\n');
-  const done = () => showToast('✓ Copied for QuickBooks — paste into a Claude chat');
+  const done_ = () => showToast('✓ Copied for QuickBooks — paste into a Claude chat');
   if (navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(text).then(done).catch(() => _qbFallback(text));
+    navigator.clipboard.writeText(text).then(done_).catch(() => _qbFallback(text));
   } else { _qbFallback(text); }
 }
 // Clipboard blocked (some Android WebViews) — show the text for manual copy.

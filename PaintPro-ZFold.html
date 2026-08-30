@@ -117,6 +117,16 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .walls-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
 .walls-perimeter{font-size:13px;font-weight:700;color:var(--blue)}
 .wall-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+/* A row is just [54] × [10] with no visible labels, which reads equally as
+   length x width. Name the columns so a side elevation can't be mistaken for
+   a floor. Mirrors .wall-row's flex sizing. */
+.wall-colhead{display:flex;align-items:center;gap:8px;margin-bottom:3px;font-size:10px;letter-spacing:1px;
+  text-transform:uppercase;color:var(--muted);font-weight:700}
+.wall-colhead-sp{flex:0 0 34px}
+.wall-colhead>span:nth-child(2){flex:1;text-align:center}
+.wall-colhead-x{flex:0 0 8px}
+.wall-colhead>span:nth-child(4){flex:0 0 52px;text-align:center}
+.wall-colhead-btns{flex:0 0 116px}
 .wall-badge{background:var(--border);color:var(--muted);font-size:11px;font-weight:700;border-radius:4px;padding:2px 7px;flex-shrink:0;font-family:var(--head);letter-spacing:1px}
 .wall-row input{flex:1;height:46px;font-size:17px}
 .wall-unit{font-size:13px;color:var(--muted);flex-shrink:0}
@@ -2964,7 +2974,7 @@ function renderRoom(room, idx) {
       <!-- Exterior: Soffit always visible; Deck shown when floor surface toggled on -->
       <div id="${room.id}_soffit_row" style="margin-bottom:12px">
         <div class="walls-header">
-          <span class="walls-label">Soffit / Overhang (L × W)</span>
+          <span class="walls-label">Soffit / Overhang (length × width)</span>
           <span class="walls-perimeter" id="${room.id}_soffit_total"></span>
         </div>
         <div id="${room.id}_soffit_sections"></div>
@@ -2972,7 +2982,7 @@ function renderRoom(room, idx) {
       </div>
       <div id="${room.id}_porch_ceil_row" style="display:${room.surfaces.ceiling?'':'none'};margin-bottom:12px">
         <div class="walls-header">
-          <span class="walls-label">Porch Ceiling (L × W)</span>
+          <span class="walls-label">Porch Ceiling (length × width)</span>
           <span class="walls-perimeter" id="${room.id}_porch_ceil_total"></span>
         </div>
         <div id="${room.id}_porch_ceil_sections"></div>
@@ -2980,7 +2990,7 @@ function renderRoom(room, idx) {
       </div>
       <div id="${room.id}_deck_row" style="display:${room.surfaces.floor?'':'none'};margin-bottom:12px">
         <div class="walls-header">
-          <span class="walls-label">Deck / Porch sections (L × W)</span>
+          <span class="walls-label">Deck / Porch FLOOR (length × width)</span>
           <span class="walls-perimeter" id="${room.id}_deck_total"></span>
         </div>
         <div id="${room.id}_deck_sections"></div>
@@ -3021,9 +3031,10 @@ function renderRoom(room, idx) {
 
       <!-- Individual walls / side widths -->
       <div class="walls-header">
-        <span class="walls-label">${isExt ? 'Side widths — shoot each wall' : 'Walls (shoot each one)'}</span>
+        <span class="walls-label">${isExt ? 'Each side: WIDTH × HEIGHT' : 'Each wall: WIDTH × HEIGHT'}</span>
         <span class="walls-perimeter" id="${room.id}_perim"></span>
       </div>
+      <div class="wall-colhead"><span class="wall-colhead-sp"></span><span>width</span><span class="wall-colhead-x"></span><span>height</span><span class="wall-colhead-btns"></span></div>
       <div class="walls-list" id="${room.id}_walls"></div>
       <button class="add-wall-btn" onclick="addWall('${room.id}')" aria-label="Add wall measurement">+ Add Wall</button>
 
@@ -3502,7 +3513,7 @@ function renderWalls(room) {
         oninput="updateWall('${room.id}','${wall.id}',this.value)"/>
       <span class="wall-unit">×</span>
       <input type="number" id="${wall.id}_ht" value="${wall.ht||''}" min="0" step="0.1"
-        inputmode="decimal" placeholder="${_esc(room.height||'H')}"
+        inputmode="decimal" placeholder="${_esc(room.height||'ht')}"
         title="Height for this wall only — blank uses the room height"
         aria-label="Height for this wall only"
         oninput="updateWallHt('${room.id}','${wall.id}',this.value)"

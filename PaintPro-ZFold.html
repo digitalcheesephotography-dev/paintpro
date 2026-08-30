@@ -148,10 +148,14 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 #add-room-btn{width:100%;height:54px;background:transparent;border:1.5px dashed var(--blue);border-radius:var(--r);color:var(--blue);font-family:var(--font);font-size:17px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-bottom:var(--gap)}
 
 /* TOTALS */
-#totals-strip{display:none;background:var(--dark);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:var(--gap)}
-#totals-strip.visible{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center}
+#totals-strip{display:none;background:var(--dark);border:1px solid var(--border);border-radius:var(--r);padding:14px 12px;margin-bottom:var(--gap)}
+#totals-strip.visible{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center}
+#totals-strip>div{min-width:0}
 .tot-label{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted)}
-.tot-val{font-family:var(--head);font-size:24px;letter-spacing:1px;margin-top:3px}
+/* The total is the number James checks most. On a five-figure job the old
+   fixed 24px overflowed its column, clipping the digits exactly when the job
+   was worth the most. Scale it to the space instead. */
+.tot-val{font-family:var(--head);font-size:clamp(17px,5.2vw,24px);letter-spacing:.5px;margin-top:3px;white-space:nowrap;overflow:visible}
 
 /* GEN BUTTON */
 #gen-btn{display:none;width:100%;height:58px;background:var(--green);border:none;border-radius:var(--r);color:#fff;font-family:var(--head);font-size:22px;letter-spacing:2px;cursor:pointer;margin-bottom:var(--gap)}
@@ -231,7 +235,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   .col-right{min-width:0}
   main.has-bid .col-right{grid-column:2;position:sticky;top:70px}
   .prod-row{grid-template-columns:1fr 100px}
-  .tot-val{font-size:26px}
+  .tot-val{font-size:26px;letter-spacing:1px}
 }
 /* Z Fold 5 cover screen */
 @media(max-width:430px){
@@ -2964,7 +2968,7 @@ function renderRoom(room, idx) {
           <span>Length (ft)</span>
           <div style="display:flex;gap:6px">
             <input type="number" id="${room.id}_floorLength" value="${room.floorLength||''}" min="0" step="0.01" inputmode="decimal"
-              oninput="updateField('${room.id}','floorLength',this.value)" style="flex:1;min-width:0"/>
+              oninput="updateField('${room.id}','floorLength',this.value,this)" style="flex:1;min-width:0"/>
             <button class="dim-shoot" id="${room.id}_floorLength_shoot" onclick="armDimShot('${room.id}','floorLength')" aria-label="Shoot length" title="Shoot length with laser">📐</button>
           </div>
         </label>
@@ -2972,7 +2976,7 @@ function renderRoom(room, idx) {
           <span>Width (ft)</span>
           <div style="display:flex;gap:6px">
             <input type="number" id="${room.id}_floorWidth" value="${room.floorWidth||''}" min="0" step="0.01" inputmode="decimal"
-              oninput="updateField('${room.id}','floorWidth',this.value)" style="flex:1;min-width:0"/>
+              oninput="updateField('${room.id}','floorWidth',this.value,this)" style="flex:1;min-width:0"/>
             <button class="dim-shoot" id="${room.id}_floorWidth_shoot" onclick="armDimShot('${room.id}','floorWidth')" aria-label="Shoot width" title="Shoot width with laser">📐</button>
           </div>
         </label>
@@ -3003,7 +3007,7 @@ function renderRoom(room, idx) {
         <label class="field">
           <span>${isExt ? 'Wall Height (ft)' : 'Ceiling Height (ft)'}</span>
           <input type="number" id="${room.id}_height" value="${room.height}" min="0" step="0.01" inputmode="decimal"
-            oninput="updateField('${room.id}','height',this.value)"/>
+            oninput="updateField('${room.id}','height',this.value,this)"/>
         </label>
       </div>
 
@@ -3106,6 +3110,13 @@ function setOpen(id,val) {
 }
 function removeRoom(id) {
   if(rooms.length===1) return showToast('Need at least one room','warn');
+  // Was instant with no confirm, no undo — one mis-tap wiped a measured room.
+  const room = rooms.find(r=>r.id===id);
+  if (room) {
+    const c = calc(room);
+    const what = c.valid ? `"${room.name||'this room'}" (${c.totalSF.toFixed(0)} sf, ${fmt(c.total)})` : `"${room.name||'this room'}"`;
+    if (!confirm(`Delete ${what}?\n\nThis can't be undone.`)) return;
+  }
   rooms=rooms.filter(r=>r.id!==id);
   delete aiPhotoBatch[id];
   document.getElementById(id+'_card').remove();
@@ -3134,6 +3145,12 @@ function addWall(roomId, ft='', ht='') {
 
 function removeWall(roomId, wallId) {
   const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  // The ✕ sits 8px from the re-shoot button — confirm only when there's an
+  // actual measurement to lose, so clearing a blank row stays one tap.
+  const w = room.walls.find(x=>x.id===wallId);
+  if (w && String(w.ft||'').trim() !== '' && parseFloat(w.ft) > 0) {
+    if (!confirm(`Delete this ${w.ft} ft measurement?`)) return;
+  }
   room.walls = room.walls.filter(w=>w.id!==wallId);
   if(reshootTarget && reshootTarget.wallId===wallId) reshootTarget=null;
   renderWalls(room);
@@ -3202,17 +3219,38 @@ function armDimShot(roomId, field) {
   showToast(`📐 Shoot for ${dimLabels[field]||field} · ${rooms[idx].name}`);
 }
 
-function updateWall(roomId, wallId, val) {
+// A stray minus sign used to quietly SUBTRACT from the bid (a $11,724 job
+// silently became $10,995 with the room still counted valid). Measurements are
+// physical lengths: never negative, never absurd. Reject at entry and say so.
+const MAX_FT = 500; // no wall, ceiling or floor run in a house exceeds this
+function saneFeet(val, label, el) {
+  const raw = String(val == null ? '' : val).trim();
+  if (raw === '') return '';                       // empty is fine — not filled in yet
+  const n = parseFloat(raw);
+  if (!isFinite(n)) return '';
+  if (n < 0) {
+    showToast(`⚠️ ${label} can't be negative — using ${Math.abs(n)}`, 'warn');
+    const fixed = String(Math.abs(n));
+    if (el) el.value = fixed;
+    return fixed;
+  }
+  if (n > MAX_FT) {
+    showToast(`⚠️ ${label} of ${n} ft looks like a typo — check it`, 'warn');
+  }
+  return raw;
+}
+
+function updateWall(roomId, wallId, val, el) {
   const room = rooms.find(r=>r.id===roomId); if(!room) return;
   const wall = room.walls.find(w=>w.id===wallId); if(!wall) return;
-  wall.ft = val;
+  wall.ft = saneFeet(val, 'A wall length', el);
   updatePerimeterDisplay(room);
   recalcRoom(roomId);
 }
-function updateWallHt(roomId, wallId, val) {
+function updateWallHt(roomId, wallId, val, el) {
   const room = rooms.find(r=>r.id===roomId); if(!room) return;
   const wall = room.walls.find(w=>w.id===wallId); if(!wall) return;
-  wall.ht = val;
+  wall.ht = saneFeet(val, 'A wall height', el);
   recalcRoom(roomId);
 }
 
@@ -3479,8 +3517,10 @@ function updatePerimeterDisplay(room) {
   const el = document.getElementById(room.id+'_perim');
   if(el) el.textContent = perim > 0 ? `${perim.toFixed(1)} ft perimeter` : '';
 }
-function updateField(id,field,val) {
+const _FT_FIELDS = { height:'Ceiling height', floorLength:'Floor length', floorWidth:'Floor width' };
+function updateField(id,field,val,el) {
   const r=rooms.find(r=>r.id===id); if(!r) return;
+  if (_FT_FIELDS[field]) val = saneFeet(val, _FT_FIELDS[field], el);
   r[field]=val;
   if(field==='name') refreshRoomSelect();
   // Wall-row height placeholders show the room height — keep them current
@@ -3857,8 +3897,13 @@ function saveSnapshot() {
   const snap = getJobSnapshot();
   snap.name = name;
   if (existing >= 0) {
-    snap.id = list[existing].id;
-    snap.createdAt = list[existing].createdAt;
+    // Silently overwriting a saved job was destroying the old measurements.
+    const prev = list[existing];
+    const when = prev.updatedAt ? new Date(prev.updatedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
+    if (name !== currentJobName &&
+        !confirm(`"${name}" already exists${when ? ` (saved ${when})` : ''}.\n\nOverwrite it with what's on screen now?`)) return;
+    snap.id = prev.id;
+    snap.createdAt = prev.createdAt;
     list[existing] = snap;
   } else {
     snap.id = 'j' + Date.now();
@@ -6467,7 +6512,10 @@ function saveContact() {
 
 function deleteContact() {
   if(!editingContactId) return;
-  const contacts = loadContacts().filter(c=>c.id!==editingContactId);
+  const _all = loadContacts();
+  const _c = _all.find(c=>c.id===editingContactId);
+  if (!confirm(`Delete ${_c && _c.name ? _c.name : 'this client'}?\n\nTheir details and notes are gone for good.`)) return;
+  const contacts = _all.filter(c=>c.id!==editingContactId);
   saveContacts(contacts);
   closeContactModal();
   renderContacts();

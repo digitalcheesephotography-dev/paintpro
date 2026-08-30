@@ -3008,6 +3008,7 @@ function renderRoom(room, idx) {
           <span>${isExt ? 'Wall Height (ft)' : 'Ceiling Height (ft)'}</span>
           <input type="number" id="${room.id}_height" value="${room.height}" min="0" step="0.01" inputmode="decimal"
             oninput="updateField('${room.id}','height',this.value,this)"/>
+          <button class="dim-shoot" id="${room.id}_height_shoot" onclick="armDimShot('${room.id}','height')" aria-label="Shoot height" title="Shoot height with laser">📐</button>
         </label>
       </div>
 
@@ -3582,9 +3583,14 @@ function calcExt(room) {
 
   const p     = PRODUCTS.find(x=>x.name===room.product) || PRODUCTS[4] || PRODUCTS[0];
   const gSid  = room.surfaces.walls ? Math.ceil(sidingSF*c/p.cov) : 0;
-  const gSof  = soffitSF > 0                     ? Math.ceil(soffitSF*c/p.cov)    : 0;
-  const gPorch= room.surfaces.ceiling&&porchCeilSF>0 ? Math.ceil(porchCeilSF*c/p.cov) : 0;
-  const gDck  = room.surfaces.floor ? Math.ceil(deckSF*c/p.cov)  : 0;
+  // If James measured it, he intends to paint it. Porch ceiling and deck used
+  // to require a surface toggle as WELL as a measurement, so sections he had
+  // measured were silently dropped from the bid (a real Robin Castor job lost
+  // \$1,094 this way). Soffit already worked on measurement alone; these now
+  // match it. Nothing measured = 0, so this can't inflate a bid.
+  const gSof  = soffitSF    > 0 ? Math.ceil(soffitSF*c/p.cov)    : 0;
+  const gPorch= porchCeilSF > 0 ? Math.ceil(porchCeilSF*c/p.cov) : 0;
+  const gDck  = deckSF      > 0 ? Math.ceil(deckSF*c/p.cov)      : 0;
   const gTrim = room.surfaces.trim  ? Math.ceil(trimLF*c/p.cov)  : 0;
   const gal   = gSid + gSof + gPorch + gDck + gTrim;
 
@@ -3594,12 +3600,12 @@ function calcExt(room) {
   // (a second coat is not a second full labor charge). Coats still scale
   // materials (more gallons) above.
   const lab = (room.surfaces.walls   ? sidingSF*r.walls     : 0)
-            + (soffitSF > 0          ? soffitSF*r.ceiling   : 0)
-            + (room.surfaces.ceiling ? porchCeilSF*r.ceiling: 0)
-            + (room.surfaces.floor   ? deckSF*r.floor       : 0)
+            + (soffitSF    > 0 ? soffitSF*r.ceiling    : 0)
+            + (porchCeilSF > 0 ? porchCeilSF*r.ceiling : 0)
+            + (deckSF      > 0 ? deckSF*r.floor        : 0)
             + (room.surfaces.trim    ? trimLF*r.trim        : 0);
 
-  const totalSF = (room.surfaces.walls?sidingSF:0)+soffitSF+(room.surfaces.ceiling?porchCeilSF:0)+(room.surfaces.floor?deckSF:0);
+  const totalSF = (room.surfaces.walls?sidingSF:0)+soffitSF+porchCeilSF+deckSF;
   const valid   = sidingSF>0 || soffitSF>0 || deckSF>0;
   return {wallSF:sidingSF, floorSF:soffitSF+deckSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, valid};
 }

@@ -530,6 +530,20 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
         <input type="number" id="job-wash-rate" value="0.20" min="0" step="any" inputmode="decimal" aria-label="Power wash rate per sq ft" oninput="updateJobField('washRate',this.value)" style="height:40px;font-size:14px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 10px;outline:none;text-align:center"/>
         <span id="job-wash-total" style="font-size:14px;font-weight:700;color:var(--green);min-width:60px;text-align:right">$0</span>
       </div>
+      <div style="display:grid;grid-template-columns:90px 1fr auto 1fr auto;gap:6px;align-items:center;margin-top:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">Railing</div>
+        <input type="number" id="job-rail-lf" min="0" inputmode="decimal" placeholder="lin ft" aria-label="Railing linear feet" oninput="updateJobField('railLF',this.value)" style="height:40px;font-size:14px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 10px;outline:none;text-align:center"/>
+        <span style="font-size:13px;color:var(--muted)">× $</span>
+        <input type="number" id="job-rail-rate" value="8.00" min="0" step="any" inputmode="decimal" aria-label="Railing rate per linear foot" oninput="updateJobField('railRate',this.value)" style="height:40px;font-size:14px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 10px;outline:none;text-align:center"/>
+        <span id="job-rail-total" style="font-size:14px;font-weight:700;color:var(--green);min-width:60px;text-align:right">$0</span>
+      </div>
+      <div style="display:grid;grid-template-columns:90px 1fr auto 1fr auto;gap:6px;align-items:center;margin-top:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">Steps/Treads</div>
+        <input type="number" id="job-tread-count" min="0" inputmode="numeric" placeholder="0" aria-label="Stair tread count" oninput="updateJobField('treadCount',this.value)" style="height:40px;font-size:14px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 10px;outline:none;text-align:center"/>
+        <span style="font-size:13px;color:var(--muted)">× $</span>
+        <input type="number" id="job-tread-price" value="15" min="0" step="any" inputmode="decimal" aria-label="Price per tread" oninput="updateJobField('treadPrice',this.value)" style="height:40px;font-size:14px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);padding:0 10px;outline:none;text-align:center"/>
+        <span id="job-tread-total" style="font-size:14px;font-weight:700;color:var(--green);min-width:60px;text-align:right">$0</span>
+      </div>
     </div>
 
     <!-- ESTIMATE ASSISTANT + custom charges (whole job) -->
@@ -1721,7 +1735,10 @@ let saveIndicatorTimer = null;
 
 // Whole-job extras (doors and windows priced per unit; shutters + power wash for exterior)
 let job = { doorCount:'', doorPrice:'75', winCount:'', winPrice:'50',
-            shutterCount:'', shutterPrice:'25', washSF:'', washRate:'0.20' };
+            shutterCount:'', shutterPrice:'25', washSF:'', washRate:'0.20',
+            // Deck railings are priced by the linear foot and stair treads by
+            // the piece — how James already writes them on his paper sheet.
+            railLF:'', railRate:'8.00', treadCount:'', treadPrice:'15' };
 // Custom whole-job charges the Estimate Assistant (or manual add) puts on the
 // bid — e.g. Sheetrock repair, staining. [{label, amount}]
 let jobLineItems = [];
@@ -1740,16 +1757,24 @@ function jobExtras() {
   const sp  = parseFloat(job.shutterPrice) || 0;
   const wsf = parseFloat(job.washSF)     || 0;
   const wr  = parseFloat(job.washRate)   || 0;
+  const rlf = parseFloat(job.railLF)     || 0;
+  const rr  = parseFloat(job.railRate)   || 0;
+  const tc  = parseInt(job.treadCount)   || 0;
+  const tp  = parseFloat(job.treadPrice) || 0;
   const shutterTotal = sc * sp;
   const washTotal    = wsf * wr;
+  const railTotal    = rlf * rr;
+  const treadTotal   = tc * tp;
   const lineItems    = jobLineItems.map(li => ({ label: li.label, amount: parseFloat(li.amount) || 0 }));
   const lineItemsTotal = lineItems.reduce((a, li) => a + li.amount, 0);
   return { doorCount:dc, doorPrice:dp, winCount:wc, winPrice:wp,
            doorTotal:dc*dp, winTotal:wc*wp,
            shutterCount:sc, shutterTotal,
            washSF:wsf, washTotal,
+           railLF:rlf, railTotal,
+           treadCount:tc, treadTotal,
            lineItems, lineItemsTotal,
-           total: dc*dp + wc*wp + shutterTotal + washTotal + lineItemsTotal };
+           total: dc*dp + wc*wp + shutterTotal + washTotal + railTotal + treadTotal + lineItemsTotal };
 }
 
 // ══════════════════════════════════════════════
@@ -3691,7 +3716,7 @@ function switchMode(mode) {
   // carry phantom shutter / power-wash charges onto an interior bid.
   if (mode === 'interior') {
     job.shutterCount = ''; job.washSF = '';
-    ['job-shutter-count','job-wash-sf'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['job-shutter-count','job-wash-sf','job-rail-lf','job-tread-count'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   }
   rooms.length = 0; roomCount = 0;
   document.getElementById('rooms-container').innerHTML = '';
@@ -3819,6 +3844,10 @@ function applyJobData(data) {
   setVal('job-shutter-count', job.shutterCount);
   setVal('job-shutter-price', job.shutterPrice || '25');
   setVal('job-wash-sf',       job.washSF);
+  setVal('job-rail-lf',       job.railLF);
+  setVal('job-rail-rate',     job.railRate || '8.00');
+  setVal('job-tread-count',   job.treadCount);
+  setVal('job-tread-price',   job.treadPrice || '15');
   setVal('job-wash-rate',     job.washRate || '0.20');
   // Re-render rooms
   const wrap = document.getElementById('rooms-container');
@@ -3965,6 +3994,8 @@ function startNewJob() {
   job.doorCount = ''; job.winCount = '';
   job.shutterCount = ''; job.shutterPrice = '25';
   job.washSF = ''; job.washRate = '0.20';
+  job.railLF = ''; job.railRate = '8.00';
+  job.treadCount = ''; job.treadPrice = '15';
   document.getElementById('client-name').value = '';
   document.getElementById('job-address').value = '';
   document.getElementById('notes').value = '';
@@ -3995,6 +4026,8 @@ function clearMeasurements() {
   job.doorCount = ''; job.winCount = '';
   job.shutterCount = ''; job.shutterPrice = '25';
   job.washSF = ''; job.washRate = '0.20';
+  job.railLF = ''; job.railRate = '8.00';
+  job.treadCount = ''; job.treadPrice = '15';
   // Clear all photo batches
   Object.keys(aiPhotoBatch).forEach(k => delete aiPhotoBatch[k]);
   document.getElementById('notes').value = '';
@@ -4721,10 +4754,14 @@ function recalcAll() {
   const wnTotEl = document.getElementById('job-win-total');
   const shTotEl = document.getElementById('job-shutter-total');
   const wsTotEl = document.getElementById('job-wash-total');
+  const rlTotEl = document.getElementById('job-rail-total');
+  const trTotEl = document.getElementById('job-tread-total');
   if (dwTotEl) dwTotEl.textContent = fmt(ex.doorTotal);
   if (wnTotEl) wnTotEl.textContent = fmt(ex.winTotal);
   if (shTotEl) shTotEl.textContent = fmt(ex.shutterTotal);
   if (wsTotEl) wsTotEl.textContent = fmt(ex.washTotal);
+  if (rlTotEl) rlTotEl.textContent = fmt(ex.railTotal);
+  if (trTotEl) trTotEl.textContent = fmt(ex.treadTotal);
   document.getElementById('totals-strip').classList.toggle('visible',any);
   document.getElementById('gen-btn').classList.toggle('visible',any);
   document.getElementById('tot-mat').textContent=fmt(mat);
@@ -4823,6 +4860,24 @@ function renderBid() {
         <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.washTotal/ex.washSF)}/sf</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.washTotal)}</td>
+      </tr>` : '')
+    + (ex.railTotal > 0 ? `
+      <tr style="border-bottom:1px solid #e5e7eb">
+        <td style="padding:8px 6px;font-weight:700;font-size:13px">Railings</td>
+        <td style="padding:8px 6px;font-size:12px;color:#555">${ex.railLF.toFixed(0)} linear ft</td>
+        <td style="padding:8px 6px;font-size:12px">—</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.railTotal/ex.railLF)}/lf</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.railTotal)}</td>
+      </tr>` : '')
+    + (ex.treadTotal > 0 ? `
+      <tr style="border-bottom:1px solid #e5e7eb">
+        <td style="padding:8px 6px;font-weight:700;font-size:13px">Steps / Treads</td>
+        <td style="padding:8px 6px;font-size:12px;color:#555">${ex.treadCount} treads</td>
+        <td style="padding:8px 6px;font-size:12px">—</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.treadTotal/ex.treadCount)} ea</td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.treadTotal)}</td>
       </tr>` : '')
     + (ex.lineItems || []).filter(li => (parseFloat(li.amount)||0) !== 0).map(li => `
       <tr style="border-bottom:1px solid #e5e7eb">
@@ -5337,6 +5392,10 @@ function copyBidForQuickBooks(){
   if (ex.doorTotal > 0)    item('Doors',    'Painting of ' + plural(ex.doorCount, 'door') + '.', ex.doorTotal);
   if (ex.winTotal > 0)     item('Windows',  'Painting of ' + plural(ex.winCount, 'window') + '.', ex.winTotal);
   if (ex.shutterTotal > 0) item('Shutters', 'Painting of ' + plural(ex.shutterCount, 'shutter') + '.', ex.shutterTotal);
+  if (ex.railTotal > 0) item('Railings',
+    'Painting of ' + _qbNum(ex.railLF) + ' linear feet of deck and porch railing.', ex.railTotal);
+  if (ex.treadTotal > 0) item('Steps and Treads',
+    'Painting of ' + plural(ex.treadCount, 'stair tread') + '.', ex.treadTotal);
   (ex.lineItems || []).forEach(li => { if (li.amount) item(li.label, '', li.amount); });
 
   L.push('Estimate total: ' + m2(grand));

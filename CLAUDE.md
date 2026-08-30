@@ -337,6 +337,10 @@ Exterior: `front side` / `left side` / `name it garage` / `call it back`
 | `ingersoll_proposals_v1` | Sent e-signature proposals (id, client, status, url, signer; device-local) |
 | `ingersoll_emailjs_v1` | EmailJS config {serviceId, templateId, publicKey} for auto-emailing signed-proposal copies (device-local) |
 | `ingersoll_deposit_v1` | Online-deposit config {enabled, pct} for Stripe deposit collection on signed proposals (device-local) |
+**Exterior extras** (`jobExtras()` / `#ext-extras-card`): Shutters (count x $), Power Wash (sf x $/sf), **Railing (linear ft x $/lf, default $8.00)** and **Steps/Treads (count x $, default $15)**. Railing and treads were added from a field report (Robin Castor job) where James's paper sheet listed deck railings in linear feet and stair treads by count with nowhere to enter them. They flow into `ex.total`, render as their own bid rows, and itemise in the QuickBooks copy.
+
+**Exterior measurement rule:** soffit, porch ceiling and deck are charged **whenever they have measurements** - they are NOT gated on the surface toggles. Porch ceiling and deck used to require `surfaces.ceiling` / `surfaces.floor` as well, which silently dropped measured sections from the bid (cost $1,094 on one side of a real job). Only siding and trim still follow their toggles.
+
 | `ingersoll_qb_paylink_v1` | Reusable QuickBooks payment link URL for the 💳 Pay by Card (QuickBooks) button (device-local) |
 | `ingersoll_anthropic_key_v1` | Anthropic API key for the AI features. **In `SYNC_KEYS`** — mirrored to `users/{uid}/data` so it survives a reinstall and returns on sign-in (owner-only per firestore.rules). Still excluded from `BACKUP_KEYS` so it never lands in an exportable backup file. |
 

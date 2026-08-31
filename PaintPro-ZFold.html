@@ -483,6 +483,8 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
             <input type="text" inputmode="decimal" id="rate-floor" oninput="updateGlobalRate('floor',this.value)"/></label>
           <label class="field"><span>Trim $/lf</span>
             <input type="text" inputmode="decimal" id="rate-trim" oninput="updateGlobalRate('trim',this.value)"/></label>
+          <label class="field" id="rate-pergola-field"><span>Pergola $/sf</span>
+            <input type="text" inputmode="decimal" id="rate-pergola" oninput="updateGlobalRate('pergola',this.value)"/></label>
         </div>
       </div>
     </div>
@@ -1620,14 +1622,21 @@ function safeSet(key, value) {
 
 // Exterior labor rates ($/sf per coat; trim $/linear ft)
 const EXT_RATES_KEY = 'ingersoll_ext_rates_v1';
-const DEFAULT_EXT_RATES = { walls:2.25, ceiling:1.75, floor:2.50, trim:3.50 };
+// Pergola is priced per square foot of FOOTPRINT (length x width on the
+// ground), not per square foot of wood. It runs far higher than a deck because
+// every rafter, beam, post and lattice piece gets coated on all four faces.
+// $6.00/sf matches the 2026 national figures (a 12x12 stains for about $860 and
+// a 16x24 for about $2,300, both landing on $6.00/sf) and sits at the same
+// multiple over James's own $2.50 deck rate that the national numbers show.
+const DEFAULT_EXT_RATES = { walls:2.25, ceiling:1.75, floor:2.50, trim:3.50, pergola:6.00 };
 function loadExtRates() {
   try {
     const s = JSON.parse(localStorage.getItem(EXT_RATES_KEY));
     if (s) return { walls:  s.walls  != null ? +s.walls  : DEFAULT_EXT_RATES.walls,
                     ceiling:s.ceiling != null ? +s.ceiling : DEFAULT_EXT_RATES.ceiling,
                     floor:  s.floor  != null ? +s.floor  : DEFAULT_EXT_RATES.floor,
-                    trim:   s.trim   != null ? +s.trim   : DEFAULT_EXT_RATES.trim };
+                    trim:   s.trim   != null ? +s.trim   : DEFAULT_EXT_RATES.trim,
+                    pergola:s.pergola!= null ? +s.pergola: DEFAULT_EXT_RATES.pergola };
   } catch {}
   return { ...DEFAULT_EXT_RATES };
 }
@@ -2704,6 +2713,30 @@ function applyMeasurement(feet, disp) {
     return;
   }
 
+  // Armed pergola shot
+  if (pergolaShotTarget) {
+    const groom = rooms.find(r=>r.id===pergolaShotTarget.roomId);
+    const sec   = groom?.pergolaSections?.find(s=>s.id===pergolaShotTarget.sectionId);
+    if (sec) {
+      sec[pergolaShotTarget.field] = shotFt(feet);
+      const el = document.getElementById(`${sec.id}_${pergolaShotTarget.field}`);
+      if (el) { el.value = sec[pergolaShotTarget.field]; el.classList.remove('bt-flash'); void el.offsetWidth; el.classList.add('bt-flash'); setTimeout(()=>el.classList.remove('bt-flash'),900); }
+      renderPergolaSections(groom.id);
+      recalcRoom(groom.id); recalcAll();
+      markDirty();
+      showToast(`${disp} → Pergola ${pergolaShotTarget.field==='l'?'Length':'Width'} · ${groom.name}`);
+      if (pergolaShotTarget.field === 'l') {
+        pergolaShotTarget = {...pergolaShotTarget, field:'w'};
+        document.getElementById(`${sec.id}_w_shoot`)?.classList.add('active');
+        showToast('📐 Now shoot Pergola Width');
+        return;
+      }
+    }
+    document.querySelectorAll('.pergola-shoot.active').forEach(b=>b.classList.remove('active'));
+    pergolaShotTarget = null;
+    return;
+  }
+
   // Armed railing shot
   if (railShotTarget) {
     const rroom = rooms.find(r=>r.id===railShotTarget.roomId);
@@ -2927,7 +2960,7 @@ function addRoom() {
   const defHt = String(rooms[rooms.length-1]?.height ?? '').trim() || (isExt ? '9' : '8');
   const room  = isExt
     ? { id, name, walls:[], height:defHt, soffitSections:[], porchCeilSections:[], deckSections:[],
-        railSections:[], treadCount:'',
+        railSections:[], treadCount:'', pergolaSections:[],
         surfaces:{walls:true, ceiling:false, trim:false, floor:false},
         product: extProduct, coats:'2', rates:null, open:true, mode:'exterior', photos:[] }
     : { id, name, walls:[], height:defHt, floorLength:'', floorWidth:'',
@@ -2939,6 +2972,7 @@ function addRoom() {
   renderPorchSections(room.id);
   renderDeckSections(room.id);
   renderRailSections(room.id);
+  renderPergolaSections(room.id);
   renderAIPhotoStrip(room.id);
   refreshRoomSelect();
   rooms.forEach(r => { if(r.id!==id) setOpen(r.id,false); });
@@ -3053,6 +3087,14 @@ function renderRoom(room, idx) {
           inputmode="numeric" placeholder="0" aria-label="Stair treads on this side"
           oninput="updateRoomTreads('${room.id}',this.value)"
           class="deck-sec-input" style="max-width:120px"/>
+      </div>
+      <div id="${room.id}_pergola_row" style="margin-bottom:12px">
+        <div class="walls-header">
+          <span class="walls-label">Pergola / Arbor (length × width)</span>
+          <span class="walls-perimeter" id="${room.id}_pergola_total"></span>
+        </div>
+        <div id="${room.id}_pergola_sections"></div>
+        <button class="add-wall-btn" onclick="addPergolaSection('${room.id}')">+ Add Pergola</button>
       </div>` : `
       <!-- Interior: floor / ceiling footprint -->
       <div class="floor-dims" id="${room.id}_floordims" style="display:${room.surfaces.ceiling||room.surfaces.floor?'grid':'none'}">
@@ -3227,6 +3269,7 @@ let deckShotTarget   = null;
 let soffitShotTarget = null;
 let porchShotTarget  = null; // {roomId, sectionId, field:'l'|'w'} for porch ceiling section shots
 let railShotTarget   = null; // {roomId, sectionId} for railing linear-foot shots
+let pergolaShotTarget= null; // {roomId, sectionId, field:'l'|'w'} for pergola footprint shots
 const aiPhotoBatch = {}; // roomId → [{data: base64, type: 'image/jpeg'}]
 
 function addWall(roomId, ft='', ht='') {
@@ -3259,7 +3302,8 @@ function setReshootTarget(roomId, wallId) {
   soffitShotTarget = null;
   porchShotTarget = null;
   railShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active').forEach(b=>b.classList.remove('active'));
+  pergolaShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active').forEach(b=>b.classList.remove('active'));
   if(reshootTarget && reshootTarget.roomId===roomId && reshootTarget.wallId===wallId) {
     // Toggle off
     reshootTarget = null;
@@ -3285,7 +3329,8 @@ function armWallHt(roomId, wallId) {
   soffitShotTarget = null;
   porchShotTarget = null;
   railShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active').forEach(b=>b.classList.remove('active'));
+  pergolaShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active').forEach(b=>b.classList.remove('active'));
   if (wallHtTarget && wallHtTarget.roomId === roomId && wallHtTarget.wallId === wallId) {
     wallHtTarget = null; // toggle off
     showToast('Height shot cancelled — back to Next Wall', 'warn');
@@ -3306,7 +3351,8 @@ function armDimShot(roomId, field) {
   soffitShotTarget = null;
   porchShotTarget = null;
   railShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active').forEach(b=>b.classList.remove('active'));
+  pergolaShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active').forEach(b=>b.classList.remove('active'));
   const idx = rooms.findIndex(r=>r.id===roomId);
   if (idx < 0) return;
   // Route the next shot to this room + field
@@ -3411,6 +3457,71 @@ function renderDeckSections(roomId) {
   const totEl = document.getElementById(`${roomId}_deck_total`);
   if(totEl) totEl.textContent = total>0 ? `${total.toFixed(0)} sf total` : '';
 }
+// ── Pergola / arbor footprints (length × width) ─────
+function addPergolaSection(roomId, l='', w='') {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  if (!room.pergolaSections) room.pergolaSections = [];
+  room.pergolaSections.push({id:'pgl_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), l:l.toString(), w:w.toString()});
+  renderPergolaSections(roomId);
+  recalcRoom(roomId); recalcAll();
+  markDirty();
+}
+function removePergolaSection(roomId, sectionId) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  room.pergolaSections = (room.pergolaSections||[]).filter(s=>s.id!==sectionId);
+  renderPergolaSections(roomId);
+  recalcRoom(roomId); recalcAll();
+  markDirty();
+}
+function updatePergolaSection(roomId, sectionId, field, val) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  const sec = (room.pergolaSections||[]).find(s=>s.id===sectionId); if(!sec) return;
+  sec[field] = val;
+  renderPergolaSections(roomId);
+  recalcRoom(roomId); recalcAll();
+  markDirty();
+}
+function renderPergolaSections(roomId) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  const container = document.getElementById(`${roomId}_pergola_sections`); if(!container) return;
+  const sections = room.pergolaSections||[];
+  container.innerHTML = '';
+  let total = 0;
+  sections.forEach((sec, i) => {
+    const l = parseFloat(sec.l)||0, w = parseFloat(sec.w)||0;
+    const sf = l*w; total += sf;
+    const row = document.createElement('div');
+    row.className = 'deck-sec-row';
+    row.innerHTML = `
+      <span class="deck-sec-num">#${i+1}</span>
+      <div style="display:flex;align-items:center;gap:4px;flex:1">
+        <input type="number" id="${sec.id}_l" value="${sec.l||''}" min="0" step="0.01" inputmode="decimal"
+          placeholder="L ft" oninput="updatePergolaSection('${roomId}','${sec.id}','l',this.value)" class="deck-sec-input"/>
+        <button class="deck-shoot pergola-shoot" id="${sec.id}_l_shoot" onclick="armPergolaShot('${roomId}','${sec.id}','l')" aria-label="Shoot pergola length">📐</button>
+        <span style="color:var(--muted);font-size:12px">×</span>
+        <input type="number" id="${sec.id}_w" value="${sec.w||''}" min="0" step="0.01" inputmode="decimal"
+          placeholder="W ft" oninput="updatePergolaSection('${roomId}','${sec.id}','w',this.value)" class="deck-sec-input"/>
+        <button class="deck-shoot pergola-shoot" id="${sec.id}_w_shoot" onclick="armPergolaShot('${roomId}','${sec.id}','w')" aria-label="Shoot pergola width">📐</button>
+        <span class="deck-sec-sf">${sf>0?sf.toFixed(1)+' sf':''}</span>
+      </div>
+      <button class="wall-remove" onclick="removePergolaSection('${roomId}','${sec.id}')" aria-label="Remove pergola">✕</button>`;
+    container.appendChild(row);
+  });
+  const totEl = document.getElementById(`${roomId}_pergola_total`);
+  if(totEl) totEl.textContent = total>0 ? `${total.toFixed(0)} sf footprint` : '';
+}
+function armPergolaShot(roomId, sectionId, field) {
+  reshootTarget = null; wallHtTarget = null; deckShotTarget = null;
+  soffitShotTarget = null; porchShotTarget = null; railShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active').forEach(b=>b.classList.remove('active'));
+  if (pergolaShotTarget && pergolaShotTarget.sectionId===sectionId && pergolaShotTarget.field===field) {
+    pergolaShotTarget = null; showToast('Pergola shot cancelled', 'warn'); return;
+  }
+  pergolaShotTarget = {roomId, sectionId, field};
+  document.getElementById(`${sectionId}_${field}_shoot`)?.classList.add('active');
+  showToast(`📐 Shoot pergola ${field==='l'?'Length':'Width'}`);
+}
+
 // ── Railing runs (linear feet, one row per run) ─────
 // Ids are unique by construction rather than from a reset-on-reload counter,
 // so adding a run to a job loaded from a snapshot can never reuse an id.
@@ -3478,7 +3589,8 @@ function armRailShot(roomId, sectionId) {
   deckShotTarget = null;
   soffitShotTarget = null;
   porchShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active').forEach(b=>b.classList.remove('active'));
+  pergolaShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active').forEach(b=>b.classList.remove('active'));
   if (railShotTarget && railShotTarget.sectionId===sectionId) {
     railShotTarget = null;
     showToast('Railing shot cancelled', 'warn');
@@ -3553,7 +3665,8 @@ function armSoffitShot(roomId, sectionId, field) {
   deckShotTarget = null;
   porchShotTarget = null;
   railShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active').forEach(b=>b.classList.remove('active'));
+  pergolaShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active').forEach(b=>b.classList.remove('active'));
   if (soffitShotTarget && soffitShotTarget.sectionId===sectionId && soffitShotTarget.field===field) {
     soffitShotTarget = null;
     showToast('Ceiling shot cancelled', 'warn');
@@ -3628,7 +3741,8 @@ function renderPorchSections(roomId) {
 function armPorchShot(roomId, sectionId, field) {
   reshootTarget = null; wallHtTarget = null; deckShotTarget = null; soffitShotTarget = null;
   railShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active').forEach(b=>b.classList.remove('active'));
+  pergolaShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active').forEach(b=>b.classList.remove('active'));
   if (porchShotTarget && porchShotTarget.sectionId===sectionId && porchShotTarget.field===field) {
     porchShotTarget = null; showToast('Porch ceiling shot cancelled', 'warn'); return;
   }
@@ -3643,7 +3757,8 @@ function armDeckShot(roomId, sectionId, field) {
   soffitShotTarget = null;
   porchShotTarget = null;
   railShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active').forEach(b=>b.classList.remove('active'));
+  pergolaShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active').forEach(b=>b.classList.remove('active'));
   if (deckShotTarget && deckShotTarget.sectionId===sectionId && deckShotTarget.field===field) {
     deckShotTarget = null;
     showToast('Deck shot cancelled', 'warn');
@@ -3762,12 +3877,14 @@ function refreshRoomSelect() {
 // ══════════════════════════════════════════════
 // CALCULATIONS
 // ══════════════════════════════════════════════
+const PERGOLA_SURFACE_FACTOR = 2;
 function calcExt(room) {
   const perimeter = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0), 0);
   const h        = parseFloat(room.height) || 0;
   const soffitSF    = (room.soffitSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
   const porchCeilSF = (room.porchCeilSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
   const deckSF      = (room.deckSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
+  const pergolaSF   = (room.pergolaSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
   const c        = Number.isFinite(parseInt(room.coats)) ? parseInt(room.coats) : 1;
   // Each siding run can override the side height (gables, walk-out basements)
   const sidingSF = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0)*(parseFloat(w.ht)||h), 0);
@@ -3783,8 +3900,13 @@ function calcExt(room) {
   const gSof  = soffitSF    > 0 ? Math.ceil(soffitSF*c/p.cov)    : 0;
   const gPorch= porchCeilSF > 0 ? Math.ceil(porchCeilSF*c/p.cov) : 0;
   const gDck  = deckSF      > 0 ? Math.ceil(deckSF*c/p.cov)      : 0;
+  // A pergola's footprint understates how much wood gets coated — every rafter,
+  // beam and post takes stain on all four faces. Doubling the footprint for the
+  // gallon count matches the published coverage tables (a footprint up to about
+  // 175 sf takes 1 gallon). Labor below still prices on the footprint.
+  const gPerg = pergolaSF   > 0 ? Math.ceil(pergolaSF*PERGOLA_SURFACE_FACTOR*c/p.cov) : 0;
   const gTrim = room.surfaces.trim  ? Math.ceil(trimLF*c/p.cov)  : 0;
-  const gal   = gSid + gSof + gPorch + gDck + gTrim;
+  const gal   = gSid + gSof + gPorch + gDck + gPerg + gTrim;
 
   const r   = room.rates || extRates;
   const mat = gal * p.price * MARKUP;
@@ -3795,10 +3917,11 @@ function calcExt(room) {
             + (soffitSF    > 0 ? soffitSF*r.ceiling    : 0)
             + (porchCeilSF > 0 ? porchCeilSF*r.ceiling : 0)
             + (deckSF      > 0 ? deckSF*r.floor        : 0)
+            + (pergolaSF   > 0 ? pergolaSF*(r.pergola != null ? r.pergola : extRates.pergola) : 0)
             + (room.surfaces.trim    ? trimLF*r.trim        : 0);
 
-  const totalSF = (room.surfaces.walls?sidingSF:0)+soffitSF+porchCeilSF+deckSF;
-  const valid   = sidingSF>0 || soffitSF>0 || deckSF>0;
+  const totalSF = (room.surfaces.walls?sidingSF:0)+soffitSF+porchCeilSF+deckSF+pergolaSF;
+  const valid   = sidingSF>0 || soffitSF>0 || deckSF>0 || pergolaSF>0;
   return {wallSF:sidingSF, floorSF:soffitSF+deckSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, valid};
 }
 
@@ -3851,6 +3974,11 @@ function syncRatesUI() {
   if (focused !== rc)                                  rc.value = r.ceiling;
   const rf = document.getElementById('rate-floor');
   if (focused !== rf)                                  rf.value = r.floor;
+  const rp = document.getElementById('rate-pergola');
+  if (rp && focused !== rp)                            rp.value = r.pergola != null ? r.pergola : DEFAULT_EXT_RATES.pergola;
+  // Pergola is an exterior-only surface, so the rate box hides on interior jobs.
+  const rpf = document.getElementById('rate-pergola-field');
+  if (rpf) rpf.style.display = isExt ? '' : 'none';
   const rt = document.getElementById('rate-trim');
   if (focused !== rt)                                  rt.value = r.trim;
   // Update surface labels to match current mode
@@ -4019,7 +4147,7 @@ function applyJobData(data) {
   // Re-render rooms
   const wrap = document.getElementById('rooms-container');
   if (wrap) wrap.innerHTML = '';
-  rooms.forEach((r, i) => { renderRoom(r, i); renderWalls(r); renderSoffitSections(r.id); renderPorchSections(r.id); renderDeckSections(r.id); renderRailSections(r.id); renderAIPhotoStrip(r.id); renderRoomPhotoStrip(r.id); });
+  rooms.forEach((r, i) => { renderRoom(r, i); renderWalls(r); renderSoffitSections(r.id); renderPorchSections(r.id); renderDeckSections(r.id); renderRailSections(r.id); renderPergolaSections(r.id); renderAIPhotoStrip(r.id); renderRoomPhotoStrip(r.id); });
   _seedSectionCounters();
   refreshRoomSelect();
   bidScopeText = data.bidScopeText || '';
@@ -5506,6 +5634,7 @@ function copyBidForQuickBooks(){
       if (_qbSectSF(r.soffitSections) > 0) hit.soffits = 1;
       if (_qbSectSF(r.porchCeilSections) > 0) hit['porch ceilings'] = 1;
       if (_qbSectSF(r.deckSections)      > 0) hit.decks = 1;
+      if (_qbSectSF(r.pergolaSections)   > 0) hit.pergolas = 1;
       if (r.surfaces.trim)   hit.trim = 1;
     } else {
       if (r.surfaces.walls)   hit.walls = 1;
@@ -5514,7 +5643,7 @@ function copyBidForQuickBooks(){
       if (r.surfaces.trim)    hit.trim = 1;
     }
   });
-  const surf = (isExt ? ['siding','soffits','porch ceilings','decks','trim']
+  const surf = (isExt ? ['siding','soffits','porch ceilings','decks','pergolas','trim']
                       : ['walls','ceilings','floors','trim']).filter(s => hit[s]);
   const coats    = done.reduce((m,r)=>Math.max(m, parseInt(r.coats)||1), 1);
   const coatWord = ['','one full coat','two full coats','three full coats'][coats] || (coats + ' full coats');
@@ -5829,6 +5958,8 @@ function _proRoomItems(room){
     push('Soffit', soffitSF*r.ceiling);
     push('Porch ceiling', porchSF*r.ceiling);
     push('Deck', deckSF*r.floor);
+    push('Pergola', (room.pergolaSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0),0)
+                    * (r.pergola != null ? r.pergola : extRates.pergola));
     if (room.surfaces.trim)    push('Trim', runLF*r.trim);
   } else {
     const r = room.rates || rates;

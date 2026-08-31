@@ -1767,10 +1767,18 @@ function jobExtras() {
   const sp  = parseFloat(job.shutterPrice) || 0;
   const wsf = parseFloat(job.washSF)     || 0;
   const wr  = parseFloat(job.washRate)   || 0;
-  const rlf = parseFloat(job.railLF)     || 0;
   const rr  = parseFloat(job.railRate)   || 0;
-  const tc  = parseInt(job.treadCount)   || 0;
   const tp  = parseFloat(job.treadPrice) || 0;
+  // Railings and treads are entered per side, the way they are written on the
+  // paper sheet. The whole-job boxes in the extras card still work and are
+  // added on top, so older saved jobs keep totalling exactly as before.
+  let roomRailLF = 0, roomTreads = 0;
+  rooms.forEach(r => {
+    (r.railSections||[]).forEach(x => { roomRailLF += parseFloat(x.lf)||0; });
+    roomTreads += parseInt(r.treadCount)||0;
+  });
+  const rlf = (parseFloat(job.railLF)   || 0) + roomRailLF;
+  const tc  = (parseInt(job.treadCount) || 0) + roomTreads;
   const shutterTotal = sc * sp;
   const washTotal    = wsf * wr;
   const railTotal    = rlf * rr;
@@ -2696,6 +2704,24 @@ function applyMeasurement(feet, disp) {
     return;
   }
 
+  // Armed railing shot
+  if (railShotTarget) {
+    const rroom = rooms.find(r=>r.id===railShotTarget.roomId);
+    const sec   = rroom?.railSections?.find(s=>s.id===railShotTarget.sectionId);
+    if (sec) {
+      sec.lf = shotFt(feet);
+      const el = document.getElementById(`${sec.id}_lf`);
+      if (el) { el.value = sec.lf; el.classList.remove('bt-flash'); void el.offsetWidth; el.classList.add('bt-flash'); setTimeout(()=>el.classList.remove('bt-flash'),900); }
+      renderRailSections(rroom.id);
+      recalcAll();
+      markDirty();
+      showToast(`${disp} → Railing · ${rroom.name}`);
+    }
+    document.querySelectorAll('.rail-shoot.active').forEach(b=>b.classList.remove('active'));
+    railShotTarget = null;
+    return;
+  }
+
   // Armed porch ceiling shot
   if (porchShotTarget) {
     const proom = rooms.find(r=>r.id===porchShotTarget.roomId);
@@ -2901,6 +2927,7 @@ function addRoom() {
   const defHt = String(rooms[rooms.length-1]?.height ?? '').trim() || (isExt ? '9' : '8');
   const room  = isExt
     ? { id, name, walls:[], height:defHt, soffitSections:[], porchCeilSections:[], deckSections:[],
+        railSections:[], treadCount:'',
         surfaces:{walls:true, ceiling:false, trim:false, floor:false},
         product: extProduct, coats:'2', rates:null, open:true, mode:'exterior', photos:[] }
     : { id, name, walls:[], height:defHt, floorLength:'', floorWidth:'',
@@ -2911,6 +2938,7 @@ function addRoom() {
   renderSoffitSections(room.id);
   renderPorchSections(room.id);
   renderDeckSections(room.id);
+  renderRailSections(room.id);
   renderAIPhotoStrip(room.id);
   refreshRoomSelect();
   rooms.forEach(r => { if(r.id!==id) setOpen(r.id,false); });
@@ -3004,6 +3032,27 @@ function renderRoom(room, idx) {
         </div>
         <div id="${room.id}_deck_sections"></div>
         <button class="add-wall-btn" onclick="addDeckSection('${room.id}')">+ Add Section</button>
+      </div>
+      <!-- Railings and stair treads are on nearly every house, and on the paper
+           sheet they are written per area ("back deck railing 21, 14, 15").
+           They live on the side card next to the deck they belong to, and are
+           never gated on a surface toggle. -->
+      <div id="${room.id}_rail_row" style="margin-bottom:12px">
+        <div class="walls-header">
+          <span class="walls-label">Railings (linear ft)</span>
+          <span class="walls-perimeter" id="${room.id}_rail_total"></span>
+        </div>
+        <div id="${room.id}_rail_sections"></div>
+        <button class="add-wall-btn" onclick="addRailSection('${room.id}')">+ Add Railing</button>
+      </div>
+      <div id="${room.id}_tread_row" style="margin-bottom:12px">
+        <div class="walls-header">
+          <span class="walls-label">Stairs / Treads (count)</span>
+        </div>
+        <input type="number" id="${room.id}_treadCount" value="${room.treadCount||''}" min="0" step="1"
+          inputmode="numeric" placeholder="0" aria-label="Stair treads on this side"
+          oninput="updateRoomTreads('${room.id}',this.value)"
+          class="deck-sec-input" style="max-width:120px"/>
       </div>` : `
       <!-- Interior: floor / ceiling footprint -->
       <div class="floor-dims" id="${room.id}_floordims" style="display:${room.surfaces.ceiling||room.surfaces.floor?'grid':'none'}">
@@ -3177,6 +3226,7 @@ let wallHtTarget  = null; // {roomId, wallId} when the next laser shot is a wall
 let deckShotTarget   = null;
 let soffitShotTarget = null;
 let porchShotTarget  = null; // {roomId, sectionId, field:'l'|'w'} for porch ceiling section shots
+let railShotTarget   = null; // {roomId, sectionId} for railing linear-foot shots
 const aiPhotoBatch = {}; // roomId → [{data: base64, type: 'image/jpeg'}]
 
 function addWall(roomId, ft='', ht='') {
@@ -3208,7 +3258,8 @@ function setReshootTarget(roomId, wallId) {
   deckShotTarget = null;
   soffitShotTarget = null;
   porchShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active').forEach(b=>b.classList.remove('active'));
+  railShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active').forEach(b=>b.classList.remove('active'));
   if(reshootTarget && reshootTarget.roomId===roomId && reshootTarget.wallId===wallId) {
     // Toggle off
     reshootTarget = null;
@@ -3233,7 +3284,8 @@ function armWallHt(roomId, wallId) {
   deckShotTarget = null;
   soffitShotTarget = null;
   porchShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active').forEach(b=>b.classList.remove('active'));
+  railShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active').forEach(b=>b.classList.remove('active'));
   if (wallHtTarget && wallHtTarget.roomId === roomId && wallHtTarget.wallId === wallId) {
     wallHtTarget = null; // toggle off
     showToast('Height shot cancelled — back to Next Wall', 'warn');
@@ -3253,7 +3305,8 @@ function armDimShot(roomId, field) {
   deckShotTarget = null;
   soffitShotTarget = null;
   porchShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active').forEach(b=>b.classList.remove('active'));
+  railShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active').forEach(b=>b.classList.remove('active'));
   const idx = rooms.findIndex(r=>r.id===roomId);
   if (idx < 0) return;
   // Route the next shot to this room + field
@@ -3358,6 +3411,84 @@ function renderDeckSections(roomId) {
   const totEl = document.getElementById(`${roomId}_deck_total`);
   if(totEl) totEl.textContent = total>0 ? `${total.toFixed(0)} sf total` : '';
 }
+// ── Railing runs (linear feet, one row per run) ─────
+// Ids are unique by construction rather than from a reset-on-reload counter,
+// so adding a run to a job loaded from a snapshot can never reuse an id.
+function _railId() { return 'rls_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function addRailSection(roomId, lf='') {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  if (!room.railSections) room.railSections = [];
+  room.railSections.push({id:_railId(), lf:lf.toString()});
+  renderRailSections(roomId);
+  recalcAll();
+  markDirty();
+}
+function removeRailSection(roomId, sectionId) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  room.railSections = (room.railSections||[]).filter(s=>s.id!==sectionId);
+  renderRailSections(roomId);
+  recalcAll();
+  markDirty();
+}
+function updateRailSection(roomId, sectionId, val) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  const sec = (room.railSections||[]).find(s=>s.id===sectionId); if(!sec) return;
+  sec.lf = val;
+  const totEl = document.getElementById(`${roomId}_rail_total`);
+  if (totEl) {
+    const t = (room.railSections||[]).reduce((a,x)=>a+(parseFloat(x.lf)||0),0);
+    totEl.textContent = t>0 ? `${t.toFixed(0)} lf total` : '';
+  }
+  recalcAll();
+  markDirty();
+}
+function renderRailSections(roomId) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  const container = document.getElementById(`${roomId}_rail_sections`); if(!container) return;
+  const sections = room.railSections||[];
+  container.innerHTML = '';
+  let total = 0;
+  sections.forEach((sec, i) => {
+    total += parseFloat(sec.lf)||0;
+    const row = document.createElement('div');
+    row.className = 'deck-sec-row';
+    row.innerHTML = `
+      <span class="deck-sec-num">#${i+1}</span>
+      <div style="display:flex;align-items:center;gap:4px;flex:1">
+        <input type="number" id="${sec.id}_lf" value="${sec.lf||''}" min="0" step="0.01" inputmode="decimal"
+          placeholder="lin ft" oninput="updateRailSection('${roomId}','${sec.id}',this.value)"
+          class="deck-sec-input"/>
+        <button class="deck-shoot rail-shoot" id="${sec.id}_lf_shoot" onclick="armRailShot('${roomId}','${sec.id}')" aria-label="Shoot railing length">📐</button>
+      </div>
+      <button class="wall-remove" onclick="removeRailSection('${roomId}','${sec.id}')" aria-label="Remove railing run">✕</button>`;
+    container.appendChild(row);
+  });
+  const totEl = document.getElementById(`${roomId}_rail_total`);
+  if(totEl) totEl.textContent = total>0 ? `${total.toFixed(0)} lf total` : '';
+}
+function updateRoomTreads(roomId, val) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  room.treadCount = val;
+  recalcAll();
+  markDirty();
+}
+function armRailShot(roomId, sectionId) {
+  reshootTarget = null;
+  wallHtTarget = null;
+  deckShotTarget = null;
+  soffitShotTarget = null;
+  porchShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active').forEach(b=>b.classList.remove('active'));
+  if (railShotTarget && railShotTarget.sectionId===sectionId) {
+    railShotTarget = null;
+    showToast('Railing shot cancelled', 'warn');
+    return;
+  }
+  railShotTarget = {roomId, sectionId};
+  document.getElementById(`${sectionId}_lf_shoot`)?.classList.add('active');
+  showToast('📐 Shoot railing length');
+}
+
 // ── Soffit Sections (porch ceiling, multi L×W areas) ──
 let _soffitSecCount = 0;
 function addSoffitSection(roomId, l='', w='') {
@@ -3421,7 +3552,8 @@ function armSoffitShot(roomId, sectionId, field) {
   wallHtTarget = null;
   deckShotTarget = null;
   porchShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active').forEach(b=>b.classList.remove('active'));
+  railShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active').forEach(b=>b.classList.remove('active'));
   if (soffitShotTarget && soffitShotTarget.sectionId===sectionId && soffitShotTarget.field===field) {
     soffitShotTarget = null;
     showToast('Ceiling shot cancelled', 'warn');
@@ -3433,6 +3565,19 @@ function armSoffitShot(roomId, sectionId, field) {
 }
 
 // ── Porch Ceiling Sections ────────────────────────
+// The soffit/porch/deck counters reset to 0 on every reload, so after loading a
+// saved job the next "+ Add Section" handed out an id already in use and edits
+// landed on the wrong row. Seed each counter past the highest id in the job.
+function _seedSectionCounters() {
+  const highest = (pre) => rooms.reduce((m, r) =>
+    [...(r.soffitSections||[]), ...(r.porchCeilSections||[]), ...(r.deckSections||[])]
+      .reduce((mm, sec) => (typeof sec.id === 'string' && sec.id.startsWith(pre))
+        ? Math.max(mm, parseInt(sec.id.slice(pre.length), 10) || 0) : mm, m), 0);
+  _soffitSecCount = Math.max(_soffitSecCount, highest('sfs_'));
+  _porchSecCount  = Math.max(_porchSecCount,  highest('pcs_'));
+  _deckSecCount   = Math.max(_deckSecCount,   highest('dks_'));
+}
+
 let _porchSecCount = 0;
 function addPorchSection(roomId, l='', w='') {
   const room = rooms.find(r=>r.id===roomId); if(!room) return;
@@ -3482,7 +3627,8 @@ function renderPorchSections(roomId) {
 }
 function armPorchShot(roomId, sectionId, field) {
   reshootTarget = null; wallHtTarget = null; deckShotTarget = null; soffitShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active').forEach(b=>b.classList.remove('active'));
+  railShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active').forEach(b=>b.classList.remove('active'));
   if (porchShotTarget && porchShotTarget.sectionId===sectionId && porchShotTarget.field===field) {
     porchShotTarget = null; showToast('Porch ceiling shot cancelled', 'warn'); return;
   }
@@ -3496,7 +3642,8 @@ function armDeckShot(roomId, sectionId, field) {
   wallHtTarget = null;
   soffitShotTarget = null;
   porchShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active').forEach(b=>b.classList.remove('active'));
+  railShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active').forEach(b=>b.classList.remove('active'));
   if (deckShotTarget && deckShotTarget.sectionId===sectionId && deckShotTarget.field===field) {
     deckShotTarget = null;
     showToast('Deck shot cancelled', 'warn');
@@ -3872,7 +4019,8 @@ function applyJobData(data) {
   // Re-render rooms
   const wrap = document.getElementById('rooms-container');
   if (wrap) wrap.innerHTML = '';
-  rooms.forEach((r, i) => { renderRoom(r, i); renderWalls(r); renderSoffitSections(r.id); renderPorchSections(r.id); renderDeckSections(r.id); renderAIPhotoStrip(r.id); renderRoomPhotoStrip(r.id); });
+  rooms.forEach((r, i) => { renderRoom(r, i); renderWalls(r); renderSoffitSections(r.id); renderPorchSections(r.id); renderDeckSections(r.id); renderRailSections(r.id); renderAIPhotoStrip(r.id); renderRoomPhotoStrip(r.id); });
+  _seedSectionCounters();
   refreshRoomSelect();
   bidScopeText = data.bidScopeText || '';
   bidAgentChat = data.bidAgentChat || [];
@@ -5356,8 +5504,8 @@ function copyBidForQuickBooks(){
     if (isExt){
       if (r.surfaces.walls)  hit.siding = 1;
       if (_qbSectSF(r.soffitSections) > 0) hit.soffits = 1;
-      if (r.surfaces.ceiling && _qbSectSF(r.porchCeilSections) > 0) hit['porch ceilings'] = 1;
-      if (r.surfaces.floor   && _qbSectSF(r.deckSections)      > 0) hit.decks = 1;
+      if (_qbSectSF(r.porchCeilSections) > 0) hit['porch ceilings'] = 1;
+      if (_qbSectSF(r.deckSections)      > 0) hit.decks = 1;
       if (r.surfaces.trim)   hit.trim = 1;
     } else {
       if (r.surfaces.walls)   hit.walls = 1;
@@ -5611,6 +5759,8 @@ Our work will include:
     if (ex.winTotal)     exItems.push({label:'Windows ('+ex.winCount+')', amount:ex.winTotal});
     if (ex.shutterTotal) exItems.push({label:'Shutters ('+ex.shutterCount+')', amount:ex.shutterTotal});
     if (ex.washTotal)    exItems.push({label:'Power washing', amount:ex.washTotal});
+    if (ex.railTotal)    exItems.push({label:'Railings ('+ex.railLF+' lin ft)', amount:ex.railTotal});
+    if (ex.treadTotal)   exItems.push({label:'Steps / treads ('+ex.treadCount+')', amount:ex.treadTotal});
     (ex.lineItems||[]).forEach(li=>{ if (li.amount) exItems.push({label:li.label||'Additional service', amount:li.amount}); });
     if (exItems.length) _proDefaultAreas.push({name:'Additional Services', items:exItems});
   }
@@ -5672,9 +5822,13 @@ function _proRoomItems(room){
     const porchSF =(room.porchCeilSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0),0);
     const deckSF  =(room.deckSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0),0);
     if (room.surfaces.walls)   push('Siding', runSF*r.walls);
+    // Measured means painted, the same rule calc() prices by. These two used to
+    // need a surface toggle as well, so a measured porch ceiling or deck was
+    // priced into the bid total but left off the proposal's itemized lines --
+    // the client's Total Project Investment came in under the bid.
     push('Soffit', soffitSF*r.ceiling);
-    if (room.surfaces.ceiling) push('Porch ceiling', porchSF*r.ceiling);
-    if (room.surfaces.floor)   push('Deck', deckSF*r.floor);
+    push('Porch ceiling', porchSF*r.ceiling);
+    push('Deck', deckSF*r.floor);
     if (room.surfaces.trim)    push('Trim', runLF*r.trim);
   } else {
     const r = room.rates || rates;

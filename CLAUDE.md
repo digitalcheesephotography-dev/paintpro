@@ -17,22 +17,54 @@ Reference document for AI assistants (Claude Code, future Claude chat sessions) 
 
 ## 2. Repository layout
 
+Verified against the repo on Aug 31, 2026. If you add or remove a file, fix this list in the same commit - it had drifted badly before (it claimed the app was 4,050 lines when it was 9,600, and listed a LICENSE that no longer exists).
+
 ```
 paintpro/
-├── PaintPro-ZFold.html       # The entire app (~4,050 lines, ~360 KB)
-├── print_hub.py              # PC-side print hub script — run on home computer to receive auto-print jobs
-├── proposal.html             # Standalone client e-signature page (opened by homeowners via a shared link)
-├── visualizer.html           # Standalone homeowner color visualizer — tap-wall recolor + "get a quote" lead
-├── manifest.json             # PWA manifest (name, icons, theme, start URL)
-├── sw.js                     # Service worker — offline cache, network-first for HTML
+│
+│  ── The app ────────────────────────────────────────────
+├── PaintPro-ZFold.html       # The entire app (~9,600 lines, ~690 KB)
+├── index.html                # Tiny redirect: / -> PaintPro-ZFold.html
+├── manifest.json             # PWA manifest (name, icons, theme, start URL, share_target)
+├── sw.js                     # Service worker - offline cache, network-first for HTML, share-target POST handler
+│
+│  ── Client-facing standalone pages ────────────────────
+├── proposal.html             # Client e-signature page (homeowner opens ?id=... via a shared link)
+├── visualizer.html           # Homeowner color visualizer - tap-wall recolor + "get a quote" lead
+├── contact.html              # Digital business card - phone/email/socials + "Save to Contacts" vCard.
+│                             #   This is what the tailgate QR code points at.
+├── ingersoll-tailgate-qr-navy.png   # Printed QR for the truck tailgate -> contact.html
+│
+│  ── Backend / infrastructure ─────────────────────────
+├── worker.js                 # Cloudflare Worker - AI proxy + Stripe checkout/verify (holds STRIPE_SECRET_KEY)
+├── .github/workflows/deploy-worker.yml   # Auto-deploys worker.js to Cloudflare on push to main
+├── netlify.toml              # Security headers (X-Frame-Options, HSTS, nosniff, referrer policy)
+├── firestore.rules           # Firestore rules - synced user data + the proposals collection
+├── storage.rules             # Firebase Storage rules - users/{uid}/photos
+│
+│  ── Home-PC print hub ───────────────────────────────
+├── print_hub.py              # Runs on the home PC, listens on ntfy.sh, auto-prints bids
+├── printer-setup.html        # Setup instructions page for the print hub
+├── install-autostart.bat     # Windows autostart installer for print_hub.py
+│
+│  ── Icons ───────────────────────────────────────────
 ├── icon-192.png              # PWA icon, full-bleed
 ├── icon-512.png              # PWA icon, full-bleed
-├── icon-maskable-192.png     # PWA icon, with safe-zone padding for Android adaptive icons
-├── icon-maskable-512.png     # PWA icon, with safe-zone padding for Android adaptive icons
-├── apple-touch-icon.png      # 180×180 for iOS home screen
-├── favicon-32.png            # 32×32 tab favicon
-├── LICENSE
-└── README.md
+├── icon-maskable-192.png     # PWA icon, safe-zone padding for Android adaptive icons
+├── icon-maskable-512.png     # PWA icon, safe-zone padding for Android adaptive icons
+├── apple-touch-icon.png      # 180x180 for iOS home screen
+├── favicon-32.png            # 32x32 tab favicon
+│
+│  ── Docs ────────────────────────────────────────────
+├── CLAUDE.md                 # This file - read first
+├── CLAUDE-quickbooks-clients.md  # Companion: rebuilding the Clients tab from QuickBooks
+├── README.md                 # Effectively empty
+│
+│  ── Retired ─────────────────────────────────────────
+├── hearsay.html              # OLD APP - "HearSay" standalone note taker. Not part of PaintPro,
+├── hearsay.webmanifest       #   not linked from it. Left in the repo but no longer worked on.
+├── hearsay-icon-192.png      #   Ignore unless James asks about it by name.
+└── hearsay-icon-512.png
 ```
 
 **Everything outside `PaintPro-ZFold.html` is PWA infrastructure.** The HTML file is the entire application — UI, styles, logic, all in one place. This is intentional. **Do not split it into separate JS/CSS files** without explicit approval from James.
@@ -429,7 +461,7 @@ IndexedDB: `paintpro-photos` database, object store `photos`, keyed by photo ID 
 ## 12. Editing workflow
 
 - **Deployment method:** Navigate to `PaintPro-ZFold.html` in GitHub web editor → Ctrl+A → paste entire file → commit to `main` → Netlify auto-deploys in ~60 seconds
-- The file is ~360 KB with an embedded base64 logo — too large for Google Drive MCP upload; use GitHub web editor
+- The file is ~690 KB with an embedded base64 logo — too large for Google Drive MCP upload; use GitHub web editor
 - `str_replace` is the preferred tool for Claude Code — small, targeted edits keep diffs reviewable
 - For large new features, edits typically come in 3-5 chunks: HTML markup, JS state, JS functions, voice commands, CSS additions if needed
 - **Always view the current file state before str_replace** — earlier views go stale after edits
@@ -510,4 +542,4 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
 
 ---
 
-*Last updated: August 31, 2026 (Pergolas / arbors added as a measured exterior surface at a researched $6.00/sf footprint rate, flowing into the bid, the client proposal and the QuickBooks copy.) Previously the same day: (Field-workflow pass so the app matches the paper sheet: laser shots round to whole feet via `shotFt`, ceiling height carries forward to the next side, and railings + stair treads are entered per side like decks instead of one summed whole-job box. Also closed a money gap - the client proposal and QuickBooks copy still gated measured porch ceilings and decks on the surface toggles that `calc()` had already stopped using, and the proposal never listed railings or treads at all, so a signed proposal could total well under the bid.) Previously: August 25, 2026 (Copy for QuickBooks now itemizes exterior work — power washing, shutters, doors, windows and custom charges each get their own line, and the descriptions come from the job data). Previously: June 11, 2026 (full diagnostic sweep: voice reliability layer restored after regression — mishear corrections, undo, room naming, fractions, hyphenated compounds, maxAlternatives=3; measurement routing now follows the open room card; quota-safe saves via `safeSet()`; Firestore sync stale-write guard; AI JSON extraction hardened via `extractAIJson()`; service worker v5 only caches OK responses). If you make substantial changes to the app structure, update this file in the same commit.*
+*Last updated: August 31, 2026 (Section 2 rewritten against the actual repo - it had drifted to listing 12 fewer files than exist, a LICENSE that was gone, and an app less than half its real size. `hearsay.html` is a retired app, not part of PaintPro.) Previously the same day: (Pergolas / arbors added as a measured exterior surface at a researched $6.00/sf footprint rate, flowing into the bid, the client proposal and the QuickBooks copy.) Previously the same day: (Field-workflow pass so the app matches the paper sheet: laser shots round to whole feet via `shotFt`, ceiling height carries forward to the next side, and railings + stair treads are entered per side like decks instead of one summed whole-job box. Also closed a money gap - the client proposal and QuickBooks copy still gated measured porch ceilings and decks on the surface toggles that `calc()` had already stopped using, and the proposal never listed railings or treads at all, so a signed proposal could total well under the bid.) Previously: August 25, 2026 (Copy for QuickBooks now itemizes exterior work — power washing, shutters, doors, windows and custom charges each get their own line, and the descriptions come from the job data). Previously: June 11, 2026 (full diagnostic sweep: voice reliability layer restored after regression — mishear corrections, undo, room naming, fractions, hyphenated compounds, maxAlternatives=3; measurement routing now follows the open room card; quota-safe saves via `safeSet()`; Firestore sync stale-write guard; AI JSON extraction hardened via `extractAIJson()`; service worker v5 only caches OK responses). If you make substantial changes to the app structure, update this file in the same commit.*

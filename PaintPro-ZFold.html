@@ -1812,43 +1812,6 @@ function updateJobField(key, val) {
   recalcAll();
 }
 
-// Paint actually purchased for the whole job: sum the raw requirement per
-// product across every valid room, then round UP once per product - that is
-// how many cans get bought and therefore what the customer should be charged.
-// Returns the per-product breakdown plus a scale factor used to allocate the
-// whole-can cost back across rooms so room subtotals still sum to the total.
-// A room's numbers with its paint share scaled to the whole-can job cost, so
-// every room row sums exactly to the Materials line on the bid.
-function roomShare(room) {
-  const c = calc(room);
-  const f = (jobPaint().scale || {})[room.product];
-  if (!f || !isFinite(f)) return c;
-  const mat = c.mat * f;
-  return { ...c, mat, total: mat + c.lab };
-}
-
-function jobPaint(list) {
-  const src = list || rooms;
-  const raw = {};
-  src.forEach(r => {
-    const c = calc(r);
-    if (!c.valid || !(c.gal > 0)) return;
-    raw[r.product] = (raw[r.product] || 0) + c.gal;
-  });
-  let gal = 0, mat = 0;
-  const products = [], scale = {};
-  Object.keys(raw).forEach(name => {
-    const p = PRODUCTS.find(x => x.name === name) || PRODUCTS[0];
-    const g = Math.ceil(raw[name] - 1e-9);       // whole cans, once
-    const cost = g * p.price * MARKUP;
-    const rawCost = raw[name] * p.price * MARKUP;
-    gal += g; mat += cost;
-    scale[name] = rawCost > 0 ? cost / rawCost : 1;
-    products.push({ product: name, galRaw: raw[name], gal: g, cost, price: p.price });
-  });
-  return { gal, mat, products, scale };
-}
-
 function jobExtras() {
   const dc  = parseInt(job.doorCount)    || 0;
   const dp  = parseFloat(job.doorPrice)  || 0;
@@ -3989,22 +3952,21 @@ function calcExt(room) {
   const trimLF   = perimeter;
 
   const p     = PRODUCTS.find(x=>x.name===room.product) || PRODUCTS[4] || PRODUCTS[0];
-  // See calc(): raw requirement here, rounded once per product in jobPaint().
-  const gSid  = room.surfaces.walls ? sidingSF*c/p.cov : 0;
+  const gSid  = room.surfaces.walls ? Math.ceil(sidingSF*c/p.cov) : 0;
   // If James measured it, he intends to paint it. Porch ceiling and deck used
   // to require a surface toggle as WELL as a measurement, so sections he had
   // measured were silently dropped from the bid (a real Robin Castor job lost
   // \$1,094 this way). Soffit already worked on measurement alone; these now
   // match it. Nothing measured = 0, so this can't inflate a bid.
-  const gSof  = soffitSF    > 0 ? soffitSF*c/p.cov    : 0;
-  const gPorch= porchCeilSF > 0 ? porchCeilSF*c/p.cov : 0;
-  const gDck  = deckSF      > 0 ? deckSF*c/p.cov      : 0;
+  const gSof  = soffitSF    > 0 ? Math.ceil(soffitSF*c/p.cov)    : 0;
+  const gPorch= porchCeilSF > 0 ? Math.ceil(porchCeilSF*c/p.cov) : 0;
+  const gDck  = deckSF      > 0 ? Math.ceil(deckSF*c/p.cov)      : 0;
   // A pergola's footprint understates how much wood gets coated — every rafter,
   // beam and post takes stain on all four faces. Doubling the footprint for the
   // gallon count matches the published coverage tables (a footprint up to about
   // 175 sf takes 1 gallon). Labor below still prices on the footprint.
-  const gPerg = pergolaSF   > 0 ? pergolaSF*PERGOLA_SURFACE_FACTOR*c/p.cov : 0;
-  const gTrim = room.surfaces.trim  ? trimLF*c/p.cov  : 0;
+  const gPerg = pergolaSF   > 0 ? Math.ceil(pergolaSF*PERGOLA_SURFACE_FACTOR*c/p.cov) : 0;
+  const gTrim = room.surfaces.trim  ? Math.ceil(trimLF*c/p.cov)  : 0;
   const gal   = gSid + gSof + gPorch + gDck + gPerg + gTrim;
 
   const r   = room.rates || extRates;
@@ -4039,15 +4001,10 @@ function calc(room) {
   const trimLF  = perimeter;
 
   const p      = PRODUCTS.find(x=>x.name===room.product) || PRODUCTS[0];
-  // Paint is bought by the can for the WHOLE JOB, not per surface per room.
-  // Rounding each surface up separately charged a customer for cans that were
-  // never bought (a measured 8-room house billed 39 gallons against 24.8
-  // actually needed - \$1,226 of phantom paint). Keep the raw requirement here
-  // and round ONCE per product at the job level in jobPaint().
-  const gWall  = room.surfaces.walls   ? wallSF*c/p.cov  : 0;
-  const gCeil  = room.surfaces.ceiling ? floorSF*c/p.cov : 0;
-  const gFloor = room.surfaces.floor   ? floorSF*c/p.cov : 0;
-  const gTrim  = room.surfaces.trim    ? trimLF*c/p.cov  : 0;
+  const gWall  = room.surfaces.walls   ? Math.ceil(wallSF*c/p.cov)  : 0;
+  const gCeil  = room.surfaces.ceiling ? Math.ceil(floorSF*c/p.cov) : 0;
+  const gFloor = room.surfaces.floor   ? Math.ceil(floorSF*c/p.cov) : 0;
+  const gTrim  = room.surfaces.trim    ? Math.ceil(trimLF*c/p.cov)  : 0;
   const gal    = gWall + gCeil + gFloor + gTrim;
 
   const r   = room.rates || rates;
@@ -5115,7 +5072,7 @@ function recalcRoom(id) {
 // card blank.
 function paintRoomSummary(id) {
   const room=rooms.find(r=>r.id===id); if(!room) return;
-  const c=roomShare(room), el=document.getElementById(`${id}_sum`);
+  const c=calc(room), el=document.getElementById(`${id}_sum`);
   const badge=document.getElementById(`${id}_sfbadge`);
 
   if(c.valid){
@@ -5147,7 +5104,7 @@ function recalcAll() {
   const cs=rooms.map(calc);
   const ex = jobExtras();
   const any = cs.some(c=>c.valid) || ex.doorCount>0 || ex.winCount>0 || ex.shutterCount>0 || ex.washSF>0;
-  const _paint = jobPaint(); const mat = _paint.mat;   // whole cans, rounded once per product
+  const mat=cs.reduce((a,c)=>a+c.mat,0);
   const lab=cs.reduce((a,c)=>a+c.lab,0) + ex.total;
   const grand=mat+lab;
   const dwTotEl = document.getElementById('job-door-total');
@@ -5190,7 +5147,7 @@ function renderBid() {
   const date   = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
   const cs     = rooms.map(calc);
   const ex     = jobExtras();
-  const _paint = jobPaint(); const mat    = _paint.mat;   // whole cans, rounded once per product
+  const mat    = cs.reduce((a,c)=>a+c.mat,0);
   const lab    = cs.reduce((a,c)=>a+c.lab,0) + ex.total;
   const grand  = mat+lab;
 
@@ -5714,7 +5671,7 @@ const _qbNum     = n => Math.round(n).toLocaleString('en-US');
 function copyBidForQuickBooks(){
   const cs      = rooms.map(calc);
   const ex      = jobExtras();
-  const _paint = jobPaint(); const mat     = _paint.mat;   // whole cans, rounded once per product
+  const mat     = cs.reduce((a,c)=>a+c.mat,0);
   const roomLab = cs.reduce((a,c)=>a+c.lab,0);
   const grand   = mat + roomLab + ex.total;
   // A wash-only or extras-only job is real work (a house wash with no
@@ -5722,7 +5679,7 @@ function copyBidForQuickBooks(){
   if (grand <= 0){ showToast('Nothing to copy yet — measure a side or add a charge', 'warn'); return; }
   const isExt  = estimatorMode === 'exterior';
   const kind   = isExt ? 'Exterior' : 'Interior';
-  const gal    = jobPaint().gal;   // whole cans bought
+  const gal    = cs.reduce((a,c)=>a+(c.gal||0),0);
   const client = (document.getElementById('client-name').value || '').trim() || 'Customer';
   const addr   = (document.getElementById('job-address').value || '').trim();
   const done   = rooms.filter((r,i)=>cs[i].valid);
@@ -5955,7 +5912,7 @@ function openProProposal(imp){
   const ex = (!imp && typeof jobExtras === 'function') ? jobExtras() : { total:0 };
   const impSvc   = imp ? (imp.areas||[]).reduce((s,a)=>s+a.items.reduce((t,i)=>t+i.amount,0),0) : 0;
   const labTotal = imp ? impSvc : cs.reduce((a,c)=>a+(c.lab||0),0) + (ex.total||0);
-  const totalGal = imp ? 0 : jobPaint().gal;   // whole cans bought
+  const totalGal = imp ? 0 : cs.reduce((a,c)=>a+(c.gal||0),0);
   const prodObj  = PRODUCTS.find(x => x.name === ((rooms[0] && rooms[0].product))) || { price:65 };
   const costGal  = imp ? 0 : prodObj.price; // app stores paint COST per gallon
   const client  = (imp && imp.client)  || document.getElementById('client-name').value || '';
@@ -6507,7 +6464,7 @@ async function printAtHome() {
   const date   = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
   const cs     = rooms.map(calc);
   const extras = jobExtras();
-  const _paint = jobPaint(); const mat    = _paint.mat;   // whole cans, rounded once per product
+  const mat    = cs.reduce((a,c)=>a+c.mat,0);
   const lab    = cs.reduce((a,c)=>a+c.lab,0) + extras.total;
   const grand  = mat + lab;
 
@@ -7877,7 +7834,7 @@ function buildEstimateSummary(){
     ? rooms.map((r,i) => { const c = cs[i]; return `- ${r.name || 'Room ' + (i+1)} (${r.mode}): ${c.valid ? c.totalSF.toFixed(0) + ' sf, ' + fmt(c.total) : 'not filled in yet'}`; }).join('\n')
     : '(no rooms yet)';
   const liLines = jobLineItems.length ? jobLineItems.map(li => `- ${li.label}: ${fmt(parseFloat(li.amount)||0)}`).join('\n') : '(none)';
-  const _paint = jobPaint(); const mat = _paint.mat;   // whole cans, rounded once per product
+  const mat = cs.reduce((a,c)=>a+c.mat,0);
   const lab = cs.reduce((a,c)=>a+c.lab,0) + ex.total;
   return `Mode: ${estimatorMode}\nRooms:\n${roomLines}\nDoors: ${ex.doorCount}, Windows: ${ex.winCount}${ex.shutterCount ? ', Shutters: ' + ex.shutterCount : ''}\nCustom charges:\n${liLines}\nCurrent estimate total: ${fmt(mat + lab)}`;
 }

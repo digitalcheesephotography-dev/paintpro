@@ -344,14 +344,6 @@ Exterior: `front side` / `left side` / `name it garage` / `call it back`
 
 ---
 
-### Paint gallons — rounded ONCE per product, per job
-
-`calc()` / `calcExt()` return the **raw, unrounded** gallon requirement per surface. `jobPaint()` sums that per product across every valid room and rounds **up once** — those are the cans actually bought and what the customer is charged. `roomShare(room)` scales a room's raw material share by its product's whole-can factor, so room subtotals on the bid still sum exactly to the Materials line.
-
-**Why:** each surface used to be `Math.ceil`d separately in every room. A measured 8-room interior (walls + ceilings + trim, 2 coats, Regal Select) billed **39 gallons against 24.8 actually needed — $1,226 of paint that was never bought**, and the client proposal prints the gallon count. After the fix the same job bills 25 cans / $2,160 instead of $3,369.60. Every consumer (totals strip, bid, QuickBooks copy, professional proposal) goes through `jobPaint()`.
-
-**Known related issue, NOT yet fixed:** trim gallons still divide **linear feet** by a **square-foot** coverage (`trimLF*c/p.cov`), so 52 ft of baseboard is treated as 52 sf of paint. Whether that is right depends on the trim profile James paints — ask him for a sf-per-linear-foot factor before changing it, because it moves every bid with trim.
-
 ## 9. Pricing defaults
 - Door = **$75 each**
 - Window = **$50 each**

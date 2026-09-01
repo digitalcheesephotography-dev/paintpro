@@ -5744,7 +5744,7 @@ function copyBidForQuickBooks(){
   if (roomLab > 0) item(kind + ' Painting - Project Services', [svc].concat(sideBlock), roomLab);
   if (mat > 0) item('Paint & Materials',
     'Paint and supplies' + (prods.length ? ' (' + prods.join(', ') + ')' : '')
-    + (gal > 0 ? ', ' + plural(gal, 'gallon') : '') + '.', mat);
+    + '.', mat);   // gallon count deliberately omitted - not shown to the customer
   if (ex.washTotal > 0) item('Power Washing',
     'Power washing of ' + _qbNum(ex.washSF) + ' sq ft of exterior surfaces.', ex.washTotal);
   if (ex.doorTotal > 0)    item('Doors',    'Painting of ' + plural(ex.doorCount, 'door') + '.', ex.doorTotal);
@@ -5969,10 +5969,17 @@ Our work will include:
     ${lbl('Scope of Work')}${inp('pp-scope', defScope, 5)}
     ${lbl('About the Product'+(prod?' ('+prod+')':''))}${inp('pp-about', defAbout, 4)}
     <div style="border-top:1px solid var(--border);margin:6px 0 14px"></div>
-    ${lbl('Paint product name (shown on the paint line)')}${inp('pp-product', prod)}
-    ${lbl('Gallons')}${money('pp-gal', totalGal)}
-    ${lbl('Retail price per gallon  ($, what the store charges — edit to your real retail)')}${money('pp-retail', costGal * MARKUP)}
-    ${lbl('Your cost per gallon  ($, set below retail to show a Volume Discount)')}${money('pp-cost', costGal)}
+    <label style="display:flex;align-items:center;gap:10px;font-size:15px;color:var(--text);margin:2px 0 12px;cursor:pointer">
+      <input type="checkbox" id="pp-show-paint" onchange="_proTogglePaint()" style="width:22px;height:22px;accent-color:var(--blue)"/>
+      Show the paint &amp; gallon breakdown to the customer
+    </label>
+    <div id="pp-paint-note" style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:12px">Off: the proposal shows one all-inclusive price and never prints a gallon count. The paint cost is folded into Project Services, so the total is identical either way.</div>
+    <div id="pp-paint-fields" style="display:none">
+      ${lbl('Paint product name (shown on the paint line)')}${inp('pp-product', prod)}
+      ${lbl('Gallons')}${money('pp-gal', totalGal)}
+      ${lbl('Retail price per gallon  ($, what the store charges — edit to your real retail)')}${money('pp-retail', costGal * MARKUP)}
+      ${lbl('Your cost per gallon  ($, set below retail to show a Volume Discount)')}${money('pp-cost', costGal)}
+    </div>
     <div id="pp-svc-single" style="display:none">
       ${lbl('Project Services  ($, labor as one number)')}${money('pp-svc', labTotal)}
       <button type="button" onclick="_proUseAreas()" style="width:100%;height:42px;background:transparent;border:1px dashed var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;margin:2px 0 12px">＋ Break the price down by room / area</button>
@@ -6094,16 +6101,43 @@ function _proAddAreaItem(card, label, amt){
   wrap.appendChild(row);
   _proRecalc();
 }
+// Hiding the paint breakdown must not change what the customer pays. The
+// paint money is folded into the services total in _proCollect/_proRecalc,
+// which works whether the price is shown as one Project Services number or
+// broken down by area.
+function _proTogglePaint(){
+  const on   = !!(document.getElementById('pp-show-paint')||{}).checked;
+  const box  = document.getElementById('pp-paint-fields');
+  const note = document.getElementById('pp-paint-note');
+  if (box)  box.style.display = on ? '' : 'none';
+  if (note) note.textContent = on
+    ? 'On: the proposal itemises the paint line and the Volume Discount, and prints the gallon count.'
+    : 'Off: the proposal shows one all-inclusive price and never prints a gallon count. The paint cost is folded in, so the total is identical either way.';
+  _proRecalc();
+}
+
+// What the paint adds to the total: gallons x YOUR cost (retail minus the
+// volume discount nets back to cost). Used to keep the total identical when
+// the paint line is hidden.
+function _proPaintCost(){
+  return _proNum('pp-gal') * _proNum('pp-cost');
+}
+
 function _proRecalc(){
-  const gal=_proNum('pp-gal'), retail=_proNum('pp-retail'), cost=_proNum('pp-cost');
-  const total = gal*retail - gal*Math.max(0,retail-cost) + _proServicesTotal(); // = gal*cost + services
+  const showPaint = !!(document.getElementById('pp-show-paint')||{}).checked;
+  const gal=showPaint?_proNum('pp-gal'):0, retail=showPaint?_proNum('pp-retail'):0, cost=showPaint?_proNum('pp-cost'):0;
+  const total = gal*retail - gal*Math.max(0,retail-cost)
+              + _proServicesTotal() + (showPaint ? 0 : _proPaintCost()); // paint stays in the total either way
   const el = document.getElementById('pp-total'); if (el) el.textContent = fmt(Math.max(0,total));
 }
 function _proCollect(){
   const g = id => (document.getElementById(id)||{}).value || '';
-  const gal=_proNum('pp-gal'), retail=_proNum('pp-retail'), cost=_proNum('pp-cost');
+  const showPaint = !!(document.getElementById('pp-show-paint')||{}).checked;
+  const gal=showPaint?_proNum('pp-gal'):0, retail=showPaint?_proNum('pp-retail'):0, cost=showPaint?_proNum('pp-cost'):0;
   const areas=_proAreasData();
-  const svc=_proServicesTotal();
+  // Hidden: the paint line disappears from the document but its cost stays in
+  // the total, folded into services. Shown: services is labour only.
+  const svc=_proServicesTotal() + (showPaint ? 0 : _proPaintCost());
   const perGal = Math.max(0, retail-cost);
   const paintRetail = gal*retail, discount = gal*perGal;
   return { title:g('pp-title'), client:g('pp-client'), address:g('pp-addr'), scope:g('pp-scope'), about:g('pp-about'),

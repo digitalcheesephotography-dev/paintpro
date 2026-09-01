@@ -1221,6 +1221,14 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Public Key</label>
     <input type="text" id="emailjs-key" placeholder="your public key" autocomplete="off"
            style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:10px"/>
+    <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Blind copy every client email to <span style="color:#6b7a8d">(optional)</span></label>
+    <input type="text" id="bcc-email" inputmode="email" placeholder="name@example.com" autocomplete="off"
+           style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:8px"/>
+    <button onclick="saveBccEmail()"
+            style="width:100%;height:44px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;margin-bottom:6px">
+      Save Blind Copy
+    </button>
+    <div id="bcc-email-status" style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:12px"></div>
     <button onclick="saveEmailjsConfig()"
             style="width:100%;height:50px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">
       Save Email Settings
@@ -1619,7 +1627,24 @@ const PRODUCTS = [
   {name:"Custom Product",             price:65, cov:400},
 ];
 const MARKUP = 1.20;
-const LISA_EMAIL = 'lbailey@digitalcheese.us';
+// Was a hard-coded personal email sitting in a public repo. It drives the BCC
+// on "Email to Client", so it is a real feature, not dead code - moved to a
+// setting (Settings -> Email Client a Copy) instead of being deleted. Synced
+// with the account so a reinstall doesn't silently drop the BCC.
+const BCC_KEY = 'ingersoll_bcc_email_v1';
+function loadBccEmail(){ return (localStorage.getItem(BCC_KEY) || '').trim(); }
+function saveBccEmail(){
+  const el = document.getElementById('bcc-email');
+  const st = document.getElementById('bcc-email-status');
+  const set = (m, ok) => { if (st) { st.textContent = m; st.style.color = ok ? 'var(--green)' : 'var(--red)'; } };
+  if (!el) return;
+  const v = (el.value || '').trim();
+  if (!v) { localStorage.removeItem(BCC_KEY); set('Blind copy turned off.', true); showToast('Blind copy cleared'); return; }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { set('That does not look like an email address.'); return; }
+  localStorage.setItem(BCC_KEY, v);
+  set('✓ Saved — ' + v + ' will be blind-copied on client emails.', true);
+  showToast('✓ Blind copy saved');
+}
 const _esc = s => (s == null ? '' : String(s))
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
   .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -1886,6 +1911,7 @@ const SYNC_KEYS = [
   // Still excluded from BACKUP_KEYS: a backup JSON is an exportable/shareable
   // file, so the secret stays out of it.
   'ingersoll_anthropic_key_v1',
+  'ingersoll_bcc_email_v1',
 ];
 
 let _db = null;        // Firestore instance (null = local-only mode)
@@ -6464,7 +6490,8 @@ function emailBid() {
     `Thank you for choosing Ingersoll Painting LLC`
   );
 
-  const bcc = LISA_EMAIL ? `&bcc=${encodeURIComponent(LISA_EMAIL)}` : '';
+  const _bcc = loadBccEmail();
+  const bcc = _bcc ? `&bcc=${encodeURIComponent(_bcc)}` : '';
   window.open(`mailto:${toEmail}?subject=${subject}${bcc}&body=${body}`);
   if (!toEmail) showToast('No email on file — add one to this client first', 'warn');
 }
@@ -6740,6 +6767,7 @@ function switchTab(tab) {
     renderLockSettings();
     renderSetupStatus();
     syncDepositUI();
+    { const be = document.getElementById('bcc-email'); if (be) be.value = loadBccEmail(); }
     const ej = loadEmailjsConfig();
     if (ej) {
       const s=document.getElementById('emailjs-service'), t=document.getElementById('emailjs-template'), y=document.getElementById('emailjs-key');

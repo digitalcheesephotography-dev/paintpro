@@ -1063,6 +1063,21 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div id="lock-status" style="font-size:13px;color:var(--muted);text-align:center;margin-top:10px"></div>
   </div>
 
+  <!-- Pay by Card (QuickBooks) -->
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
+    <div style="font-family:var(--head);font-size:20px;color:#2ca01c;margin-bottom:4px">💳 Pay by Card (QuickBooks)</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      Paste a reusable QuickBooks payment link and a <strong style="color:var(--text)">💳 Pay by Card</strong> button appears on your bids, so a customer can pay on the spot. Get one in QuickBooks under <em>Get paid → Payment links</em> (QuickBooks Payments must be switched on).
+    </div>
+    <input type="text" id="qb-paylink" inputmode="url" placeholder="https://…intuit.com/pay/…" autocomplete="off"
+           style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:10px"/>
+    <button onclick="saveQbPayLink()"
+            style="width:100%;height:50px;background:#2ca01c;color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">
+      Save Payment Link
+    </button>
+    <div id="qb-paylink-status" style="font-size:13px;color:var(--muted);text-align:center;margin-top:10px"></div>
+  </div>
+
   <!-- AI Photo Estimator -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
     <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🤖 AI Photo Estimator</div>
@@ -2071,6 +2086,23 @@ function loadDepositConfig(){
 }
 function depositEnabled(){ const d = loadDepositConfig(); return !!(d && d.enabled && d.pct > 0); }
 function loadQbPayLink(){ return (localStorage.getItem(QB_PAYLINK_KEY) || '').trim(); }
+// Removing the Stripe card also removed the only input that wrote the
+// QuickBooks pay link, so James's chosen payment path could never be turned
+// on. This is its own card and its own saver now, independent of Stripe.
+function saveQbPayLink(){
+  const el = document.getElementById('qb-paylink');
+  const st = document.getElementById('qb-paylink-status');
+  const set = (m, ok) => { if (st) { st.textContent = m; st.style.color = ok ? 'var(--green)' : 'var(--red)'; } };
+  if (!el) return;
+  const url = (el.value || '').trim();
+  if (!url) { localStorage.removeItem(QB_PAYLINK_KEY); set('Pay by Card button turned off.', true); showToast('QuickBooks pay link cleared'); return; }
+  if (!/^https:\/\/\S+$/i.test(url)) { set('The link must start with https://'); return; }
+  localStorage.setItem(QB_PAYLINK_KEY, url);
+  set('✓ Saved — a 💳 Pay by Card button now shows on your bids.', true);
+  showToast('✓ QuickBooks pay link saved');
+  if (typeof bidOpen !== 'undefined' && bidOpen) renderBid();   // button appears immediately
+}
+
 function saveDepositConfig(){
   const pctRaw = (document.getElementById('deposit-pct').value || '').trim();
   const on     = document.getElementById('deposit-enabled').checked;
@@ -2096,14 +2128,12 @@ function payByCardQuickBooks(){
 }
 // Fill the payment inputs from saved config when Settings opens.
 function syncDepositUI(){
-  const d = loadDepositConfig();
-  const pctEl = document.getElementById('deposit-pct');
-  const onEl  = document.getElementById('deposit-enabled');
-  const qbEl  = document.getElementById('qb-paylink');
-  if (pctEl) pctEl.value = d && d.pct ? d.pct : 25;
-  if (onEl)  onEl.checked = !!(d && d.enabled);
-  if (qbEl)  qbEl.value = loadQbPayLink();
+  const qbEl = document.getElementById('qb-paylink');
+  if (qbEl) qbEl.value = loadQbPayLink();
+  const st = document.getElementById('qb-paylink-status');
+  if (st && loadQbPayLink()) { st.textContent = '✓ Pay by Card button is on'; st.style.color = 'var(--green)'; }
 }
+
 
 async function testAnthropicKey() {
   const st = document.getElementById('settings-key-status');
@@ -6496,7 +6526,7 @@ function savePrintSecret() {
 // Each card is sorted into a named group; anything unmatched falls to the end
 // so a newly-added card is never lost.
 const SETTINGS_GROUPS = [
-  { name: '🔧 SET UP (ONE TIME)', match: [/AI Photo|Estimator/i, /Email Client/i] },
+  { name: '🔧 SET UP (ONE TIME)', match: [/AI Photo|Estimator/i, /Pay by Card/i, /Email Client/i] },
   { name: '🧰 TOOLS',             match: [/Visualizer/i] },
   { name: '🔐 ACCOUNT & DATA',    match: [/Account Vault/i, /Account/i, /App Lock/i, /Backup/i, /Privacy/i] },
   { name: 'ℹ️ APP',               match: [/About/i] },

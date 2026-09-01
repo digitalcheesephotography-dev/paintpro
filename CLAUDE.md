@@ -2,6 +2,11 @@
 
 Reference document for AI assistants (Claude Code, future Claude chat sessions) working on this repository. Read this first before making changes.
 
+> ## ⚠️ START HERE — run `git log --oneline -30` FIRST
+> The copy of this file preloaded into your context may be **stale** (this was confirmed on Aug 31 2026: a fresh session was handed a version two commits old that described an app with four tabs, an APT section, and Projects/Notes sub-tabs — none of which exist). The working tree is the truth. `git log` subjects state removals in plain English and will inoculate you against a bad context in one command.
+>
+> **A lot has been deliberately removed from this app. See [section 17](#17-removed-on-purpose--do-not-re-add-without-asking) before proposing anything that looks "missing."**
+
 ---
 
 ## 1. What this project is
@@ -89,7 +94,7 @@ paintpro/
 - **Google Fonts** — Bebas Neue + Barlow Condensed, loaded from CDN
 - **Web Bluetooth API** — for Leica DISTO D2 laser measurer integration
 - **Web Speech API** — for voice commands (Chrome only)
-- **localStorage** — for all job/client/project/notes/materials/apt data
+- **localStorage** — for job/client/materials data (project, notes and apt keys still exist but their UI was retired — see section 17)
 - **IndexedDB** — for photo storage (larger blobs, keyed by photo ID)
 - **Service Worker API** — for offline support and installability
 
@@ -171,8 +176,6 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 1. **ESTIMATE** (`#tab-estimate` → `#estimator-section`) — room-by-room measurements + doors/windows + bid generation
 2. **CLIENTS** (`#tab-contacts` → `#contacts-section`) — sub-nav: **Clients | Materials** only (Projects and Notes were retired — see section 17)
 3. **☰ MENU** (`#tab-settings` → `#settings-section`) — quick actions, a **setup-status strip** (`renderSetupStatus()`: signed-in + AI-key readiness, each row taps through to the card that fixes it via `openSettingsCard(rx)`), a **live search box** (`filterSettings()`), then settings cards sorted into named groups by `organizeSettingsMenu()` / `SETTINGS_GROUPS` (Refresh App pinned first; unmatched cards fall into "⋯ MORE" so a new card is never lost). Old layout was 15 ungrouped collapsed cards in arbitrary order.
-   Legacy note — the original description follows: — quick-action grid (Jobs, Proposals & Signatures, Shared Files, Send a Written Bid) followed by collapsed settings sections. `buildSettingsAccordion()` (run once at boot) folds every settings card to its title row with a chevron; tap to expand. New settings cards added as plain `<div>` cards in `#settings-section` are picked up automatically — first child = always-visible header, rest = collapsible body.
-
 ### Estimator tab order (top to bottom)
 1. **📁 Jobs button** (`#current-job-badge`) — opens the saved-jobs modal; label reflects currently-loaded snapshot name when set
 2. Client name + Job address inputs
@@ -357,11 +360,11 @@ Exterior: `front side` / `left side` / `name it garage` / `call it back`
 | `ingersoll_rates_v1` | Interior labor rates object |
 | `ingersoll_ext_rates_v1` | Exterior labor rates object |
 | `ingersoll_contacts_v1` | Contacts/clients array |
-| `ingersoll_projects_v1` | Projects array |
-| `ingersoll_notes_v1` | Notes array |
+| `ingersoll_projects_v1` | ⚠️ **RETIRED UI (section 17)** — data kept, no longer reachable. Projects array |
+| `ingersoll_notes_v1` | ⚠️ **RETIRED UI (section 17)** — data kept, no longer reachable. Notes array |
 | `ingersoll_materials_v1` | Materials lists array |
-| `ingersoll_apt_pricing_v1` | Apt pricing locations/units |
-| `ingersoll_supplies_v1` | Supplies (apt sub-section) |
+| `ingersoll_apt_pricing_v1` | ⚠️ **RETIRED UI (section 17)** — data kept, no longer reachable. Apt pricing locations/units |
+| `ingersoll_supplies_v1` | ⚠️ **RETIRED UI (section 17)** — data kept, no longer reachable. Supplies (apt sub-section) |
 | `ingersoll_pin_v1` | App Lock PIN (PBKDF2-SHA256 salt+hash; device-local, NOT synced) |
 | `ingersoll_bio_v1` | App Lock WebAuthn credential id for fingerprint unlock (device-local) |
 | `ingersoll_proposals_v1` | Sent e-signature proposals (id, client, status, url, signer; device-local) |
@@ -439,19 +442,19 @@ IndexedDB: `paintpro-photos` database, object store `photos`, keyed by photo ID 
 ### Contacts (Clients sub-tab)
 `loadContacts`, `saveContacts`, `renderContacts`, `openContactModal`, `closeContactModal`, `saveContact`, `deleteContact`, `buildContactCard`, `buildQuickTexts`, `toggleQuickTexts`, `setStatusFilter`, `showServices`
 
-### Projects
+### Projects — ⚠️ RETIRED UI (section 17); functions remain, no buttons
 `projLoad`, `projSave`, `renderProjects`, `openProjectModal`, `closeProjectModal`, `saveProject`, `deleteProject`, `projAddTask`, `projToggleTask`, `renderProjTasks`
 
-### Notes
+### Notes — ⚠️ RETIRED UI (section 17); functions remain, no buttons
 `notesLoad`, `notesSave`, `renderNotes`, `openNoteModal`, `closeNoteModal`, `saveNote`, `deleteNote`
 
 ### Materials (Lists)
 `materialsLoad`, `materialsSave`, `renderMaterials`, `openMaterialsModal`, `closeMaterialsModal`, `renderMlItems`, `mlAddItem`, `mlPullFromEstimator`, `mlCopyToClipboard`, `saveMaterials`, `deleteMaterials`
 
-### Apt Pricing
+### Apt Pricing — ⚠️ RETIRED UI (section 17); functions remain, no tab
 `aptLoad`, `aptSaveData`, `aptRender`, `aptRenderActive`, `aptOpenAddLoc`, `aptCloseLocModal`, `aptSaveLoc`, `aptRemoveLoc`, `aptSelectLoc`, `aptOpenAddUnit`, `aptCloseUnitModal`, `aptSaveUnit`, `aptRemoveUnit`
 
-### Supplies (Apt sub-section)
+### Supplies (Apt sub-section) — ⚠️ RETIRED UI (section 17)
 `supplyLoad`, `supplySave`, `renderSupplies`, `openSupplyModal`, `closeSupplyModal`, `saveSupply`, `deleteSupply`
 
 ---
@@ -524,7 +527,7 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
 
 ## 15. Open questions / known TODOs
 
-- **Railing $8.00/lf and tread $15 each are placeholder defaults** — James should replace them with his own pricing. (Pergola's $6.00/sf is researched — see 7.x.)
+- **Railing $8.00/lf and tread $15 each are placeholder defaults** — James should replace them with his own pricing. (Pergola's $6.00/sf is researched — see the pergola notes in section 7.)
 - **Lowe's price lookup is intentionally NOT in the app.** Materials list → 📋 copy → paste into a Claude chat → prices back. Don't add live price lookup.
 - **Logo-based PWA icons are current.** The old "IP monogram" placeholders are obsolete.
 - **Offered and deferred, still worth doing:** carry the rest of a room's settings (product, coats, surface toggles) forward to the next room — ceiling height already does; and the bid's ~12-button stack in 9 colours needs one clear primary action (the audit found "Send this Bid for Signature" sitting 4th of 12, ~2,748px down the page).
@@ -563,6 +566,7 @@ James cut these after using the app on real jobs. **Do not rebuild them, do not 
 - **Payments = QuickBooks, not Stripe.** Per-job Pay-Now links are created through the QuickBooks connector in a normal Claude chat. A single reusable fixed-amount link was considered and rejected: QuickBooks multi-use links carry a fixed amount and deposits vary per job.
 - **No live Lowe's/price lookup in the app.** Materials list → copy → paste into a Claude chat.
 - **Do not split the single HTML file.**
+- **⚠️ Two secrets are currently IN the repo and should be rotated/removed:** `PRINT_HUB_TOPIC = 'ingersoll-print-7h112nufd393'` (an ntfy.sh topic is a bearer token — anyone with the repo can push to his home printer; Print Hub is retired so this can simply be blanked) and `LISA_EMAIL`. Flagged Aug 31 2026, not yet actioned — ask James.
 - **Do not put secrets in the app or the repo.** The Anthropic key is device-local but synced to the user's own Firestore; `STRIPE_SECRET_KEY` lives only as a Cloudflare env var.
 
 ---

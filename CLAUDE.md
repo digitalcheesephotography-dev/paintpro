@@ -169,9 +169,8 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 
 ### Top-level tabs (`#tab-bar`)
 1. **ESTIMATE** (`#tab-estimate` → `#estimator-section`) — room-by-room measurements + doors/windows + bid generation
-2. **CLIENTS** (`#tab-contacts` → `#contacts-section`) — sub-nav for Clients, Projects, Materials, Notes
-3. **APT PRICING** (`#tab-apt` → `#apt-section`) — property/unit pricing reference
-4. **☰ MENU** (`#tab-settings` → `#settings-section`) — quick actions, a **setup-status strip** (`renderSetupStatus()`: signed-in + AI-key readiness, each row taps through to the card that fixes it via `openSettingsCard(rx)`), a **live search box** (`filterSettings()`), then settings cards sorted into named groups by `organizeSettingsMenu()` / `SETTINGS_GROUPS` (Refresh App pinned first; unmatched cards fall into "⋯ MORE" so a new card is never lost). Old layout was 15 ungrouped collapsed cards in arbitrary order.
+2. **CLIENTS** (`#tab-contacts` → `#contacts-section`) — sub-nav: **Clients | Materials** only (Projects and Notes were retired — see section 17)
+3. **☰ MENU** (`#tab-settings` → `#settings-section`) — quick actions, a **setup-status strip** (`renderSetupStatus()`: signed-in + AI-key readiness, each row taps through to the card that fixes it via `openSettingsCard(rx)`), a **live search box** (`filterSettings()`), then settings cards sorted into named groups by `organizeSettingsMenu()` / `SETTINGS_GROUPS` (Refresh App pinned first; unmatched cards fall into "⋯ MORE" so a new card is never lost). Old layout was 15 ungrouped collapsed cards in arbitrary order.
    Legacy note — the original description follows: — quick-action grid (Jobs, Proposals & Signatures, Shared Files, Send a Written Bid) followed by collapsed settings sections. `buildSettingsAccordion()` (run once at boot) folds every settings card to its title row with a chevron; tap to expand. New settings cards added as plain `<div>` cards in `#settings-section` are picked up automatically — first child = always-visible header, rest = collapsible body.
 
 ### Estimator tab order (top to bottom)
@@ -189,9 +188,8 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 
 ### Clients tab sub-nav (`switchSubnav()`)
 - `subnav-clients` → `#sub-clients` — contact list with status filters
-- `subnav-projects` → `#sub-projects` — project tracking with task checklists
+- ~~`subnav-projects`~~ / ~~`subnav-notes`~~ — **retired** (section 17). Panes, code and `ingersoll_projects_v1` / `ingersoll_notes_v1` are intact; only the buttons and their voice commands were removed, and `switchSubnav()` is null-guarded for them.
 - `subnav-materials` → `#sub-materials` — per-job materials lists with copy-to-clipboard
-- `subnav-notes` → `#sub-notes` — general notes
 
 ---
 
@@ -235,7 +233,7 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 - `armDimShot(roomId, field)` arms the Length or Width field for a shoot
 - Every measurable field should have its own 📐 shoot button (not just the dropdown)
 
-### 7.6 Auto-Print Hub
+### 7.6 Auto-Print Hub — ⚠️ REMOVED FROM THE UI (see section 17)
 - `const PRINT_HUB_TOPIC = ''` — set this to a hard-to-guess ntfy.sh topic name to enable
 - `printAtHome()` — sends the current bid as plain text to `ntfy.sh/{topic}` via HTTP POST
 - `print_hub.py` (in repo root) — Python script that runs on the home PC; streams from ntfy.sh and opens the bid in a local browser page with `window.print()` auto-triggered
@@ -243,7 +241,7 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 - Setup: `pip install requests` on PC, set matching topic in both files, run `python print_hub.py`
 - Auto-start on Windows: shortcut to `pythonw print_hub.py` in `shell:startup` folder
 
-### 7.8 Online deposit collection (Stripe) — built
+### 7.8 Online deposit collection (Stripe) — ⚠️ BUILT BUT REMOVED FROM THE UI (see section 17). James uses QuickBooks for payments.
 - Lets a homeowner pay a deposit by card right after they sign a proposal. **Card data never touches the app or `proposal.html`** — the client is handed off to Stripe's hosted checkout (PCI stays with Stripe).
 - **Config:** Settings → 💳 Collect a Deposit Online. `ingersoll_deposit_v1 = {enabled, pct}` (device-local). `loadDepositConfig()` / `depositEnabled()` / `saveDepositConfig()` / `syncDepositUI()`.
 - **Secret key** (`STRIPE_SECRET_KEY`) lives ONLY as a Cloudflare env var on the Worker (`worker.js`) — never in the app. The app reuses the existing **Proxy URL** (`ingersoll_proxy_url_v1`) as the Worker endpoint.
@@ -526,20 +524,49 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
 
 ## 15. Open questions / known TODOs
 
-- **Doors & Windows card placement.** Currently sits between "+ Add Room" and the Notes field. James hasn't decided whether to move it (top of estimator / inside each room card / new tab).
-- **Logo-based icons deployed.** PWA icons were regenerated from the actual Ingersoll Painting logo. Earlier "IP monogram" placeholder icons are obsolete.
-- **Lowe's price lookup is intentionally NOT in the app.** Workflow: build materials list in app → tap 📋 copy → paste into Claude chat → get prices back. Don't add live price lookup to the HTML.
+- **Railing $8.00/lf and tread $15 each are placeholder defaults** — James should replace them with his own pricing. (Pergola's $6.00/sf is researched — see 7.x.)
+- **Lowe's price lookup is intentionally NOT in the app.** Materials list → 📋 copy → paste into a Claude chat → prices back. Don't add live price lookup.
+- **Logo-based PWA icons are current.** The old "IP monogram" placeholders are obsolete.
+- **Offered and deferred, still worth doing:** carry the rest of a room's settings (product, coats, surface toggles) forward to the next room — ceiling height already does; and the bid's ~12-button stack in 9 colours needs one clear primary action (the audit found "Send this Bid for Signature" sitting 4th of 12, ~2,748px down the page).
+- **Tom Skeffington's $9,169 exterior proposal is deliberately NOT in QuickBooks** — James asked to hold. There is no "Skeffington" customer there, and the connector's fuzzy search confidently offers three *wrong* Toms (McConkey 99.6%, Johnston, Needle). **Never trust `best_match` on a name that isn't an exact hit.**
+- **Most of James's estimates from the last 8–10 months live in past Claude chats**, not in QuickBooks or the app.
 
 ---
 
 ## 16. When you start a new session
 
-1. Read this file
-2. Ask the user to share the latest `PaintPro-ZFold.html` if working on a code change (the file in the repo may be ahead of what's in your context)
-3. Verify any assumption about current state by viewing the file before editing
-4. Test changes locally with Playwright before delivering
-5. Deliver via `present_files` so the user can download in one tap
+1. **Read this file, especially section 17.** A lot was cut from this app on purpose. Do not offer to rebuild it.
+2. The repo is the source of truth — `git log --oneline -30` shows recent work. Don't ask James to paste the HTML; read it.
+3. **Verify before you claim.** This app prices real jobs; a wrong number costs money. Drive the running app with Playwright — serve the folder, load `PaintPro-ZFold.html`, block `gstatic`/`googleapis`, and use a **380px** viewport for the Fold cover screen and **880px** unfolded.
+4. Deploy = commit to `main`; Netlify picks it up in ~60s. **Other sessions push to this repo too** — if a push is rejected, fetch and rebase onto `origin/main`. Never force over someone else's work.
+5. Tell James to pull changes with **⚙️ Settings → 🔄 Refresh App** (he cannot see a change until he does).
 
 ---
 
-*Last updated: August 31, 2026 (Section 2 rewritten against the actual repo - it had drifted to listing 12 fewer files than exist, a LICENSE that was gone, and an app less than half its real size. `hearsay.html` is a retired app, not part of PaintPro.) Previously the same day: (Pergolas / arbors added as a measured exterior surface at a researched $6.00/sf footprint rate, flowing into the bid, the client proposal and the QuickBooks copy.) Previously the same day: (Field-workflow pass so the app matches the paper sheet: laser shots round to whole feet via `shotFt`, ceiling height carries forward to the next side, and railings + stair treads are entered per side like decks instead of one summed whole-job box. Also closed a money gap - the client proposal and QuickBooks copy still gated measured porch ceilings and decks on the surface toggles that `calc()` had already stopped using, and the proposal never listed railings or treads at all, so a signed proposal could total well under the bid.) Previously: August 25, 2026 (Copy for QuickBooks now itemizes exterior work — power washing, shutters, doors, windows and custom charges each get their own line, and the descriptions come from the job data). Previously: June 11, 2026 (full diagnostic sweep: voice reliability layer restored after regression — mishear corrections, undo, room naming, fractions, hyphenated compounds, maxAlternatives=3; measurement routing now follows the open room card; quota-safe saves via `safeSet()`; Firestore sync stale-write guard; AI JSON extraction hardened via `extractAIJson()`; service worker v5 only caches OK responses). If you make substantial changes to the app structure, update this file in the same commit.*
+## 17. REMOVED ON PURPOSE — do not re-add without asking
+
+James cut these after using the app on real jobs. **Do not rebuild them, do not suggest them, and do not "restore" them because they look missing.** In every case the code and any saved data were left in place, so nothing was destroyed and a revert is small — but ask first.
+
+| Removed | Why | What was left behind |
+|---|---|---|
+| **🏢 APT PRICING tab** | Early experiment, never used | Tab button gone; `#apt-section`, the apt code and `ingersoll_apt_pricing_v1` all intact. `switchTab()` is null-guarded |
+| **🖨️ Print Hub** (settings card + "Send to Home Printer" on the bid) | Needed a PC running a Python script at home; never used | `printAtHome()` and the secret helpers remain, unreferenced. See 7.6 |
+| **👂 HearSay** | A separate standalone app that PaintPro only linked to. Nothing flowed between them and it needed its own API key | Card gone and dropped from the SW precache. `hearsay.html` still in the repo, still reachable by URL |
+| **📋 Projects sub-tab** | Duplicated saved Jobs and never linked to a client | Pane, code and `ingersoll_projects_v1` intact; sub-nav button + 2 voice commands removed |
+| **📝 Notes sub-tab** | A scratchpad attached to nothing; the estimate has its own Notes field and the Estimate Assistant | Pane, code and `ingersoll_notes_v1` intact; sub-nav button + 2 voice commands removed |
+| **💳 Stripe deposit card** | James is using QuickBooks for payments | All Stripe code and the `worker.js` handlers remain. `depositEnabled()` returns false so the deposit UI simply doesn't render. See 7.8 |
+| **Per-room AI chat boxes** | One inside every room card was clutter | Replaced by the single **Estimate Assistant**. `sendAIChat` / `openAIChat` remain; their UI is gone |
+| **Duplicate menu cards** | "Proposals & Signatures" and "Shared Files" each appeared BOTH as a quick action and as a settings card | Quick actions kept, duplicate cards removed |
+| **"Send a Written Bid" quick action** | Superseded by **📥 BRING IN A BID**, which covers paste *and* file import | `sendWrittenBid()` still used by the new screen |
+
+**Settled decisions — do not re-litigate:**
+- **Payments = QuickBooks, not Stripe.** Per-job Pay-Now links are created through the QuickBooks connector in a normal Claude chat. A single reusable fixed-amount link was considered and rejected: QuickBooks multi-use links carry a fixed amount and deposits vary per job.
+- **No live Lowe's/price lookup in the app.** Materials list → copy → paste into a Claude chat.
+- **Do not split the single HTML file.**
+- **Do not put secrets in the app or the repo.** The Anthropic key is device-local but synced to the user's own Firestore; `STRIPE_SECRET_KEY` lives only as a Cloudflare env var.
+
+---
+
+*Last updated: August 31, 2026 — **Sections 6, 15, 16 and 17 corrected after a fresh session started proposing features James had deliberately removed.** The tab list said four tabs (it is three; APT is gone) and the Clients sub-nav still listed Projects and Notes (it is Clients | Materials). Added **section 17 "REMOVED ON PURPOSE"** listing every cut feature, why it went, what code/data was left behind, and the settled decisions not to re-litigate. Print Hub (7.6) and the Stripe deposit card (7.8) are flagged as built-but-removed-from-the-UI. Earlier history below.*
+
+*Previously: August 31, 2026 (Section 2 rewritten against the actual repo - it had drifted to listing 12 fewer files than exist, a LICENSE that was gone, and an app less than half its real size. `hearsay.html` is a retired app, not part of PaintPro.) Previously the same day: (Pergolas / arbors added as a measured exterior surface at a researched $6.00/sf footprint rate, flowing into the bid, the client proposal and the QuickBooks copy.) Previously the same day: (Field-workflow pass so the app matches the paper sheet: laser shots round to whole feet via `shotFt`, ceiling height carries forward to the next side, and railings + stair treads are entered per side like decks instead of one summed whole-job box. Also closed a money gap - the client proposal and QuickBooks copy still gated measured porch ceilings and decks on the surface toggles that `calc()` had already stopped using, and the proposal never listed railings or treads at all, so a signed proposal could total well under the bid.) Previously: August 25, 2026 (Copy for QuickBooks now itemizes exterior work — power washing, shutters, doors, windows and custom charges each get their own line, and the descriptions come from the job data). Previously: June 11, 2026 (full diagnostic sweep: voice reliability layer restored after regression — mishear corrections, undo, room naming, fractions, hyphenated compounds, maxAlternatives=3; measurement routing now follows the open room card; quota-safe saves via `safeSet()`; Firestore sync stale-write guard; AI JSON extraction hardened via `extractAIJson()`; service worker v5 only caches OK responses). If you make substantial changes to the app structure, update this file in the same commit.*

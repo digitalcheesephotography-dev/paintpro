@@ -574,7 +574,7 @@ James cut these after using the app on real jobs. **Do not rebuild them, do not 
 - **Payments = QuickBooks, not Stripe.** Per-job Pay-Now links are created through the QuickBooks connector in a normal Claude chat. A single reusable fixed-amount link was considered and rejected: QuickBooks multi-use links carry a fixed amount and deposits vary per job.
 - **No live Lowe's/price lookup in the app.** Materials list → copy → paste into a Claude chat.
 - **Do not split the single HTML file.**
-- **⚠️ Two secrets are currently IN the repo and should be rotated/removed:** `PRINT_HUB_TOPIC = 'ingersoll-print-7h112nufd393'` (an ntfy.sh topic is a bearer token — anyone with the repo can push to his home printer; Print Hub is retired so this can simply be blanked) and `LISA_EMAIL`. Flagged Aug 31 2026, not yet actioned — ask James.
+- **⚠️ Secrets and the repo.** The old `PRINT_HUB_TOPIC` (an ntfy.sh topic, effectively a bearer token) was **blanked in both `PaintPro-ZFold.html` and `print_hub.py` on Aug 31 2026** — it had been committed to a public repo, so anyone could have pushed print jobs to James's home printer. It remains in git history; if the print hub is ever revived, generate a **new** topic and keep it out of version control. `LISA_EMAIL` is still in the file — a work email, low risk, ask James before touching it.
 - **Do not put secrets in the app or the repo.** The Anthropic key is device-local but synced to the user's own Firestore; `STRIPE_SECRET_KEY` lives only as a Cloudflare env var.
 
 ---

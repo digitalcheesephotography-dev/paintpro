@@ -1688,7 +1688,12 @@ function modeRates(mode) { return mode === 'exterior' ? extRates : rates; }
 // SECURITY: The topic name is the only password. Make it random and unique.
 // Anyone who knows the topic can send a print job to this PC.
 // ─────────────────────────────────────────────────────────────────────────────
-const PRINT_HUB_TOPIC = 'ingersoll-print-7h112nufd393';
+// Blanked Aug 31 2026. An ntfy.sh topic is a bearer secret - anyone who could
+// read this public repo could push print jobs to James's home printer. The
+// Print Hub UI was retired (see CLAUDE.md section 17) so nothing calls this;
+// printAtHome() already no-ops on an empty topic. If the feature is ever
+// revived, put the topic in a Cloudflare Worker env var, not here.
+const PRINT_HUB_TOPIC = '';
 
 // ─── FIREBASE CONFIG ──────────────────────────────────────────────────────────
 //

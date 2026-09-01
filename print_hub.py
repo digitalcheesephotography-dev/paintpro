@@ -105,7 +105,10 @@ except ImportError:
 
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 # Must match the PRINT_HUB_TOPIC constant in PaintPro-ZFold.html exactly.
-TOPIC = 'ingersoll-print-7h112nufd393'
+# Blanked Aug 31 2026 - this topic was committed to a public repo, which makes
+# it readable by anyone. If you revive the print hub, generate a NEW topic and
+# keep it out of version control.
+TOPIC = ''
 
 # Encryption key — 64 hex characters (256-bit AES-GCM key).
 # Generate in PaintPro → Settings → Print Hub → tap "Generate", then paste here.

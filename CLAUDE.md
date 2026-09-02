@@ -3,9 +3,31 @@
 Reference document for AI assistants (Claude Code, future Claude chat sessions) working on this repository. Read this first before making changes.
 
 > ## ⚠️ START HERE — run `git log --oneline -30` FIRST
-> The copy of this file preloaded into your context may be **stale** (this was confirmed on Aug 31 2026: a fresh session was handed a version two commits old that described an app with four tabs, an APT section, and Projects/Notes sub-tabs — none of which exist). The working tree is the truth. `git log` subjects state removals in plain English and will inoculate you against a bad context in one command.
->
-> **A lot has been deliberately removed from this app. See [section 17](#17-removed-on-purpose--do-not-re-add-without-asking) before proposing anything that looks "missing."**
+> The copy of this file preloaded into your context may be **stale** (confirmed Aug 31 2026: a fresh session was handed a version two commits old that described an app with four tabs, an APT section, and Projects/Notes sub-tabs — none of which exist). The working tree is the truth. `git log` subjects state removals in plain English and will inoculate you against a bad context in one command.
+
+## 0. THE ONE-SCREEN BRIEFING — read this even if you read nothing else
+
+James is a solo painter running a real business off this app. He has had to re-explain
+the same things to session after session and it wastes his time. **Do not make him
+re-teach you any of the following. It is all already decided.**
+
+| # | Rule |
+|---|---|
+| 1 | **Do not split `PaintPro-ZFold.html`.** One file, no build step, no framework, no npm. Deliberate. |
+| 2 | **A lot was removed on purpose.** APT tab, Print Hub, HearSay, Projects + Notes sub-tabs, the Stripe deposit card, per-room AI chat boxes. Do NOT rebuild or "restore" them. See [section 17](#17-removed-on-purpose--do-not-re-add-without-asking). |
+| 3 | **Payments = QuickBooks. Not Stripe.** Settled. Don't re-open it. |
+| 4 | **No live Lowe's / price lookup in the app.** Materials list → copy → paste into a Claude chat. Settled. |
+| 5 | **Every URL you give James must be a full `https://…` link** so it's tappable on his phone. Never a bare domain. This is a standing rule he has asked for repeatedly. |
+| 6 | The app has **three tabs**: ESTIMATE, CLIENTS, ☰ MENU. Clients sub-nav is **Clients \| Materials** only. |
+| 7 | **Deploy = commit to `main`.** Netlify picks it up in ~60s. Then tell him: **☰ MENU → 🔄 Refresh App** — he cannot see a change until he taps it. |
+| 8 | **Never ask him to paste the HTML.** Read it yourself. Other sessions push here too — if a push is rejected, fetch and rebase. Never force over someone else's work. |
+| 9 | **Verify before you claim.** This app prices real jobs; a wrong number costs money. Drive it with Playwright at **380px** (Fold cover) and **880px** (unfolded). Check the Robin Castor benchmark in section 7 after any exterior math change. |
+| 10 | **Bid documents:** Georgia font only, **no em dashes**, Project Services is ONE number, never show hourly rates / man-hours / crew size. Full rules in section 5. |
+| 11 | **No secrets in the app or the repo.** API keys are device-local; `STRIPE_SECRET_KEY` lives only as a Cloudflare env var. |
+| 12 | **He talks to you by voice-to-text.** Messages are short and sometimes garbled ("stores" = doors). Lead with the answer, skip preamble, don't ask five questions when one will do, and don't ask anything you could reasonably infer. |
+
+**If you are a new session and unsure whether something was removed on purpose:** it probably
+was. Check section 17 and `git log` before offering to build it.
 
 ---
 

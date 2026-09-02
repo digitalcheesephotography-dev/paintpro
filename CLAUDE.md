@@ -382,6 +382,25 @@ Rate research (Aug 2026): staining a pergola runs **$6-$7/sf of footprint** nati
 
 **Ceiling height carries forward.** `addRoom()` starts a new room/side at the height last entered (`defHt`), falling back to the canned 8 interior / 9 exterior only for the first room of a job. Retyping the height on every side was the single biggest source of manual entry in the field.
 
+**Side height entry:** the wall row is **width × height** (`wall.ft` × `wall.ht`, falling back to `room.height`); deck, porch ceiling, soffit and pergola sections are **length × width**. Both inputs now carry visible `width` / `height` column headers (`.wall-colhead`) and the section reads "Each side: WIDTH × HEIGHT", because the row rendered as a bare `[54] × [10]` and James could not tell whether the app read his `54 x 10` as width×height or length×width. The height field also has its own 📐 shoot button (`${room.id}_height_shoot` → `armDimShot(id,'height')`); without it the laser target stayed on "Next Wall" and **every height reading was appended as another wall** — the reported "app treats it as another wall instead of a height input".
+
+**REGRESSION BENCHMARK — Robin Castor exterior.** Use this to check the exterior math after any change to `calcExt()`, the section sums, or the surface toggles. Straight off James's paper sheet, with **all surface toggles OFF** (which is how he works):
+
+| Input | Value |
+|---|---|
+| Side One | 54×10 |
+| Side Two | 26×12, 28×10, 11×10 |
+| Side Three | 31×14 |
+| Side Four | 28×16, 10×12, 9×11, 7×11, 11×11 |
+| Porch ceiling | 11×9 |
+| Porch floor (deck section) | 11×9 |
+| Back deck / side deck | 21×14 and 4×11 |
+| Railings | 21+14+15 back, 22 side = **72 lf** |
+| Treads | 14 back + 9 side = **23** |
+| Pergola | 19×12 |
+
+**Expected: siding 2,541 sf, grand total 3,077 sf** (per side: 738 / 702 / 772 / 865, with the porch on Side One and the decks on Side Three). At the default rates railings come to $576.00 and treads $345.00. Verified Aug 31 2026. If a change makes this drift, something regressed.
+
 **Exterior measurement rule:** soffit, porch ceiling and deck are charged **whenever they have measurements** - they are NOT gated on the surface toggles. Porch ceiling and deck used to require `surfaces.ceiling` / `surfaces.floor` as well, which silently dropped measured sections from the bid (cost $1,094 on one side of a real job). Only siding and trim still follow their toggles. This rule now holds in all three consumers: `calc()` (pricing), `_proRoomItems()` (the client proposal's itemized lines) and `copyBidForQuickBooks()` (the books). The proposal and QuickBooks used to keep the old toggle gate, so a measured porch ceiling or deck was priced into the bid total but left off the client's itemized breakdown - the signed proposal came in under the bid. Railings and treads were missing from the proposal's Additional Services entirely; both are now line items there.
 
 | `ingersoll_bcc_email_v1` | Address blind-copied on "Email to Client". Replaced a hard-coded personal email in the source. **In `SYNC_KEYS`** so it survives a reinstall. |

@@ -21,7 +21,7 @@ re-teach you any of the following. It is all already decided.**
 | 6 | The app has **three tabs**: ESTIMATE, CLIENTS, ☰ MENU. Clients sub-nav is **Clients \| Materials** only. |
 | 7 | **Deploy = commit to `main`.** Netlify picks it up in ~60s. Then tell him: **☰ MENU → 🔄 Refresh App** — he cannot see a change until he taps it. |
 | 8 | **Never ask him to paste the HTML.** Read it yourself. Other sessions push here too — if a push is rejected, fetch and rebase. Never force over someone else's work. |
-| 9 | **Verify before you claim.** This app prices real jobs; a wrong number costs money. Drive it with Playwright at **380px** (Fold cover) and **880px** (unfolded). Check the Robin Castor benchmark in section 7 after any exterior math change. |
+| 9 | **Verify before you claim.** This app prices real jobs; a wrong number costs money. Drive it with Playwright at **380px** (Fold cover) and **880px** (unfolded). Check the Caster benchmark in section 7 after any exterior math change. |
 | 10 | **Bid documents:** Georgia font only, **no em dashes**, Project Services is ONE number, never show hourly rates / man-hours / crew size. Full rules in section 5. |
 | 11 | **No secrets in the app or the repo.** API keys are device-local; `STRIPE_SECRET_KEY` lives only as a Cloudflare env var. |
 | 12 | **He talks to you by voice-to-text.** Messages are short and sometimes garbled ("stores" = doors). Lead with the answer, skip preamble, don't ask five questions when one will do, and don't ask anything you could reasonably infer. |
@@ -392,7 +392,7 @@ Exterior: `front side` / `left side` / `name it garage` / `call it back`
 | `ingersoll_proposals_v1` | Sent e-signature proposals (id, client, status, url, signer; device-local) |
 | `ingersoll_emailjs_v1` | EmailJS config {serviceId, templateId, publicKey} for auto-emailing signed-proposal copies (device-local) |
 | `ingersoll_deposit_v1` | Online-deposit config {enabled, pct} for Stripe deposit collection on signed proposals (device-local) |
-**Exterior extras** (`jobExtras()` / `#ext-extras-card`): Shutters (count x $), Power Wash (sf x $/sf), **Railing (linear ft x $/lf, default $8.00)** and **Steps/Treads (count x $, default $15)**. Railing and treads were added from a field report (Robin Castor job) where James's paper sheet listed deck railings in linear feet and stair treads by count with nowhere to enter them. They flow into `ex.total`, render as their own bid rows, and itemise in the QuickBooks copy.
+**Exterior extras** (`jobExtras()` / `#ext-extras-card`): Shutters (count x $), Power Wash (sf x $/sf), **Railing (linear ft x $/lf, default $8.00)** and **Steps/Treads (count x $, default $15)**. Railing and treads were added from a field report (Caster job) where James's paper sheet listed deck railings in linear feet and stair treads by count with nowhere to enter them. They flow into `ex.total`, render as their own bid rows, and itemise in the QuickBooks copy.
 
 **Railings and stair treads are per side** (`room.railSections` = a list of `{id, lf}` runs, `room.treadCount` = a count). They render on the exterior room card right under the deck sections, each run with its own laser button, because a paper sheet lists them per area ("back deck railing 21, 14, 15"). `jobExtras()` sums every side's runs and treads and **adds the whole-job Railing / Steps boxes on top**, so older saved jobs total exactly as before. Helpers: `addRailSection` / `removeRailSection` / `updateRailSection` / `renderRailSections` / `updateRoomTreads` / `armRailShot` (target `railShotTarget`). Rail ids are unique by construction (`_railId()`) rather than from a reset-on-reload counter.
 
@@ -406,7 +406,7 @@ Rate research (Aug 2026): staining a pergola runs **$6-$7/sf of footprint** nati
 
 **Side height entry:** the wall row is **width × height** (`wall.ft` × `wall.ht`, falling back to `room.height`); deck, porch ceiling, soffit and pergola sections are **length × width**. Both inputs now carry visible `width` / `height` column headers (`.wall-colhead`) and the section reads "Each side: WIDTH × HEIGHT", because the row rendered as a bare `[54] × [10]` and James could not tell whether the app read his `54 x 10` as width×height or length×width. The height field also has its own 📐 shoot button (`${room.id}_height_shoot` → `armDimShot(id,'height')`); without it the laser target stayed on "Next Wall" and **every height reading was appended as another wall** — the reported "app treats it as another wall instead of a height input".
 
-**REGRESSION BENCHMARK — Robin Castor exterior.** Use this to check the exterior math after any change to `calcExt()`, the section sums, or the surface toggles. Straight off James's paper sheet, with **all surface toggles OFF** (which is how he works):
+**REGRESSION BENCHMARK — Caster exterior.** The client is **Robin & Brenda Caster, 380 Lake Shore Rd, Fulton, NY 13069** (this file said "Robin Castor" with no address until Sep 17 2026 — it is Cast**e**r, and a session almost put the misspelling on a client-facing bid). Use this to check the exterior math after any change to `calcExt()`, the section sums, or the surface toggles. Straight off James's paper sheet, with **all surface toggles OFF** (which is how he works):
 
 | Input | Value |
 |---|---|

@@ -997,6 +997,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
       <button onclick="openProposalsModal()" style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">📄 Proposals &amp; Signatures</button>
       <button onclick="openDocsInbox()"      style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">📥 Shared Files</button>
       <button onclick="openBringInBid()"     style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">📥 Bring In a Bid</button>
+      <button onclick="openReelKit()"        style="grid-column:1/-1;height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">🎬 Make a Reel</button>
     </div>
     <!-- Setup status — shows at a glance what still needs connecting -->
     <div id="setup-status" style="margin-top:16px"></div>
@@ -4135,7 +4136,7 @@ function getJobSnapshot() {
     notes:         document.getElementById('notes')?.value || '',
     // Photos live in IndexedDB (see photoDBOpen); snapshots keep only the photo
     // IDs so localStorage never fills and the synced jobs doc stays tiny.
-    rooms:         rooms.map(r => { const c = JSON.parse(JSON.stringify(r)); c.photos = (r.photos||[]).map(p => ({ id:p.id })); return c; }),
+    rooms:         rooms.map(r => { const c = JSON.parse(JSON.stringify(r)); c.photos = (r.photos||[]).map(p => p.tag ? ({ id:p.id, tag:p.tag }) : ({ id:p.id })); return c; }),
     roomCount:     roomCount,
     job:           { ...job },
     jobLineItems:  jobLineItems.map(li => ({ label: li.label, amount: li.amount })),
@@ -7317,6 +7318,12 @@ function renderAIPhotoStrip(roomId) {
 // IndexedDB store keyed by photo ID; snapshots carry only { id }. Cross-device
 // photo sync (Firebase Storage) layers on top of this — see the report.
 const PHOTO_DB = 'paintpro-photos', PHOTO_STORE = 'photos';
+// Reference photos double as reel footage (see openReelKit), so they're kept at
+// a size CapCut can put on a 1080-wide canvas with room to crop in. They were
+// 550px/0.5, which is plenty for a job record and mush on a phone screen.
+// AI-scan photos (addAIPhotos) stay small - the model doesn't need the pixels
+// and every one of those rides in an API request.
+const REF_PHOTO_PX = 1400, REF_PHOTO_Q = 0.72;
 let _photoDB = null;
 function photoDBOpen(){
   return new Promise((res, rej) => {
@@ -7414,7 +7421,7 @@ async function addRoomPhotoFiles(roomId, files) {
   let saved = 0;
   for (const file of files) {
     try {
-      const data = await compressToBase64(file, 550, 0.5);
+      const data = await compressToBase64(file, REF_PHOTO_PX, REF_PHOTO_Q);
       const id = 'p' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
       await photoPut(id, data);       // blob to IndexedDB (local, always)
       room.photos.push({ id });       // only the reference on the job
@@ -7458,7 +7465,7 @@ async function renderRoomPhotoStrip(roomId) {
     // No local blob (e.g. taken on another device) — pull it from Storage.
     let url = null;
     if (!data) url = await photoDownloadURL(p.id);
-    items.push({ id:p.id, data, url });
+    items.push({ id:p.id, data, url, tag:p.tag || '' });
   }
   if (migrated) markDirty(); // persist the now-slimmed snapshot
   strip.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 0 4px">` +
@@ -7472,6 +7479,13 @@ async function renderRoomPhotoStrip(roomId) {
         <button onclick="removeRoomPhoto('${roomId}','${it.id}')"
                 style="position:absolute;top:-5px;right:-5px;width:20px;height:20px;border-radius:50%;background:var(--red);border:none;color:#fff;font-size:11px;cursor:pointer;line-height:20px;padding:0;text-align:center;font-weight:700"
                 aria-label="Delete photo">✕</button>
+        <button onclick="cycleRoomPhotoTag('${roomId}','${it.id}')"
+                style="position:absolute;bottom:3px;left:3px;height:20px;min-width:20px;padding:0 5px;border-radius:5px;border:none;cursor:pointer;font-family:var(--font);font-size:11px;font-weight:700;line-height:20px;text-align:center;${
+                  it.tag === 'before' ? 'background:var(--blue);color:#fff'
+                : it.tag === 'after'  ? 'background:var(--green);color:#fff'
+                : 'background:rgba(0,0,0,.55);color:var(--muted)'}"
+                title="Tag for a reel: before / after"
+                aria-label="${it.tag ? it.tag : 'untagged'} - tap to change">${it.tag === 'before' ? 'B' : it.tag === 'after' ? 'A' : '·'}</button>
       </div>`).join('') +
     `</div>`;
 }
@@ -7498,6 +7512,216 @@ async function viewRoomPhoto(photoId) {
 function closeRoomPhotoLightbox() {
   const lb = document.getElementById('room-photo-lightbox');
   if (lb) lb.style.display = 'none';
+}
+
+// ── Reel Kit — job photos out to a video editor (CapCut and friends) ────────
+// CapCut has no API and nothing can drive its timeline from here. What it does
+// accept is a batch of images from the Android share sheet, imported in
+// filename order. So the app's job is curation: pick the photos, put them in
+// before/after order, name them so the timeline lands in that order, and hand
+// over the caption copy. All of it works with no signal.
+const REEL_MAX_FILES = 20;
+
+// Tag cycles blank → before → after → blank. The badge sits on the thumbnail
+// because that's where he's already looking when the photo is fresh.
+function cycleRoomPhotoTag(roomId, photoId){
+  const room = rooms.find(r => r.id === roomId);
+  const p = room && (room.photos || []).find(x => x.id === photoId);
+  if (!p) return;
+  const next = p.tag === 'before' ? 'after' : p.tag === 'after' ? '' : 'before';
+  if (next) p.tag = next; else delete p.tag;
+  renderRoomPhotoStrip(roomId);
+  markDirty();
+}
+
+// Walk the job in room order; inside a room, befores lead and afters follow so
+// each area reads as a pair. Untagged photos keep their capture order, which is
+// also what a job with no tagging at all falls back to.
+function buildReelSequence(){
+  const seq = [];
+  const rank = p => p.tag === 'before' ? 0 : p.tag === 'after' ? 2 : 1;
+  rooms.forEach((r, ri) => {
+    (r.photos || []).map((p, i) => ({ p, i }))
+      .sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i)
+      .forEach(({ p }) => seq.push({
+        id:   p.id,
+        tag:  p.tag || '',
+        room: r.name || (estimatorMode === 'exterior' ? 'Side ' + (ri + 1) : 'Room ' + (ri + 1))
+      }));
+  });
+  return seq;
+}
+
+const _reelSlug = s => String(s || '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'photo';
+const _reelTime = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+
+// Resolve one photo to a File. Local IndexedDB blob first; a photo taken on the
+// other phone gets pulled back down from Storage.
+async function _reelFile(item, n){
+  let data = null;
+  try { data = await photoGet(item.id); } catch(_){}
+  let blob = data ? _b64ToBlob(data) : null;
+  if (!blob) {
+    const url = await photoDownloadURL(item.id);
+    if (!url) return null;
+    try { blob = await (await fetch(url)).blob(); } catch(_){ return null; }
+  }
+  const label = item.tag ? item.tag.toUpperCase() : 'CLIP';
+  const name = String(n).padStart(2, '0') + '_' + label + '_' + _reelSlug(item.room) + '.jpg';
+  return new File([blob], name, { type: 'image/jpeg' });
+}
+
+// Town only — never the client's name or street number. This copy gets posted
+// in public.
+function _reelTown(){
+  const addr = document.getElementById('job-address')?.value || '';
+  const m = addr.match(/,\s*([A-Za-z][A-Za-z .'-]{2,}?)\s*,\s*(?:NY|New York)\b/i);
+  return m ? m[1].trim() + ', NY' : 'Central New York';
+}
+
+function buildReelCaption(){
+  const ext  = estimatorMode === 'exterior';
+  const n    = rooms.length;
+  const unit = ext ? (n === 1 ? 'side' : 'sides') : (n === 1 ? 'room' : 'rooms');
+  const prods = [];
+  rooms.forEach(r => { const p = _qbProduct(r.product); if (p && !prods.includes(p)) prods.push(p); });
+  const same  = n > 0 && rooms.every(r => String(r.coats) === String(rooms[0].coats));
+  const coats = same ? parseInt(rooms[0].coats, 10) : 0;
+
+  const out = [];
+  out.push(`${ext ? 'Exterior' : 'Interior'} repaint in ${_reelTown()}${n ? ', ' + n + ' ' + unit : ''}.`);
+  const detail = [];
+  if (coats) detail.push(coats === 1 ? 'One coat' : coats === 2 ? 'Two coats' : coats + ' coats');
+  if (prods.length === 1) detail.push(prods[0]);
+  if (detail.length) out.push(detail.join(', ') + '.');
+  out.push('');
+  out.push('Ingersoll Painting LLC, family owned since 1978.');
+  out.push('Free estimates: (315) 952-8259');
+  out.push('');
+  out.push(ext
+    ? '#beforeandafter #exteriorpainting #housepainting #paintingcontractor #curbappeal #cny #upstateny #familyowned'
+    : '#beforeandafter #interiorpainting #housepainting #paintingcontractor #homemakeover #cny #upstateny #familyowned');
+  return out.join('\n');
+}
+
+// A cut list rather than a script: 3 seconds a photo is the standard reel beat,
+// so the timestamps line up with the clips once they're on the timeline.
+function buildReelBeats(seq){
+  const out = ['ON-SCREEN TEXT (type these in CapCut)', ''];
+  let t = 0;
+  seq.slice(0, REEL_MAX_FILES).forEach(it => {
+    const label = it.tag === 'before' ? 'BEFORE' : it.tag === 'after' ? 'AFTER' : it.room;
+    out.push(`${_reelTime(t)}  ${label}${it.tag ? ' - ' + it.room : ''}`);
+    t += 3;
+  });
+  out.push(`${_reelTime(t)}  Ingersoll Painting LLC - (315) 952-8259`);
+  return out.join('\n');
+}
+
+// Clipboard blocked (some Android WebViews) — show the text for manual copy.
+function _reelFallback(text){
+  const s = _ppModal();
+  const t = document.createElement('div');
+  t.setAttribute('style', 'font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:8px');
+  t.textContent = '🎬 Reel Caption';
+  const p = document.createElement('p');
+  p.setAttribute('style', 'color:var(--muted);font-size:13px;margin-bottom:10px;line-height:1.5');
+  p.textContent = 'Long-press in the box below, Select All, Copy.';
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.setAttribute('readonly', '');
+  ta.setAttribute('style', 'width:100%;height:300px;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--text);font-family:monospace;font-size:12px;line-height:1.5');
+  s.append(t, p, ta); ta.focus(); ta.select();
+}
+
+async function openReelKit(){
+  const seq = buildReelSequence();
+  const s   = _ppModal();
+  const title = document.createElement('div');
+  title.setAttribute('style', 'font-family:var(--head);font-size:22px;color:var(--blue);margin-bottom:4px');
+  title.textContent = '🎬 Make a Reel';
+  const sub = document.createElement('p');
+  sub.setAttribute('style', 'color:var(--muted);font-size:13px;line-height:1.5;margin-bottom:14px');
+  s.append(title, sub);
+
+  if (!seq.length) {
+    sub.textContent = 'No photos saved on this job yet.';
+    const how = document.createElement('div');
+    how.setAttribute('style', 'background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-size:13px;color:var(--text);line-height:1.7');
+    how.innerHTML = 'On any room card tap <strong>📷 Photos &amp; Video</strong>, then <strong>📸 Save a Reference Photo</strong>.<br><br>' +
+      'Tap the badge on a thumbnail to mark it <strong style="color:var(--blue)">B</strong> for before or ' +
+      '<strong style="color:var(--green)">A</strong> for after.<br><br>' +
+      'Come back here and they go out to CapCut in that order.';
+    s.appendChild(how);
+    return;
+  }
+
+  const shown = Math.min(seq.length, REEL_MAX_FILES);
+  sub.textContent = seq.length > REEL_MAX_FILES
+    ? `${seq.length} photos on this job. The first ${REEL_MAX_FILES} go over - more than that and the share sheet chokes.`
+    : `${shown} photo${shown > 1 ? 's' : ''}, in the order they will land on the timeline.`;
+
+  const list = document.createElement('div');
+  list.setAttribute('style', 'margin-bottom:14px;max-height:34vh;overflow-y:auto');
+  seq.slice(0, REEL_MAX_FILES).forEach((it, i) => {
+    const row = document.createElement('div');
+    row.setAttribute('style', 'display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)');
+    const badge = it.tag === 'before' ? '<span style="color:var(--blue);font-weight:700">BEFORE</span>'
+                : it.tag === 'after'  ? '<span style="color:var(--green);font-weight:700">AFTER</span>'
+                : '<span style="color:var(--muted)">untagged</span>';
+    row.innerHTML = `<span style="width:22px;color:var(--muted);font-size:12px;flex:none">${i + 1}</span>
+      <div id="reel-th-${_esc(it.id)}" style="width:40px;height:40px;border-radius:6px;background:var(--card);flex:none"></div>
+      <div style="flex:1;min-width:0;font-size:13px;line-height:1.3">${badge}
+        <div style="color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(it.room)}</div></div>`;
+    list.appendChild(row);
+  });
+  s.appendChild(list);
+
+  const send = document.createElement('button');
+  send.setAttribute('style', 'width:100%;height:52px;background:var(--blue);border:none;border-radius:10px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;margin-bottom:8px');
+  send.textContent = `🎬 Send ${shown} Photo${shown > 1 ? 's' : ''} to CapCut`;
+  send.onclick = async () => {
+    const was = send.textContent;
+    send.disabled = true; send.textContent = 'Getting photos ready…';
+    const files = []; let missing = 0;
+    for (let i = 0; i < shown; i++) {
+      const f = await _reelFile(seq[i], i + 1);
+      if (f) files.push(f); else missing++;
+    }
+    send.disabled = false; send.textContent = was;
+    if (!files.length) { showToast('Could not load those photos', 'warn'); return; }
+    if (!(navigator.canShare && navigator.canShare({ files }))) {
+      showToast('This browser cannot share photos - open PaintPro from the home screen', 'warn');
+      return;
+    }
+    try {
+      await navigator.share({ files, title: 'Job photos for a reel' });
+      if (missing) showToast(`${missing} photo${missing > 1 ? 's' : ''} is on your other phone and was skipped`, 'warn');
+    } catch(_) {} // he backed out of the share sheet
+  };
+
+  const hint = document.createElement('p');
+  hint.setAttribute('style', 'color:var(--muted);font-size:12px;line-height:1.5;margin:0 0 12px');
+  hint.textContent = 'Pick CapCut in the share sheet. It imports them in this order, 3 seconds each is the usual beat.';
+
+  const copy = document.createElement('button');
+  copy.setAttribute('style', 'width:100%;height:48px;background:var(--dark);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer');
+  copy.textContent = '📋 Copy Caption & On-Screen Text';
+  copy.onclick = () => {
+    const txt = buildReelCaption() + '\n\n' + buildReelBeats(seq);
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).then(() => showToast('📋 Caption copied')).catch(() => _reelFallback(txt));
+    else _reelFallback(txt);
+  };
+  s.append(send, hint, copy);
+
+  // Thumbnails last so the sheet paints immediately — a 20-photo job would
+  // otherwise sit blank while IndexedDB reads.
+  for (const it of seq.slice(0, REEL_MAX_FILES)) {
+    let data = null;
+    try { data = await photoGet(it.id); } catch(_){}
+    const url = data ? 'data:image/jpeg;base64,' + data : await photoDownloadURL(it.id);
+    const cell = document.getElementById('reel-th-' + it.id);
+    if (cell && url) cell.style.cssText += `;background-image:url('${url}');background-size:cover;background-position:center`;
+  }
 }
 
 function aiMultiPhotoPrompt(isExt, count) {

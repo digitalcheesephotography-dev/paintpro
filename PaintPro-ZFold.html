@@ -138,6 +138,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .dim-shoot.active{border-color:var(--blue);color:var(--blue);background:#162535}
 .deck-sec-row{display:flex;align-items:center;gap:6px;margin-bottom:8px}
 .deck-sec-num{font-size:12px;font-weight:700;color:var(--muted);min-width:20px}
+.cab-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
 .deck-sec-input{width:62px;height:40px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:14px;text-align:center;outline:none;padding:0 4px}
 .deck-sec-sf{font-size:12px;color:var(--blue);font-weight:700;min-width:52px;text-align:right}
 .deck-shoot,.soffit-shoot,.porch-shoot{background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:14px;cursor:pointer;padding:0 6px;flex-shrink:0;height:36px;transition:all .15s}
@@ -485,6 +486,17 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
             <input type="text" inputmode="decimal" id="rate-trim" oninput="updateGlobalRate('trim',this.value)"/></label>
           <label class="field" id="rate-pergola-field"><span>Pergola $/sf</span>
             <input type="text" inputmode="decimal" id="rate-pergola" oninput="updateGlobalRate('pergola',this.value)"/></label>
+        </div>
+        <div id="rate-cab-fields">
+          <div style="font-size:11px;color:var(--muted);margin:12px 0 8px;line-height:1.4">Cabinets are priced per piece, not per square foot. Count door fronts, drawer fronts and boxes on the room card.</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <label class="field"><span>Cabinet door $/ea</span>
+              <input type="text" inputmode="decimal" id="rate-cabDoor" oninput="updateGlobalRate('cabDoor',this.value)"/></label>
+            <label class="field"><span>Drawer front $/ea</span>
+              <input type="text" inputmode="decimal" id="rate-cabDrawer" oninput="updateGlobalRate('cabDrawer',this.value)"/></label>
+            <label class="field"><span>Cabinet box $/ea</span>
+              <input type="text" inputmode="decimal" id="rate-cabBox" oninput="updateGlobalRate('cabBox',this.value)"/></label>
+          </div>
         </div>
       </div>
     </div>
@@ -1758,14 +1770,24 @@ const FIREBASE_CONFIG = {
 // Labor rates ($/sf per coat; trim is $/linear ft). Editable + persisted as the
 // whole-job default. Individual rooms can override via room.rates.
 const RATES_KEY = 'ingersoll_rates_v1';
-const DEFAULT_RATES = { walls:1.85, ceiling:1.65, floor:1.65, trim:3.50 };
+// Cabinets are the one interior surface nobody prices by the square foot. A
+// painter counts the kitchen: door fronts, drawer fronts, and the boxes/face
+// frames behind them, each at a flat price. $75 / $35 / $50 sit inside the 2026
+// market range (roughly $50-$125 a door, $25-$40 a drawer front, $40-$75 a box)
+// and are meant to be replaced with James's own numbers in the Labor Rates card.
+const DEFAULT_RATES = { walls:1.85, ceiling:1.65, floor:1.65, trim:3.50,
+                        cabDoor:75, cabDrawer:35, cabBox:50 };
+const CAB_RATE_KEYS = ['cabDoor','cabDrawer','cabBox'];
 function loadRates() {
   try {
     const s = JSON.parse(localStorage.getItem(RATES_KEY));
     if (s) return { walls:  s.walls  != null ? +s.walls  : DEFAULT_RATES.walls,
                     ceiling:s.ceiling != null ? +s.ceiling : DEFAULT_RATES.ceiling,
                     floor:  s.floor  != null ? +s.floor  : DEFAULT_RATES.floor,
-                    trim:   s.trim   != null ? +s.trim   : DEFAULT_RATES.trim };
+                    trim:   s.trim   != null ? +s.trim   : DEFAULT_RATES.trim,
+                    cabDoor:   s.cabDoor   != null ? +s.cabDoor   : DEFAULT_RATES.cabDoor,
+                    cabDrawer: s.cabDrawer != null ? +s.cabDrawer : DEFAULT_RATES.cabDrawer,
+                    cabBox:    s.cabBox    != null ? +s.cabBox    : DEFAULT_RATES.cabBox };
   } catch {}
   return { ...DEFAULT_RATES };
 }
@@ -3026,6 +3048,7 @@ function addRoom() {
         surfaces:{walls:true, ceiling:false, trim:false, floor:false},
         product: extProduct, coats:'2', rates:null, open:true, mode:'exterior', photos:[] }
     : { id, name, walls:[], height:defHt, floorLength:'', floorWidth:'',
+        cabDoors:'', cabDrawers:'', cabBoxes:'',
         surfaces:{walls:true, ceiling:false, trim:false, floor:false},
         product: PRODUCTS[0].name, coats:'2', rates:null, open:true, photos:[] };
   rooms.push(room);
@@ -3177,6 +3200,29 @@ function renderRoom(room, idx) {
             <button class="dim-shoot" id="${room.id}_floorWidth_shoot" onclick="armDimShot('${room.id}','floorWidth')" aria-label="Shoot width" title="Shoot width with laser">📐</button>
           </div>
         </label>
+      </div>
+      <!-- Cabinets are counted, not measured, so there is no laser button and no
+           surface toggle. They sit on the room card because a kitchen, a utility
+           room and a bath vanity are separate rooms with separate counts. -->
+      <div id="${room.id}_cab_row" style="margin-bottom:12px">
+        <div class="walls-header">
+          <span class="walls-label">Cabinets (count the pieces)</span>
+          <span class="walls-perimeter" id="${room.id}_cab_total"></span>
+        </div>
+        <div class="cab-grid">
+          <label class="field"><span>Door fronts</span>
+            <input type="number" id="${room.id}_cabDoors" value="${room.cabDoors||''}" min="0" step="1"
+              inputmode="numeric" placeholder="0" aria-label="Cabinet door fronts in this room"
+              oninput="updateField('${room.id}','cabDoors',this.value)"/></label>
+          <label class="field"><span>Drawer fronts</span>
+            <input type="number" id="${room.id}_cabDrawers" value="${room.cabDrawers||''}" min="0" step="1"
+              inputmode="numeric" placeholder="0" aria-label="Cabinet drawer fronts in this room"
+              oninput="updateField('${room.id}','cabDrawers',this.value)"/></label>
+          <label class="field"><span>Boxes / frames</span>
+            <input type="number" id="${room.id}_cabBoxes" value="${room.cabBoxes||''}" min="0" step="1"
+              inputmode="numeric" placeholder="0" aria-label="Cabinet boxes or face frames in this room"
+              oninput="updateField('${room.id}','cabBoxes',this.value)"/></label>
+        </div>
       </div>`;
 
   card.innerHTML = `
@@ -3285,6 +3331,12 @@ function renderRoom(room, idx) {
             <input type="text" inputmode="decimal" id="${room.id}_rate_floor" value="${roomRates.floor}" oninput="updateRoomRate('${room.id}','floor',this.value)"/></label>
           <label class="field"><span>Trim $/lf</span>
             <input type="text" inputmode="decimal" id="${room.id}_rate_trim" value="${roomRates.trim}" oninput="updateRoomRate('${room.id}','trim',this.value)"/></label>
+          <label class="field" style="display:${isExt?'none':''}"><span>Cab door $/ea</span>
+            <input type="text" inputmode="decimal" id="${room.id}_rate_cabDoor" value="${cabRate(roomRates,'cabDoor')}" oninput="updateRoomRate('${room.id}','cabDoor',this.value)"/></label>
+          <label class="field" style="display:${isExt?'none':''}"><span>Cab drawer $/ea</span>
+            <input type="text" inputmode="decimal" id="${room.id}_rate_cabDrawer" value="${cabRate(roomRates,'cabDrawer')}" oninput="updateRoomRate('${room.id}','cabDrawer',this.value)"/></label>
+          <label class="field" style="display:${isExt?'none':''}"><span>Cab box $/ea</span>
+            <input type="text" inputmode="decimal" id="${room.id}_rate_cabBox" value="${cabRate(roomRates,'cabBox')}" oninput="updateRoomRate('${room.id}','cabBox',this.value)"/></label>
         </div>
       </div>
 
@@ -3940,6 +3992,44 @@ function refreshRoomSelect() {
 // CALCULATIONS
 // ══════════════════════════════════════════════
 const PERGOLA_SURFACE_FACTOR = 2;
+
+// ── Cabinets ────────────────────────────────────────────────────────────────
+// Counted, not measured. Square footage is still needed for the gallon math,
+// so each piece carries an average coated area: a door front gets painted on
+// both faces, a drawer front on the face only, and a "box" is the face frame
+// plus whatever end panel shows.
+const CAB_DOOR_SF = 5, CAB_DRAWER_SF = 2, CAB_BOX_SF = 8;
+// Cabinets get sprayed, and spraying wastes far more finish than rolling a
+// wall - the 400 sf/gal on the can is a roller figure. Without this a 38-piece
+// kitchen came out at one gallon of Advance, which would not finish the job.
+// 1.5x puts that kitchen at two gallons, which matches what it actually takes.
+// Labor is per piece and is not touched by this.
+const CAB_SPRAY_FACTOR = 1.5;
+// A job saved before cabinets existed can carry a room.rates override with no
+// cabinet keys in it. Fall back to the current global rate so those rooms price
+// cabinets at James's rate instead of silently at $0.
+function cabRate(r, key) { return (r && r[key] != null) ? +r[key] : rates[key]; }
+function cabCalc(room, r) {
+  const doors   = parseInt(room.cabDoors)   || 0;
+  const drawers = parseInt(room.cabDrawers) || 0;
+  const boxes   = parseInt(room.cabBoxes)   || 0;
+  return { doors, drawers, boxes,
+           pieces: doors + drawers + boxes,
+           sf:     doors*CAB_DOOR_SF + drawers*CAB_DRAWER_SF + boxes*CAB_BOX_SF,
+           total:  doors*cabRate(r,'cabDoor') + drawers*cabRate(r,'cabDrawer')
+                 + boxes*cabRate(r,'cabBox') };
+}
+const CAB_NONE = { doors:0, drawers:0, boxes:0, pieces:0, sf:0, total:0 };
+// "24 door fronts, 6 drawer fronts" - the plain-English piece list that goes on
+// the bid, the client proposal and the QuickBooks estimate.
+function cabDesc(cab) {
+  const bits = [];
+  if (cab.doors)   bits.push(cab.doors   + ' door front'   + (cab.doors===1  ?'':'s'));
+  if (cab.drawers) bits.push(cab.drawers + ' drawer front' + (cab.drawers===1?'':'s'));
+  if (cab.boxes)   bits.push(cab.boxes   + ' cabinet box'  + (cab.boxes===1  ?'':'es'));
+  return bits.join(', ');
+}
+
 function calcExt(room) {
   const perimeter = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0), 0);
   const h        = parseFloat(room.height) || 0;
@@ -3984,7 +4074,7 @@ function calcExt(room) {
 
   const totalSF = (room.surfaces.walls?sidingSF:0)+soffitSF+porchCeilSF+deckSF+pergolaSF;
   const valid   = sidingSF>0 || soffitSF>0 || deckSF>0 || pergolaSF>0;
-  return {wallSF:sidingSF, floorSF:soffitSF+deckSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, valid};
+  return {wallSF:sidingSF, floorSF:soffitSF+deckSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, cab:CAB_NONE, valid};
 }
 
 function calc(room) {
@@ -4001,26 +4091,37 @@ function calc(room) {
   const floorSF = fL * fW;         // ceiling/floor: length × width
   const trimLF  = perimeter;
 
+  const r   = room.rates || rates;
+  // Counted, never gated on a surface toggle - the same rule the exterior
+  // sections follow. If James counted the pieces, they get painted.
+  const cab = cabCalc(room, r);
+
   const p      = PRODUCTS.find(x=>x.name===room.product) || PRODUCTS[0];
   const gWall  = room.surfaces.walls   ? Math.ceil(wallSF*c/p.cov)  : 0;
   const gCeil  = room.surfaces.ceiling ? Math.ceil(floorSF*c/p.cov) : 0;
   const gFloor = room.surfaces.floor   ? Math.ceil(floorSF*c/p.cov) : 0;
   const gTrim  = room.surfaces.trim    ? Math.ceil(trimLF*c/p.cov)  : 0;
-  const gal    = gWall + gCeil + gFloor + gTrim;
+  const gCab   = cab.sf > 0 ? Math.ceil(cab.sf*CAB_SPRAY_FACTOR*c/p.cov) : 0;
+  const gal    = gWall + gCeil + gFloor + gTrim + gCab;
 
-  const r   = room.rates || rates;
   const mat = gal * p.price * MARKUP;
   // Labor is the $/sf rate for the FINISHED job — coats do NOT multiply labor
   // (a second coat is not a second full labor charge). Coats still scale
-  // materials (more gallons) above.
+  // materials (more gallons) above. Cabinets are a flat price per piece, so
+  // coats don't multiply them either.
   const lab = (room.surfaces.walls   ? wallSF*r.walls    : 0)
             + (room.surfaces.ceiling ? floorSF*r.ceiling : 0)
             + (room.surfaces.floor   ? floorSF*r.floor   : 0)
-            + (room.surfaces.trim    ? trimLF*r.trim     : 0);
+            + (room.surfaces.trim    ? trimLF*r.trim     : 0)
+            + cab.total;
 
+  // Cabinet square footage is a coverage estimate for the gallon count, not a
+  // measured surface, so it stays out of the sf shown on the bid.
   const totalSF = (room.surfaces.walls?wallSF:0)+(room.surfaces.ceiling?floorSF:0)+(room.surfaces.floor?floorSF:0);
-  const valid   = wallSF>0 || floorSF>0;
-  return {wallSF, floorSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, valid};
+  // A kitchen where only the cabinets are being painted is a whole job on its
+  // own. Without this it measured 0 sf, failed `valid`, and dropped off the bid.
+  const valid   = wallSF>0 || floorSF>0 || cab.pieces>0;
+  return {wallSF, floorSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, cab, valid};
 }
 
 // ── Labor rate controls ──
@@ -4043,6 +4144,13 @@ function syncRatesUI() {
   if (rpf) rpf.style.display = isExt ? '' : 'none';
   const rt = document.getElementById('rate-trim');
   if (focused !== rt)                                  rt.value = r.trim;
+  // Cabinets are interior-only work, so the piece prices hide on an exterior job.
+  const rcf = document.getElementById('rate-cab-fields');
+  if (rcf) rcf.style.display = isExt ? 'none' : '';
+  if (!isExt) CAB_RATE_KEYS.forEach(k => {
+    const el = document.getElementById('rate-' + k);
+    if (el && focused !== el) el.value = cabRate(r, k);
+  });
   // Update surface labels to match current mode
   const lw = document.getElementById('rate-label-walls');
   const lc = document.getElementById('rate-label-ceiling');
@@ -4096,7 +4204,7 @@ function updateGlobalRate(key, val) {
   rooms.forEach(r => {
     if (!r.rates) {
       const rr = r.mode === 'exterior' ? extRates : rates;
-      ['walls','ceiling','floor','trim'].forEach(k => {
+      ['walls','ceiling','floor','trim'].concat(r.mode === 'exterior' ? [] : CAB_RATE_KEYS).forEach(k => {
         const el = document.getElementById(`${r.id}_rate_${k}`);
         if (el) el.value = rr[k];
       });
@@ -4112,7 +4220,7 @@ function toggleRoomRates(id, on) {
   const grid = document.getElementById(id+'_rategrid');
   if (grid) grid.style.display = on ? 'grid' : 'none';
   if (on) {
-    ['walls','ceiling','floor','trim'].forEach(k => {
+    ['walls','ceiling','floor','trim'].concat(r.mode === 'exterior' ? [] : CAB_RATE_KEYS).forEach(k => {
       const el = document.getElementById(`${id}_rate_${k}`);
       if (el) el.value = r.rates[k];
     });
@@ -5075,6 +5183,8 @@ function paintRoomSummary(id) {
   const room=rooms.find(r=>r.id===id); if(!room) return;
   const c=calc(room), el=document.getElementById(`${id}_sum`);
   const badge=document.getElementById(`${id}_sfbadge`);
+  const cabTot=document.getElementById(`${id}_cab_total`);
+  if(cabTot) cabTot.textContent = c.cab.pieces>0 ? `${c.cab.pieces} pcs · ${fmt(c.cab.total)}` : '';
 
   if(c.valid){
     // Mini summary inside card
@@ -5163,11 +5273,24 @@ function renderBid() {
   const roomRows = rooms.map((r,i) => {
     const c     = cs[i];
     if (!c.valid) return ''; // skip empty/unfilled rooms so the bid has no phantom $0.00 rows
-    let surfs = Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>surfLabel(k,r.mode)).join(', ');
+    // Only list an interior surface the room is actually charged for. A
+    // cabinets-only kitchen still has the default Walls toggle on, and
+    // "Walls" on a bid with no wall square footage reads as work the client
+    // is buying but isn't. Exterior keeps its existing toggle-based list.
+    let surfs = Object.entries(r.surfaces).filter(([k,v]) => {
+      if (!v) return false;
+      if (r.mode === 'exterior') return true;
+      if (k === 'walls') return c.wallSF  > 0;
+      if (k === 'trim')  return c.trimLF  > 0;
+      return c.floorSF > 0;   // ceiling and floor both come off the footprint
+    }).map(([k])=>surfLabel(k,r.mode)).join(', ');
     // Soffit is charged whenever it's measured (independent of the surface toggles),
     // so list it on the exterior bid when the room actually has soffit area.
     if (r.mode === 'exterior' && (r.soffitSections||[]).some(s => (parseFloat(s.l)||0)*(parseFloat(s.w)||0) > 0)) {
       surfs = surfs ? surfs + ', Soffit' : 'Soffit';
+    }
+    if (c.cab.pieces > 0) {
+      surfs = (surfs ? surfs + ', ' : '') + 'Cabinets (' + cabDesc(c.cab) + ')';
     }
     const short = r.product.replace(/ \(Int\)| \(Ext\)| \(Cabinets\/Trim\)/g,'');
     const sf    = c.totalSF > 0 ? c.totalSF.toFixed(0)+' sf' : '—';
@@ -5690,7 +5813,7 @@ function copyBidForQuickBooks(){
   // What was actually painted, read off the room cards — no boilerplate. Kept
   // in a fixed order so the sentence reads the same way on every estimate.
   const hit = {};
-  done.forEach(r => {
+  done.forEach((r, i) => {
     if (isExt){
       if (r.surfaces.walls)  hit.siding = 1;
       if (_qbSectSF(r.soffitSections) > 0) hit.soffits = 1;
@@ -5699,14 +5822,15 @@ function copyBidForQuickBooks(){
       if (_qbSectSF(r.pergolaSections)   > 0) hit.pergolas = 1;
       if (r.surfaces.trim)   hit.trim = 1;
     } else {
-      if (r.surfaces.walls)   hit.walls = 1;
-      if (r.surfaces.ceiling) hit.ceilings = 1;
-      if (r.surfaces.floor)   hit.floors = 1;
-      if (r.surfaces.trim)    hit.trim = 1;
+      if (r.surfaces.walls   && doneCs[i].wallSF  > 0) hit.walls    = 1;
+      if (r.surfaces.ceiling && doneCs[i].floorSF > 0) hit.ceilings = 1;
+      if (r.surfaces.floor   && doneCs[i].floorSF > 0) hit.floors   = 1;
+      if (r.surfaces.trim    && doneCs[i].trimLF  > 0) hit.trim     = 1;
+      if (doneCs[i].cab.pieces > 0)                    hit.cabinets = 1;
     }
   });
   const surf = (isExt ? ['siding','soffits','porch ceilings','decks','pergolas','trim']
-                      : ['walls','ceilings','floors','trim']).filter(s => hit[s]);
+                      : ['walls','ceilings','floors','trim','cabinets']).filter(s => hit[s]);
   const coats    = done.reduce((m,r)=>Math.max(m, parseInt(r.coats)||1), 1);
   const coatWord = ['','one full coat','two full coats','three full coats'][coats] || (coats + ' full coats');
   const prods = [];
@@ -5716,14 +5840,20 @@ function copyBidForQuickBooks(){
   const painted   = surf.length  ? _qbList(surf)  : (isExt ? 'the exterior' : 'the interior');
   // An AI-written project description, when there is one, is what the bid and
   // the proposal show — so the books get the same words the customer reads.
+  const cabOnly = !isExt && surf.length === 1 && surf[0] === 'cabinets';
   const svc = (bidScopeText || '').trim() || (isExt
     ? 'Surface preparation, protection of landscaping and surrounding areas, ' + coatWord + ' of ' + paintWord + ' on ' + painted + ', and complete cleanup.'
+    : cabOnly
+    ? 'Removal and labeling of doors, drawer fronts and hardware, cleaning and degreasing, sanding and surface preparation, protection of countertops and surrounding areas, ' + coatWord + ' of ' + paintWord + ', and rehanging and complete cleanup.'
     : 'Surface preparation, minor wall repair, protection of floors and furniture, ' + coatWord + ' of ' + paintWord + ' on ' + painted + ', and complete cleanup.');
   // Per-side square footage documents the scope without ever putting a labor
   // rate or a per-side price in the books (Project Services stays one number).
   const sideLines = done.map((r,i)=>{
     const sf = doneCs[i].totalSF > 0 ? ' - ' + _qbNum(doneCs[i].totalSF) + ' sq ft' : '';
-    return '  ' + ((r.name||'').trim() || (isExt ? 'Side' : 'Room')) + sf;
+    // Cabinets have no measured square footage, so the piece count documents
+    // the scope in its place. Still no rate and no per-room price.
+    const cb = doneCs[i].cab.pieces > 0 ? ' - ' + cabDesc(doneCs[i].cab) : '';
+    return '  ' + ((r.name||'').trim() || (isExt ? 'Side' : 'Room')) + sf + cb;
   });
   const sideBlock = sideLines.length ? [(isExt ? 'Sides' : 'Rooms') + ' included:'].concat(sideLines) : [];
 
@@ -6052,6 +6182,10 @@ function _proRoomItems(room){
     if (room.surfaces.ceiling) push('Ceiling', floorSF*r.ceiling);
     if (room.surfaces.floor)   push('Floor', floorSF*r.floor);
     if (room.surfaces.trim)    push('Trim', runLF*r.trim);
+    // Counted, not toggled - same rule calc() prices by, so the client's
+    // itemized total can't come in under the bid.
+    const cab = cabCalc(room, r);
+    if (cab.pieces) push('Cabinets (' + cabDesc(cab) + ')', cab.total);
   }
   return items;
 }

@@ -314,16 +314,17 @@ Three ways a bid written in a Claude chat reaches the app, all landing in `sendW
 Cabinets are the one interior surface nobody prices by the square foot, so they are **counted, not measured**. Every interior room card carries a **Cabinets** section with three counts: **door fronts**, **drawer fronts**, and **boxes / frames**. They sit on the room card (not in a whole-job extras box) because a kitchen, a utility room and a bath vanity are separate rooms with separate counts.
 
 - **Room fields:** `cabDoors`, `cabDrawers`, `cabBoxes` (interior only). They ride inside the room object, so `getJobSnapshot()` / `applyJobData()` carry them with no change needed — verified across a save + reload.
-- **Rates** live in `ingersoll_rates_v1` alongside the $/sf rates: `cabDoor` **$75**, `cabDrawer` **$35**, `cabBox` **$50** each. Editable in the Labor Rates card (the block hides on exterior jobs via `rate-cab-fields`) and per room in the custom-rate grid. `CAB_RATE_KEYS` is the key list; `cabRate(r,key)` falls back to the current global rate so a job saved **before** cabinets existed, whose `room.rates` override has no cabinet keys, prices them at James's rate instead of silently at $0.
+- **Rates** live in `ingersoll_rates_v1` alongside the $/sf rates: `cabDoor` **$100**, `cabDrawer` **$40**, `cabBox` **$50** each. **The door and drawer numbers are James's own, given Sep 23 2026**, and each one covers the whole piece: take it off, sand, prime, two coats, rehang. The box / face frame rate is still a starting default (he prices doors and drawers and has not quoted frames separately). Editable in the Labor Rates card (the block hides on exterior jobs via `rate-cab-fields`) and per room in the custom-rate grid. `CAB_RATE_KEYS` is the key list; `cabRate(r,key)` falls back to the current global rate so a job saved **before** cabinets existed, whose `room.rates` override has no cabinet keys, prices them at James's rate instead of silently at $0.
 - **Never gated on a surface toggle.** Same rule the exterior sections follow: if James counted the pieces, they get painted. A **cabinets-only kitchen is now `valid`** — before this it measured 0 sf, failed `calc()`'s validity check, and dropped off the bid entirely.
 - **Labor** is flat per piece, so coats do NOT multiply it (matching how walls are priced). It is added into the room's `lab`, so every consumer picks it up automatically.
 - **Gallons** need a coated area, so each piece carries an average: `CAB_DOOR_SF = 5` (both faces), `CAB_DRAWER_SF = 2` (face only), `CAB_BOX_SF = 8` (face frame plus exposed end panel). `CAB_SPRAY_FACTOR = 1.5` is then applied **to gallons only** — cabinets get sprayed and the 400 sf/gal on the can is a roller figure. Without it a 38-piece kitchen came out at one gallon of Advance, which would not finish the job; 1.5x puts it at two.
 - **Cabinet sf stays out of `totalSF`** — it is a coverage estimate, not a measured surface, so the sf column on the bid stays honest and the exterior benchmark is untouched.
+- **Priming is named in the cabinets-only scope sentence.** The standing rule in section 5 is never to reference priming unless the user specifically includes it — for cabinets James did, so a bonding primer is part of what the per-piece price sells and the QuickBooks text says so.
 - **Flows through everywhere:** the bid room row (`Cabinets (24 door fronts, 6 drawer fronts, 8 cabinet boxes)` via `cabDesc()`), the client proposal's per-room itemized lines (`_proRoomItems`), and the QuickBooks copy (piece counts in the Rooms-included block, in place of the sq ft a measured room shows).
 - **`renderBid` now filters the interior surface list by actual area.** A cabinets-only kitchen still has the default Walls toggle on, and listing "Walls" on a bid with no wall square footage reads as work the client is buying but isn't. `copyBidForQuickBooks` got the same gate, plus a **cabinets-only scope sentence** (remove and label doors and hardware, degrease, sand, protect countertops, rehang) instead of promising minor wall repair.
 - Helpers: `cabCalc`, `cabRate`, `cabDesc`, `CAB_NONE` (what `calcExt` returns so exterior consumers can read `c.cab` safely).
 
-**Verified Sep 21 2026** with Playwright at 380px and 880px: a 24-door / 6-drawer / 8-box kitchen prices at $2,410 labor + $211.20 materials (2 gal), survives a save and reload with the inputs repopulated, itemizes on the proposal, and the QuickBooks lines sum to the bid total exactly. The **Robin Caster exterior benchmark still returns 738 / 702 / 772 / 865, siding 2,541 sf, grand 3,077 sf, railings $576, treads $345** — exterior math untouched, and `c.cab.total` is 0 on every side.
+**Verified Sep 23 2026** with Playwright at 380px and 880px: at James's rates a 24-door / 6-drawer / 8-box kitchen prices at $3,040 labor + $211.20 materials (2 gal), survives a save and reload with the inputs repopulated, itemizes on the proposal, and the QuickBooks lines sum to the bid total exactly. The **Robin Caster exterior benchmark still returns 738 / 702 / 772 / 865, siding 2,541 sf, grand 3,077 sf, railings $576, treads $345** — exterior math untouched, and `c.cab.total` is 0 on every side.
 
 ### 7.7 Backup & Restore
 - `buildBackup()` serializes all localStorage keys + IndexedDB photos into a JSON blob
@@ -392,7 +393,7 @@ Exterior: `front side` / `left side` / `name it garage` / `call it back`
 ## 9. Pricing defaults
 - Door = **$75 each**
 - Window = **$50 each**
-- Cabinet door front = **$75 each**, drawer front = **$35 each**, box/frame = **$50 each** (see 7.13)
+- Cabinet door front = **$100 each**, drawer front = **$40 each** (James's own rates — off, sand, prime, two coats, rehang); box/frame = **$50 each**, still a placeholder (see 7.13)
 - Paint markup = **1.20× (20%)** — `const MARKUP = 1.20`
 - Do not change defaults; James edits per job when needed
 
@@ -599,7 +600,8 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
 
 ## 15. Open questions / known TODOs
 
-- **Cabinet $75/door, $35/drawer, $50/box are starting defaults** inside the 2026 market range (roughly $50-$125 a door, $25-$40 a drawer front, $40-$75 a box). James should replace them with his own numbers in the Labor Rates card.
+- **Cabinet $50/box is still a placeholder.** The $100/door and $40/drawer are James's own rates (given Sep 23 2026); he has never quoted face frames separately, so ask before relying on the box number.
+- **Cabinet materials do not include primer.** The per-piece price covers priming as labor, and the gallon count only prices the finish product (`CAB_SPRAY_FACTOR` covers spray waste, not a separate primer). On a big kitchen that is a real material cost sitting outside the estimate.
 - **Railing $8.00/lf and tread $15 each are placeholder defaults** — James should replace them with his own pricing. (Pergola's $6.00/sf is researched — see the pergola notes in section 7.)
 - **Lowe's price lookup is intentionally NOT in the app.** Materials list → 📋 copy → paste into a Claude chat → prices back. Don't add live price lookup.
 - **Logo-based PWA icons are current.** The old "IP monogram" placeholders are obsolete.
@@ -644,7 +646,9 @@ James cut these after using the app on real jobs. **Do not rebuild them, do not 
 
 ---
 
-*Last updated: September 21, 2026 — **Cabinet pricing added (section 7.13):** every interior room card now counts door fronts, drawer fronts and cabinet boxes and prices them per piece, so a cabinets-only kitchen is a bid-able job instead of a room that measured 0 sf and vanished off the bid. Cabinets flow into the bid, the client proposal and the QuickBooks copy, and `renderBid` / `copyBidForQuickBooks` stopped listing surfaces a room is not actually charged for. Earlier history below.*
+*Last updated: September 23, 2026 — **Cabinet rates set to James's own numbers:** $100 a door front and $40 a drawer front, each covering the full piece (off, sand, prime, two coats, rehang), and the cabinets-only QuickBooks scope sentence now names the bonding primer because he specified it. The $50 box/frame rate is still a placeholder. Earlier history below.*
+
+*Previously: September 21, 2026 — **Cabinet pricing added (section 7.13):** every interior room card now counts door fronts, drawer fronts and cabinet boxes and prices them per piece, so a cabinets-only kitchen is a bid-able job instead of a room that measured 0 sf and vanished off the bid. Cabinets flow into the bid, the client proposal and the QuickBooks copy, and `renderBid` / `copyBidForQuickBooks` stopped listing surfaces a room is not actually charged for. Earlier history below.*
 
 *Previously: September 18, 2026 — **Reel Kit added (section 7.12):** room photos can be tagged before/after and handed to CapCut through the Android share sheet in timeline order, with the caption and on-screen text copy built from the job. Reference photos now capture at 1400px/0.72 instead of 550px/0.5 so they are usable as reel footage. Earlier history below.*
 

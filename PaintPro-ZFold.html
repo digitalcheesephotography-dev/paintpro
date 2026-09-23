@@ -1772,11 +1772,13 @@ const FIREBASE_CONFIG = {
 const RATES_KEY = 'ingersoll_rates_v1';
 // Cabinets are the one interior surface nobody prices by the square foot. A
 // painter counts the kitchen: door fronts, drawer fronts, and the boxes/face
-// frames behind them, each at a flat price. $75 / $35 / $50 sit inside the 2026
-// market range (roughly $50-$125 a door, $25-$40 a drawer front, $40-$75 a box)
-// and are meant to be replaced with James's own numbers in the Labor Rates card.
+// frames behind them, each at a flat price.
+// $100 a door and $40 a drawer front are JAMES'S OWN RATES, and each one covers
+// the whole piece: take it off, sand, prime, two coats, rehang. The $50 box /
+// face frame rate is still a starting default - he prices doors and drawers and
+// has not quoted frames separately. All three are editable in the Labor Rates card.
 const DEFAULT_RATES = { walls:1.85, ceiling:1.65, floor:1.65, trim:3.50,
-                        cabDoor:75, cabDrawer:35, cabBox:50 };
+                        cabDoor:100, cabDrawer:40, cabBox:50 };
 const CAB_RATE_KEYS = ['cabDoor','cabDrawer','cabBox'];
 function loadRates() {
   try {
@@ -5844,7 +5846,7 @@ function copyBidForQuickBooks(){
   const svc = (bidScopeText || '').trim() || (isExt
     ? 'Surface preparation, protection of landscaping and surrounding areas, ' + coatWord + ' of ' + paintWord + ' on ' + painted + ', and complete cleanup.'
     : cabOnly
-    ? 'Removal and labeling of doors, drawer fronts and hardware, cleaning and degreasing, sanding and surface preparation, protection of countertops and surrounding areas, ' + coatWord + ' of ' + paintWord + ', and rehanging and complete cleanup.'
+    ? 'Removal and labeling of doors, drawer fronts and hardware, cleaning and degreasing, sanding, a bonding primer, protection of countertops and surrounding areas, ' + coatWord + ' of ' + paintWord + ', and rehanging of all doors and drawer fronts with complete cleanup.'
     : 'Surface preparation, minor wall repair, protection of floors and furniture, ' + coatWord + ' of ' + paintWord + ' on ' + painted + ', and complete cleanup.');
   // Per-side square footage documents the scope without ever putting a labor
   // rate or a per-side price in the books (Project Services stays one number).

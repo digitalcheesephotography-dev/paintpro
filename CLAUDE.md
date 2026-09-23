@@ -330,7 +330,7 @@ Cabinets are the one interior surface nobody prices by the square foot, so they 
 Crown molding is charged by the **linear foot at its own rate**, separate from Trim. Trim is the baseboard and casing at $3.50/lf; crown is overhead work off a ladder, cut tight to the ceiling, often a multi-piece profile. Lumping it into the flat trim rate under-bid it.
 
 - **Room field:** `room.crownLF` (interior only), an input on the room card between the surface toggles and the cabinets block. Rides inside the room object, so the job snapshot carries it with no change.
-- **Rate:** `rates.crown`, default **$4.50/lf**, a starting number just above James's $3.50 trim rate. Editable in the Labor Rates card (inside the interior-only `rate-cab-fields` block) and per room in the custom-rate grid. `INT_ONLY_RATE_KEYS = ['crown', ...CAB_RATE_KEYS]` is the list that hides on exterior and syncs to the room inputs; `cabRate(r,'crown')` gives the same legacy-override fallback cabinets get.
+- **Rate:** `rates.crown`, **$4.00/lf — James's own rate, given Sep 23 2026, and it covers CAULKING AND PAINTING.** The caulk line top and bottom is most of the work, so the bid row and the proposal line both read "Crown molding, caulked and painted", and the QuickBooks scope sentence names caulking of the crown seams whenever crown is in the job. Editable in the Labor Rates card (inside the interior-only `rate-cab-fields` block) and per room in the custom-rate grid. `INT_ONLY_RATE_KEYS = ['crown', ...CAB_RATE_KEYS]` is the list that hides on exterior and syncs to the room inputs; `cabRate(r,'crown')` gives the same legacy-override fallback cabinets get.
 - **⟲ Perimeter button** (`crownUsePerimeter`) fills the box with the sum of the room's wall widths, because that is the run crown takes in a normal room and James has already measured those walls. Still editable for a room where crown stops at a cased opening. Toasts a warning instead of writing 0 if no walls are measured yet.
 - **Charged on top of the Trim toggle, and never gated on one.** A room can carry both (baseboard AND crown), which is the normal case; the card says so under the input. `crown.lf > 0` also makes a room `valid`, so a crown-only hallway bids on its own.
 - **Gallons** count a linear foot as a square foot, the same convention `gTrim` already uses.
@@ -339,7 +339,7 @@ Crown molding is charged by the **linear foot at its own rate**, separate from T
 
 **Also fixed here:** the interior QuickBooks scope sentence only promises **"minor wall repair" when the job actually has wall work** (`hit.walls`). A crown-and-cabinets kitchen touches no drywall and was promising repair work it wasn't doing.
 
-**Verified Sep 23 2026** at 380px and 880px: a 14x12 room at 9 ft with walls + trim + crown prices walls $865.80, trim $182.00, crown $234.00 (52 lf perimeter, one-tap filled); a crown-only hallway is valid and bids; a `room.rates` override saved before crown existed still prices at the global rate, not $0; persistence survives reload; **Robin Caster exterior benchmark unchanged at 738 / 702 / 772 / 865, 2,541 sf siding, 3,077 sf grand, $576 railings, $345 treads** with `c.crown.total` 0 on every side.
+**Verified Sep 23 2026** at 380px and 880px: a 14x12 room at 9 ft with walls + trim + crown prices walls $865.80, trim $182.00, crown $208.00 (52 lf perimeter, one-tap filled); a crown-only hallway is valid and bids; a `room.rates` override saved before crown existed still prices at the global rate, not $0; persistence survives reload; **Robin Caster exterior benchmark unchanged at 738 / 702 / 772 / 865, 2,541 sf siding, 3,077 sf grand, $576 railings, $345 treads** with `c.crown.total` 0 on every side.
 
 ### 7.7 Backup & Restore
 - `buildBackup()` serializes all localStorage keys + IndexedDB photos into a JSON blob
@@ -408,7 +408,7 @@ Exterior: `front side` / `left side` / `name it garage` / `call it back`
 ## 9. Pricing defaults
 - Door = **$75 each**
 - Window = **$50 each**
-- Crown molding = **$4.50/linear ft**, charged on top of Trim and still a placeholder (see 7.14)
+- Crown molding = **$4.00/linear ft** (James's own rate — covers caulking and painting), charged on top of Trim (see 7.14)
 - Cabinet door front = **$100 each**, drawer front = **$40 each** (James's own rates — off, sand, prime, two coats, rehang); box/frame = **$50 each**, still a placeholder (see 7.13)
 - Paint markup = **1.20× (20%)** — `const MARKUP = 1.20`
 - Do not change defaults; James edits per job when needed
@@ -619,7 +619,6 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
 
 ## 15. Open questions / known TODOs
 
-- **Crown molding $4.50/lf is a placeholder** set just above the $3.50 trim rate. James has not given his crown number yet.
 - **Cabinet $50/box is still a placeholder.** The $100/door and $40/drawer are James's own rates (given Sep 23 2026); he has never quoted face frames separately, so ask before relying on the box number.
 - **Cabinet materials do not include primer.** The per-piece price covers priming as labor, and the gallon count only prices the finish product (`CAB_SPRAY_FACTOR` covers spray waste, not a separate primer). On a big kitchen that is a real material cost sitting outside the estimate.
 - **Railing $8.00/lf and tread $15 each are placeholder defaults** — James should replace them with his own pricing. (Pergola's $6.00/sf is researched — see the pergola notes in section 7.)
@@ -666,7 +665,7 @@ James cut these after using the app on real jobs. **Do not rebuild them, do not 
 
 ---
 
-*Last updated: September 23, 2026 — **Crown molding added (section 7.14):** its own $/lf per room, charged on top of Trim rather than buried in the flat trim rate, with a one-tap fill from the room perimeter. The interior QuickBooks scope sentence also stopped promising minor wall repair on a job with no wall work. Earlier history below.*
+*Last updated: September 23, 2026 — **Crown molding added (section 7.14):** $4.00/lf, James's own rate covering caulking and painting, charged per room on top of Trim rather than buried in the flat trim rate, with a one-tap fill from the room perimeter. The interior QuickBooks scope sentence also stopped promising minor wall repair on a job with no wall work. Earlier history below.*
 
 *Previously the same day: **Cabinet rates set to James's own numbers:** $100 a door front and $40 a drawer front, each covering the full piece (off, sand, prime, two coats, rehang), and the cabinets-only QuickBooks scope sentence now names the bonding primer because he specified it. The $50 box/frame rate is still a placeholder. Earlier history below.*
 

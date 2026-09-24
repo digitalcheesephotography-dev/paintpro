@@ -236,7 +236,7 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 - Named snapshots saved to `ingersoll_jobs_v1` array via `saveSnapshot()`
 - `getJobSnapshot()` / `applyJobData()` must be updated together when adding new persistent fields
 - Save indicator (`#save-indicator`) shows last-save timestamp — always visible
-- **Replacing the job on screen** (Start New Job, loading another job) goes through `_keepCurrentJob()`: a named job is re-saved under **its own name** (`_writeSnapshotAs(currentJobName)`); an unnamed job with priced work and a client name is saved automatically as "Client - Sep 24" (deduped with " (2)"); only an unnamed, client-less job still asks. `saveSnapshot(nameArg)` takes an optional name. **Never call `saveSnapshot()` with no argument from code**: it reads the Jobs box, which can hold a *different* job's name. That bug overwrote another client's saved job (fixed Sep 24 2026).
+- **Replacing the job on screen** (Start New Job, loading another job) goes through `_keepCurrentJob(skipAsk)`: a named job is re-saved under **its own name** (`_writeSnapshotAs(currentJobName)`) **only if the screen still has content** (`_jobHasContent`: priced work, notes or photos), so Clear then New Job can't empty a saved job; an unnamed job with content and a client name is saved automatically as "Client - Sep 24" (deduped with " (2)"); an unnamed, client-less job asks. Start New Job asks whenever `_jobHasAnything()` (content, client name or address) - a notes-only job was once wiped silently. Deleting the open job clears `currentJobName` so it can't be re-created. `saveSnapshot(nameArg)` takes an optional name. **Never call `saveSnapshot()` with no argument from code**: it reads the Jobs box, which can hold a *different* job's name. That bug overwrote another client's saved job (fixed Sep 24 2026).
 - **Wall ids** come from one global `wallCount` that restarts at 0 on page load. `_repairWallIds()` runs in `applyJobData()` before anything renders: it seeds `wallCount` past every `w\d+` id and re-ids duplicates. Without it the first wall added after a reload got "w1" and edits landed on Wall 1.
 - **Whole-job extras** reset from `JOB_DEFAULTS` (`job = {...JOB_DEFAULTS, ...data.job}` on load, so an old snapshot can't inherit today's railings); `_syncJobInputs()` pushes every extras value into its box.
 
@@ -405,7 +405,7 @@ Exterior: `front side` / `left side` / `name it garage` / `call it back`
 - Windows: `eight windows` / `put twelve windows`
 - Navigation: `estimator` / `clients` / `materials` (the `projects`, `notes` and `apt` / `pricing` routes were removed; "pricing" used to open the retired APT screen)
 - Add new: `add room` / `add client` / `add material`
-- **Voice memos** (🎙 button) append to the job's own Notes box (`#notes`), which saves with the job and prints on the bid. They used to go to the retired Notes tab, where nothing could show them.
+- **Voice memos** (🎙 button) append to the job's own Notes box (`#notes`) as a paragraph starting "🎙", which saves with the job. **`renderBid` drops 🎙 paragraphs** from the printed Project Notes, so a walkthrough remark ("she's picky, add 10%") never reaches the customer; other notes still print. (Memos used to go to the retired Notes tab, where nothing could show them.)
 - Exterior: `siding forty by nine` / `six shutters` / `railing thirty` / `power wash 250`
 - Exterior advance: `next side` / `next` / `done`
 
@@ -480,6 +480,8 @@ Rate research (Aug 2026): staining a pergola runs **$6-$7/sf of footprint** nati
 | `ingersoll_anthropic_key_v1` | Anthropic API key for the AI features. **In `SYNC_KEYS`** — mirrored to `users/{uid}/data` so it survives a reinstall and returns on sign-in (owner-only per firestore.rules). Still excluded from `BACKUP_KEYS` so it never lands in an exportable backup file. |
 
 **Client e-signature proposals:** "✍️ Send for Signature" on a bid writes it to Firestore `proposals/{randomId}` (`createProposal`) and shows a shareable link. The homeowner opens `proposal.html?id=…` (standalone, no login — public read by unguessable capability ID), reviews, types their name + draws a signature, and accepts; the doc flips to `status:'accepted'` with the signature PNG. The app watches sent proposals (`proposalWatch` / `watchAllProposals` in `setupFirestoreSync`) and toasts when signed; `openProposalsModal` lists them. Rules for the `proposals` collection are in `firestore.rules` (public read, owner-only create/delete, one-time constrained client accept) — must be published in the console.
+
+**Sign In / Sign Out card:** its button (`#acct-btn` → `_acctButton()`) reads **Sign In** when signed out (reloads to the sign-in screen) and **Sign Out** when signed in, and asks first: `signOut()` clears every `ingersoll_` key on the phone (it all returns on sign-in). It used to be a bare Sign Out that wiped the phone in one tap even when not signed in.
 
 **App Lock (opt-in):** `bootApp()` gates `_bootAppInner()` behind `showLockScreen()` when `pinIsSet()`. Enforced online AND offline (a lost phone in airplane mode no longer opens into data). Fingerprint via WebAuthn platform authenticator when `bioAvailable()`; PIN is the always-available fallback/recovery. `signOut()` clears both keys, so "forgot PIN" recovery = sign in again (synced data returns). Configured in ⚙ Settings → App Lock.
 

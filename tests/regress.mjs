@@ -234,6 +234,57 @@ ok(nj.jones===90,'Start New Job leaves the other saved job alone (Jones perimete
 ok(nj.smith===35,'Start New Job saves the open job under its own name (Smith perimeter '+nj.smith+')');
 ok(nj.brownKept,'an unnamed job with a client name is kept in Jobs, not thrown away');
 
+console.log('9. Round-two fixes (each one a bug found in review)');
+const r2=await p.evaluate(()=>{
+  const out={};
+  const reset=()=>{ rooms.length=0; roomCount=0; document.getElementById('rooms-container').innerHTML=''; jobLineItems=[]; addRoom(); };
+  let asked=0; const realConfirm=window.confirm;
+  // A: a job with only a name and notes still asks before New Job clears it
+  localStorage.removeItem('ingersoll_jobs_v1'); currentJobName=''; reset();
+  document.getElementById('client-name').value=''; document.getElementById('job-address').value='';
+  document.getElementById('notes').value='Customer wants a quote on the garage too';
+  window.confirm=()=>{asked++; return false;}; startNewJob(); window.confirm=realConfirm;
+  out.notesOnlyAsks = asked===1 && document.getElementById('notes').value.includes('garage');
+  // D: Clear then New Job must not empty a named saved job
+  reset(); document.getElementById('client-name').value='Smith'; ['10','10','10','10'].forEach(v=>addWall(rooms[0].id,v)); recalcAll();
+  document.getElementById('job-snapshot-name').value='Smith'; saveSnapshot();
+  window.confirm=()=>true; clearMeasurements(); startNewJob(); window.confirm=realConfirm;
+  const sm=jobsLoad().find(j=>j.name==='Smith'); out.clearKeepsSaved = !!sm && sm.rooms[0].walls.length===4;
+  // D2: a deleted open job does not come back
+  const smith=jobsLoad().find(j=>j.name==='Smith'); window.confirm=()=>true; loadSnapshot(smith.id); deleteSnapshot(smith.id);
+  addWall(rooms[0].id,'12'); startNewJob(); window.confirm=realConfirm;
+  out.deletedStaysDeleted = !jobsLoad().some(j=>j.name==='Smith');
+  // B: signed out, the account button signs IN and cannot wipe the phone
+  renderSetupStatus(); out.acctSaysSignIn = (document.getElementById('acct-btn')||{}).textContent==='Sign In';
+  // C: laser target follows the room, not its old position
+  reset(); addRoom(); addRoom(); rooms[0].name='Kitchen'; rooms[1].name='Den'; rooms[2].name='Bath';
+  rooms.forEach(r=>setOpen(r.id,false)); refreshRoomSelect(); document.getElementById('target-room').value='1';
+  const denId=rooms[1].id; window.confirm=()=>true; removeRoom(rooms[0].id); window.confirm=realConfirm;
+  const tv=parseInt(document.getElementById('target-room').value); out.laserStaysOnDen = rooms[tv] && rooms[tv].id===denId;
+  // E: voice memos never print on the customer's bid
+  reset(); rooms[0].cabDoors='10'; document.getElementById('client-name').value='Test';
+  document.getElementById('notes').value='Two coats on the trim\n\n🎙 Sep 24: she is picky, add 10%'; recalcAll(); bidOpen=true; renderBid();
+  const bt=document.getElementById('bid-out').textContent; out.memoHidden = !bt.includes('picky') && bt.includes('Two coats on the trim');
+  // F: spoken hundreds with a unit after them
+  out.h1=parseSpokenNumber('two hundred fifty feet'); out.h2=parseSpokenNumber('one hundred and five'); out.h3=parseSpokenNumber('three hundred square feet');
+  // G: paint hidden always matches the bid, even after editing gallons with it shown
+  reset(); rooms[0].cabDoors='24'; rooms[0].product='BM Advance (Cabinets/Trim)'; recalcAll();
+  const grand=rooms.map(calc).reduce((a,c)=>a+c.mat+c.lab,0)+jobExtras().total;
+  openProProposal(); const cb=document.getElementById('pp-show-paint'); cb.checked=true; _proTogglePaint();
+  document.getElementById('pp-gal').value='20'; _proRecalc(); cb.checked=false; _proTogglePaint();
+  out.paintOffMatches = Math.abs(_proCollect().total-grand)<0.005; _ppCloseModals();
+  document.getElementById('notes').value='';
+  return out;
+});
+ok(r2.notesOnlyAsks,'a job with only notes asks before Start New Job clears it');
+ok(r2.clearKeepsSaved,'Clear then Start New Job leaves the named saved job intact');
+ok(r2.deletedStaysDeleted,'a deleted open job does not come back on the next save');
+ok(r2.acctSaysSignIn,'signed out, the account card offers Sign In (not a data-wiping Sign Out)');
+ok(r2.laserStaysOnDen,'laser target stays on the same room after an earlier room is removed');
+ok(r2.memoHidden,'voice memos stay off the customer bid; other notes still print');
+ok(r2.h1===250 && r2.h2===105 && r2.h3===300,'spoken hundreds with units: 250 / 105 / 300 (got '+[r2.h1,r2.h2,r2.h3]+')');
+ok(r2.paintOffMatches,'Pro Proposal with paint hidden matches the bid even after editing gallons');
+
 console.log('5. Layout: no horizontal overflow, all tabs render');
 for (const w of [380,880]) {
   const q = w===380 ? p : await mk(880);

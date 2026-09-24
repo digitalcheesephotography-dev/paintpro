@@ -178,6 +178,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 /* BID OUTPUT */
 #bid-out{display:none;background:#fff;color:#111;border-radius:var(--r);padding:24px 20px;font-family:Georgia,serif;font-size:13px;line-height:1.7;margin-bottom:var(--gap)}
 #bid-out.visible{display:block}
+#bid-out{scroll-margin-top:52px}
 /* Bid actions: one style, one primary. */
 .bid-actions{margin-top:18px;font-family:var(--font)}
 .bid-act{display:flex;align-items:center;justify-content:center;width:100%;min-height:50px;margin-top:10px;padding:0 10px;background:#fff;color:#111;border:1.5px solid #c9d1da;border-radius:10px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;text-align:center;line-height:1.2}
@@ -1165,7 +1166,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
     <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🔐 Sign In / Sign Out</div>
     <div id="acct-status-text" style="font-size:13px;color:var(--muted);margin-bottom:14px"></div>
-    <button onclick="signOut()" style="background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:14px;padding:10px 18px;cursor:pointer">Sign Out</button>
+    <button id="acct-btn" onclick="_acctButton()" style="background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:14px;padding:10px 18px;cursor:pointer">Sign Out</button>
   </div>
 
 
@@ -2086,6 +2087,15 @@ async function resetPassword() {
   }
 }
 
+// The Sign In / Sign Out card's button. Not signed in: it signs in (a reload
+// brings up the sign-in screen). Signed in: it asks first, because signing out
+// clears this phone's copy of every job, client and price. It used to be a bare
+// Sign Out that wiped everything with one tap, even when not signed in.
+function _acctButton() {
+  const signedIn = !!(typeof _uid !== 'undefined' && _uid);
+  if (!signedIn) { location.reload(); return; }
+  if (confirm('Sign out? This phone\'s copy of your jobs, clients and prices is cleared. It all comes back when you sign in again.')) signOut();
+}
 function signOut() {
   if (!FIREBASE_CONFIG.apiKey) return;
   // Wipe every app-data key from this device before reloading, so the next
@@ -4088,15 +4098,17 @@ function toggleSurf(id, surf) {
 }
 function refreshRoomSelect() {
   const tr = document.getElementById('target-room');
-  const prev = tr.value === '' ? -1 : parseInt(tr.value);
-  tr.innerHTML = rooms.map((r,i)=>`<option value="${i}">${_esc(r.name)}</option>`).join('');
+  // Remember WHICH room was targeted, not its position: after an earlier room
+  // is removed the positions shift and the old index pointed at the next room.
+  const prevId = tr.selectedOptions && tr.selectedOptions[0] ? tr.selectedOptions[0].dataset.id : '';
+  tr.innerHTML = rooms.map((r,i)=>`<option value="${i}" data-id="${r.id}">${_esc(r.name)}</option>`).join('');
   // Rebuilding options resets the selection to the first room — point it back
   // at the open room so measurements don't silently land in Room 1.
   const openIdx = rooms.findIndex(r=>r.open);
   if (openIdx >= 0) tr.value = openIdx;
   // Nothing open (every card collapsed): stay on the room that was targeted
   // rather than snapping back to Room 1.
-  else if (typeof prev === 'number' && prev >= 0) tr.value = Math.min(prev, rooms.length - 1);
+  else { const i = rooms.findIndex(r => r.id === prevId); if (i >= 0) tr.value = i; }
 }
 
 // ══════════════════════════════════════════════
@@ -4607,11 +4619,29 @@ function loadSnapshot(id) {
 function _jobHasWork() {
   return rooms.some(r => calc(r).valid || (r.walls||[]).some(w => parseFloat(w.ft) > 0)) || jobExtras().total > 0;
 }
-function _keepCurrentJob() {
-  if (currentJobName) { _writeSnapshotAs(currentJobName); return true; }
-  if (!_jobHasWork()) return true;
+// Anything James wrote down that would be lost: measurements, notes (voice
+// memos land there), photos. Priced work alone was not enough - a job with only
+// a name, notes and photos was being wiped with no question asked.
+function _jobHasContent() {
+  return _jobHasWork() || !!(document.getElementById('notes')?.value || '').trim()
+      || rooms.some(r => (r.photos||[]).length);
+}
+function _jobHasAnything() {
+  return _jobHasContent() || !!(document.getElementById('client-name')?.value || '').trim()
+      || !!(document.getElementById('job-address')?.value || '').trim();
+}
+// skipAsk: the caller already asked. Returns false if James cancels.
+function _keepCurrentJob(skipAsk) {
+  if (currentJobName) {
+    // After Clear, a named job's screen holds only its client name. Writing that
+    // over the saved job emptied it; the saved copy is kept instead.
+    if (_jobHasContent()) _writeSnapshotAs(currentJobName);
+    return true;
+  }
+  if (!_jobHasAnything()) return true;
   const client = (document.getElementById('client-name').value || '').trim();
-  if (!client) return confirm('This job has measurements but no client name, so it can\'t be saved to Jobs. Replace it anyway?');
+  if (!client) return skipAsk ? true : confirm('This job has no client name, so it can\'t be kept in Jobs and will be cleared. Continue anyway?');
+  if (!_jobHasContent()) return true;   // just a name and address: nothing worth a Jobs entry
   const base = client + ' - ' + new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
   const list = jobsLoad();
   let name = base, k = 2;
@@ -4635,14 +4665,21 @@ function deleteSnapshot(id) {
   if (!j) return;
   if (!confirm(`Delete "${j.name}"? This cannot be undone.`)) return;
   jobsSave(jobsLoad().filter(x => x.id !== id));
+  // The open job was just deleted: stop saving under its name, or the next
+  // New Job / Load re-created it.
+  if (j.name === currentJobName) { currentJobName = ''; syncJobBadge(); }
   renderJobsList();
 }
 function startNewJob() {
-  if (_jobHasWork() && !confirm('Start a new blank job? This one will be kept in Jobs.')) return;
+  if (_jobHasAnything()) {
+    const keepable = currentJobName || (document.getElementById('client-name').value || '').trim();
+    if (!confirm(keepable ? 'Start a new blank job? This one is kept in Jobs.'
+                          : 'This job has no client name, so it can\'t be kept in Jobs and will be cleared. Start a new job anyway?')) return;
+  }
   // Save under the open job's OWN name. This used to call saveSnapshot(), which
   // reads the Jobs box - still holding the last job's name - and overwrote a
   // different client's saved job.
-  if (!_keepCurrentJob()) return;
+  if (!_keepCurrentJob(true)) return;
   const nameBox = document.getElementById('job-snapshot-name'); if (nameBox) nameBox.value = '';
   // Clear active state
   rooms.length = 0; roomCount = 0;
@@ -5510,7 +5547,11 @@ function _bidAboutText() {
 function renderBid() {
   const client = document.getElementById('client-name').value || '';
   const addr   = document.getElementById('job-address').value || '';
-  const notes  = document.getElementById('notes').value;
+  // Voice memos (paragraphs starting 🎙) are James's walkthrough notes - "she's
+  // picky, add 10%" must never reach the homeowner. Everything else in Notes
+  // prints as Project Notes.
+  const notes  = document.getElementById('notes').value.split(/\n{2,}/)
+    .filter(p => !p.trim().startsWith('🎙')).join('\n\n').trim();
   const date   = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
   const cs     = rooms.map(calc);
   const ex     = jobExtras();
@@ -6519,13 +6560,10 @@ function _proPaintNote(){
 // What the paint adds to the total: gallons x YOUR cost (retail minus the
 // volume discount nets back to cost). Used to keep the total identical when
 // the paint line is hidden.
-function _proPaintCost(){
-  const g = document.getElementById('pp-gal'), rt = document.getElementById('pp-retail');
-  // Untouched fields: use the bid's exact paint figure, so the rounded
-  // per-gallon price can't drift the total by a few cents.
-  if (_proPaintDefaults && g && rt && g.value === _proPaintDefaults.gal && rt.value === _proPaintDefaults.retail) return _proPaintBid;
-  return _proNum('pp-gal') * _proNum('pp-retail');
-}
+// Paint folded in (line hidden) is always exactly what the bid charges, so the
+// "matches your bid" note is always true. Gallon edits only matter when the
+// paint line is shown.
+function _proPaintCost(){ return _proPaintBid; }
 
 function _proRecalc(){
   const showPaint = !!(document.getElementById('pp-show-paint')||{}).checked;
@@ -7232,6 +7270,8 @@ function renderSetupStatus() {
   if (acct) acct.textContent = signedIn
     ? 'Signed in. Your jobs, clients and rates sync to your account.'
     : 'Not signed in. Your work is saved on this phone only.';
+  const acctBtn = document.getElementById('acct-btn');
+  if (acctBtn) acctBtn.textContent = signedIn ? 'Sign Out' : 'Sign In';
   // All green means nothing to do - say nothing and leave the space for work.
   if (allGood) return;
   const wrap = document.createElement('div');
@@ -9815,14 +9855,18 @@ function parseSpokenNumber(text) {
   // square feet, railing runs). "hundred" is a multiplier; it used to be added,
   // so "two hundred" came out 2.1. Only fires when "hundred" is spoken, so the
   // spaced-words-mean-feet-and-inches rule below is untouched.
-  const hun = String(text).toLowerCase().match(/\b([a-z-]+|\d+)\s+hundred\b(?:\s+(?:and\s+)?([a-z-]+(?:\s+[a-z-]+)?|\d+))?/);
+  const hun = String(text).toLowerCase().match(/\b([a-z-]+|\d+)\s+hundred\b(.*)$/);
   if (hun) {
     const h = wordToNum(hun[1]);
     if (h !== null && h > 0 && h < 10) {
+      // Add the number words that follow ("fifty", "and five"), stopping at the
+      // first word that isn't one ("feet", "square") instead of dropping them all.
       let rest = 0;
-      if (hun[2]) {
-        const parts = hun[2].split(/\s+/).map(wordToNum);
-        if (parts.every(x => x !== null)) rest = parts.reduce((a,b)=>a+b, 0);
+      for (const w of hun[2].trim().split(/\s+/).filter(Boolean)) {
+        if (w === 'and') continue;
+        const v = wordToNum(w);
+        if (v === null) break;
+        rest += v;
       }
       return h * 100 + rest;
     }
@@ -10250,7 +10294,7 @@ function _saveMemoNote() {
     box.value = (box.value.trim() ? box.value.trim() + '\n\n' : '') + '🎙 ' + date + ': ' + body;
     markDirty();
   }
-  showToast('🎙 Memo added to this job\'s Notes');
+  showToast('🎙 Memo added to this job\'s Notes (not printed on the bid)');
 }
 
 function _updateMemoPreview() {

@@ -252,8 +252,11 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
    half with a permanently blank right half (and made everything look tiny).
    So: single centred column by default, second column only once a bid is open.
    Breakpoint raised to 820px so a folded/cover screen never triggers it. */
+/* Labels were bumped to 12px on the folded screen only, so the bigger
+   unfolded screen had the smaller (9-10px) labels. Same size everywhere now. */
+.sum-label,.field>span,.walls-label,.tot-label,.wall-colhead{font-size:12px;letter-spacing:.5px}
+#contacts-section{max-width:760px;margin-left:auto;margin-right:auto}
 @media(min-width:820px){
-  body{font-size:15px}
   main{display:grid;grid-template-columns:minmax(0,1fr);column-gap:16px;
        padding:16px 16px 0;align-items:start;max-width:760px;margin:0 auto}
   main.has-bid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);max-width:1200px}
@@ -461,10 +464,10 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;margin-bottom:12px">
       <button id="current-job-badge" onclick="openJobsModal()" aria-label="Open jobs"
         style="height:42px;background:var(--panel);border:1.5px solid var(--border);border-radius:8px;color:var(--blue);font-family:var(--head);font-size:14px;font-weight:700;letter-spacing:1.5px;cursor:pointer">📁 Jobs</button>
-      <button onclick="document.getElementById('scan-notes-input').click()" aria-label="Scan handwritten notes"
+      <button onclick="if(_needAiKey())return;document.getElementById('scan-notes-input').click()" aria-label="Scan handwritten notes"
         style="height:42px;padding:0 14px;background:var(--panel);border:1.5px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--head);font-size:14px;font-weight:700;letter-spacing:1px;cursor:pointer;white-space:nowrap;transition:border-color .15s,color .15s"
         onmouseenter="this.style.borderColor='var(--blue)';this.style.color='var(--blue)'"
-        onmouseleave="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📝 Scan</button>
+        onmouseleave="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📝 Scan Notes</button>
       <button onclick="clearMeasurements()" aria-label="Clear measurements"
         style="height:42px;padding:0 14px;background:var(--panel);border:1.5px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--head);font-size:14px;font-weight:700;letter-spacing:1px;cursor:pointer;white-space:nowrap;transition:border-color .15s,color .15s"
         onmouseenter="this.style.borderColor='var(--red)';this.style.color='var(--red)'"
@@ -3227,6 +3230,12 @@ function renderRoom(room, idx) {
           </div>
         </label>
       </div>
+      <!-- Most rooms have neither crown nor cabinets, so the six boxes stay
+           folded behind one button and open by themselves on a room that has
+           any of them filled in. -->
+      <button type="button" class="add-wall-btn" id="${room.id}_extras_btn" style="display:${roomHasExtras(room)?'none':''}"
+        onclick="showRoomExtras('${room.id}')">＋ Crown molding / Cabinets</button>
+      <div id="${room.id}_extras" style="display:${roomHasExtras(room)?'':'none'}">
       <!-- Crown molding runs the ceiling perimeter, which is the same number the
            wall widths already add up to - hence the one-tap fill. It is charged
            ON TOP of the Trim toggle, because trim is the baseboard and casing
@@ -3268,13 +3277,14 @@ function renderRoom(room, idx) {
               inputmode="numeric" placeholder="0" aria-label="Cabinet boxes or face frames in this room"
               oninput="updateField('${room.id}','cabBoxes',this.value)"/></label>
         </div>
+      </div>
       </div>`;
 
   card.innerHTML = `
     <div class="room-head" onclick="toggleOpen('${room.id}')">
       <div class="room-head-left">
         <span class="room-num" id="${room.id}_num">#${idx+1}</span>
-        <input class="room-name-input" type="text" id="${room.id}_name" value="${_esc(room.name)}"
+        <input class="room-name-input" type="text" id="${room.id}_name" value="${_esc(room.name)}" aria-label="${isExt ? 'Side name' : 'Room name'}"
           onclick="event.stopPropagation()" oninput="updateField('${room.id}','name',this.value)"/>
       </div>
       <span class="room-sf-badge" id="${room.id}_sfbadge" style="display:none"></span>
@@ -3289,7 +3299,7 @@ function renderRoom(room, idx) {
       </div>
       <div class="wall-colhead"><span class="wall-colhead-sp"></span><span>width</span><span class="wall-colhead-x"></span><span>height</span><span class="wall-colhead-btns"></span></div>
       <div class="walls-list" id="${room.id}_walls"></div>
-      <button class="add-wall-btn" onclick="addWall('${room.id}')" aria-label="Add wall measurement">+ Add Wall</button>
+      <button class="add-wall-btn" onclick="addWall('${room.id}')" aria-label="Add wall measurement">${isExt ? '+ Add Siding Section' : '+ Add Wall'}</button>
 
       <!-- Height -->
       <div class="height-row">
@@ -3367,7 +3377,7 @@ function renderRoom(room, idx) {
           <input type="checkbox" id="${room.id}_ratetoggle" ${room.rates?'checked':''}
             onchange="toggleRoomRates('${room.id}',this.checked)"
             style="width:20px;height:20px;accent-color:var(--blue);cursor:pointer"/>
-          <span style="font-size:13px;color:var(--muted)">Custom $/sf rates for this ${isExt ? 'side' : 'room'}</span>
+          <span style="font-size:14px;color:var(--muted)">Different prices for this ${isExt ? 'side' : 'room'}</span>
         </label>
         <div id="${room.id}_rategrid" style="display:${room.rates?'grid':'none'};grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
           <label class="field"><span>${isExt ? 'Siding $/sf' : 'Walls $/sf'}</span>
@@ -3976,7 +3986,7 @@ function renderWalls(room) {
       <span class="wall-badge" onclick="editWallLabel('${room.id}','${wall.id}')"
         style="cursor:pointer" title="Tap to label this wall (e.g. pantry wall, ask her)">W${i+1}</span>
       <input type="number" id="${wall.id}_ft" value="${wall.ft}" min="0" step="0.01"
-        inputmode="decimal" placeholder="0.00"
+        inputmode="decimal" placeholder="0.00" aria-label="Wall ${i+1} width in feet"
         oninput="updateWall('${room.id}','${wall.id}',this.value)"/>
       <span class="wall-unit">×</span>
       <input type="number" id="${wall.id}_ht" value="${wall.ht||''}" min="0" step="0.1"
@@ -4078,11 +4088,15 @@ function toggleSurf(id, surf) {
 }
 function refreshRoomSelect() {
   const tr = document.getElementById('target-room');
+  const prev = tr.value === '' ? -1 : parseInt(tr.value);
   tr.innerHTML = rooms.map((r,i)=>`<option value="${i}">${_esc(r.name)}</option>`).join('');
   // Rebuilding options resets the selection to the first room — point it back
   // at the open room so measurements don't silently land in Room 1.
   const openIdx = rooms.findIndex(r=>r.open);
   if (openIdx >= 0) tr.value = openIdx;
+  // Nothing open (every card collapsed): stay on the room that was targeted
+  // rather than snapping back to Room 1.
+  else if (typeof prev === 'number' && prev >= 0) tr.value = Math.min(prev, rooms.length - 1);
 }
 
 // ══════════════════════════════════════════════
@@ -4133,6 +4147,25 @@ const CROWN_NONE = { lf:0, total:0 };
 // One tap fills crown with the perimeter the wall widths already add up to,
 // which is the run crown takes in a normal room. Still editable afterwards for
 // a room where it stops at a cased opening.
+// True (and James is taken to the AI Key card) when there is no key yet, so a
+// feature that needs AI says so BEFORE asking him to take a photo.
+function _needAiKey() {
+  if ((localStorage.getItem('ingersoll_anthropic_key_v1') || '').trim()) return false;
+  showToast('Add your AI key first: ☰ MENU → Setup → AI Key', 'warn');
+  switchTab('settings'); openSettingsCard(/AI Key/i);
+  return true;
+}
+function roomHasExtras(room) {
+  return !!(room.showExtras || _pos(room.crownLF) || _posInt(room.cabDoors) || _posInt(room.cabDrawers) || _posInt(room.cabBoxes));
+}
+function showRoomExtras(roomId) {
+  const room = rooms.find(r=>r.id===roomId); if (!room) return;
+  room.showExtras = true;   // stays open for this room, saved with the job
+  const box = document.getElementById(roomId+'_extras'), btn = document.getElementById(roomId+'_extras_btn');
+  if (box) box.style.display = '';
+  if (btn) btn.style.display = 'none';
+  markDirty();
+}
 function crownUsePerimeter(roomId) {
   const room = rooms.find(r=>r.id===roomId); if (!room) return;
   const perim = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0), 0);
@@ -6100,7 +6133,7 @@ function _qbFallback(text){
 // is set up to collect an online deposit, it becomes a Pay-Deposit button on
 // the client's signed proposal.
 async function _sendProposal(bodyHtml, client, address, totalForDeposit){
-  if (!_db || !_uid) { showToast('Sign in to send a proposal for signature', 'warn'); return; }
+  if (!_db || !_uid) { showToast('Sign in to send a proposal for signature (☰ MENU)', 'warn'); switchTab('settings'); return; }
   const id = _propRandId();
   const doc = {
     ownerUid:_uid, createdAt:Date.now(), client:client||'Client', address:address||'', bodyHtml,
@@ -6959,7 +6992,7 @@ function emailBid() {
   const _bcc = loadBccEmail();
   const bcc = _bcc ? `&bcc=${encodeURIComponent(_bcc)}` : '';
   window.open(`mailto:${toEmail}?subject=${subject}${bcc}&body=${body}`);
-  if (!toEmail) showToast('No email on file — add one to this client first', 'warn');
+  if (!toEmail) showToast('No email saved for this client. Type it in your email app.', 'warn');
 }
 
 async function printAtHome() {
@@ -9777,6 +9810,23 @@ function wordToNum(word) {
 function parseSpokenNumber(text) {
   const direct = parseFloat(text);
   if (!isNaN(direct) && direct > 0) return direct;
+
+  // "two hundred" / "two hundred fifty" / "one hundred and twenty" (power wash
+  // square feet, railing runs). "hundred" is a multiplier; it used to be added,
+  // so "two hundred" came out 2.1. Only fires when "hundred" is spoken, so the
+  // spaced-words-mean-feet-and-inches rule below is untouched.
+  const hun = String(text).toLowerCase().match(/\b([a-z-]+|\d+)\s+hundred\b(?:\s+(?:and\s+)?([a-z-]+(?:\s+[a-z-]+)?|\d+))?/);
+  if (hun) {
+    const h = wordToNum(hun[1]);
+    if (h !== null && h > 0 && h < 10) {
+      let rest = 0;
+      if (hun[2]) {
+        const parts = hun[2].split(/\s+/).map(wordToNum);
+        if (parts.every(x => x !== null)) rest = parts.reduce((a,b)=>a+b, 0);
+      }
+      return h * 100 + rest;
+    }
+  }
 
   // "twelve feet six inches"
   const ftIn = text.match(/(\w+)\s+feet?\s+(\w+)\s+inch/i) || text.match(/(\w+)\s+ft\s+(\w+)/i);

@@ -285,6 +285,12 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 - **Deposit-paid status is NOT written back to Firestore** (avoids loosening the proposal rules). James's source of truth for payment is Stripe's own dashboard + receipt email. A webhook-based status sync is the documented future enhancement.
 - One-time setup (James): create a Stripe account, add `STRIPE_SECRET_KEY` secret to the Worker in Cloudflare, ensure Proxy URL is set, turn on the switch + set a percent.
 
+### 7.9a Small UI rules added Sep 24 2026
+- Every `_ppModal()` sheet has a ✕ riding just above its top edge (in a holder around the sheet, so sheets that set `innerHTML` can't wipe it), and **Esc** closes it.
+- **Exterior Extras** card (was "Shutters & Power Wash"): the whole-job Railing / Steps **quantity** boxes only show for an older job that still has a value in them; otherwise the per-side totals show in their place ("40 lf (sides)"), so nobody types a railing twice. The **$/lf and $/step boxes stay**: they set the price the per-side railings use.
+- The ZIP-code "regional rate" pop-up on address blur was removed (it said "above" when the rate was below, and covered the inputs). `suggestRatesForAddress()` remains, unused.
+- Adding a charge by hand keeps the form open for the next one. The room summary's first figure is labelled "Sq Ft" (it is all the room's square feet, not only walls).
+
 ### 7.9 Estimate Assistant + custom charges — built
 - **One** whole-job AI chat (`#assistant-card`, near the bottom of the estimator) replaces the old per-room AI chat box, which was removed from every room card. Talk-or-type (the phone keyboard mic covers "talk").
 - **Custom charges:** `jobLineItems = [{label, amount}]` — whole-job line items (Sheetrock, staining, power washing, etc.). `addJobLineItem()` / `removeJobLineItem()` / `renderLineItems()` (list in the assistant card with ✕ remove). `toggleManualCharge()` / `manualAddCharge()` are the no-signal manual add (label + $ inputs) — works fully offline, no AI needed. They flow into totals via `jobExtras().lineItems` / `.lineItemsTotal` (added into `jobExtras().total`), so every consumer (`recalcAll`, `renderBid`, deposit, QuickBooks copy, pro proposal) picks them up automatically. `renderBid` shows each as its own row.
@@ -648,7 +654,7 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
 - **Railing $8.00/lf and tread $15 each are placeholder defaults** — James should replace them with his own pricing. (Pergola's $6.00/sf is researched — see the pergola notes in section 7.)
 - **Lowe's price lookup is intentionally NOT in the app.** Materials list → 📋 copy → paste into a Claude chat → prices back. Don't add live price lookup.
 - **Logo-based PWA icons are current.** The old "IP monogram" placeholders are obsolete.
-- **Offered and deferred, still worth doing:** carry the rest of a room's settings (product, coats, surface toggles) forward to the next room — ceiling height already does. (The bid's button stack was fixed Sep 24 2026.)
+- **Carry-forward:** a new room/side now starts with the previous one's height, **surface toggles and coats** (Sep 24 2026). Product is deliberately NOT carried (a kitchen in Advance shouldn't make the next bedroom Advance). Turning on Ceiling/Floor on a room whose four walls are a rectangle fills the footprint by itself (`_autoFootprint`; only fills empty boxes), because an unsized ceiling priced at $0 and silently left the bid.
 - **Sep 24 2026 six-reviewer audit: found but deliberately NOT done** (ask James before doing any):
   - Collapse the laser bar when no laser has connected (~115px of every screen). Kept: James uses the laser.
   - Put per-room "Different prices" and "Remove" behind a ⋯ menu; Photos & Video as a small icon.
@@ -658,6 +664,8 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
   - Typing `12'6` into a wall box stores 126 ft (the number input drops the apostrophe).
   - proposal.html labels and buttons use Arial (web chrome, not the bid document); the signature image isn't shown on the page after signing, only in the download.
   - A handful of hard-coded `#6b7a8d` greys on white inside the Bid Agent panel are below 4.5:1 contrast.
+  - Gallons round up per surface per room, so a multi-room job runs ~2 gallons high (10 gal for two 12x14 bedrooms). Conservative, and changing it changes every materials figure, so left alone.
+  - Room names start as the real value "Room 1" (tapping now selects it all, so speaking a name replaces it); a true placeholder would need a fallback everywhere a name is printed.
 - **Tom Skeffington's $9,169 exterior proposal is deliberately NOT in QuickBooks** — James asked to hold. There is no "Skeffington" customer there, and the connector's fuzzy search confidently offers three *wrong* Toms (McConkey 99.6%, Johnston, Needle). **Never trust `best_match` on a name that isn't an exact hit.**
 - **Most of James's estimates from the last 8–10 months live in past Claude chats**, not in QuickBooks or the app.
 

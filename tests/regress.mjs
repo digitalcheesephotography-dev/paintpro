@@ -285,6 +285,37 @@ ok(r2.memoHidden,'voice memos stay off the customer bid; other notes still print
 ok(r2.h1===250 && r2.h2===105 && r2.h3===300,'spoken hundreds with units: 250 / 105 / 300 (got '+[r2.h1,r2.h2,r2.h3]+')');
 ok(r2.paintOffMatches,'Pro Proposal with paint hidden matches the bid even after editing gallons');
 
+console.log('10. Field round-two fixes');
+const f2=await p.evaluate(()=>{
+  const out={};
+  rooms.length=0; roomCount=0; document.getElementById('rooms-container').innerHTML=''; jobLineItems=[]; addRoom();
+  const r=rooms[0]; ['12','14','12','14'].forEach(v=>addWall(r.id,v)); toggleSurf(r.id,'ceiling'); toggleSurf(r.id,'trim'); recalcAll();
+  out.footprint = r.floorLength==='12' && r.floorWidth==='14' && calc(r).floorSF===168;
+  addRoom(); out.carries = rooms[1].surfaces.ceiling===true && rooms[1].surfaces.trim===true && rooms[1].coats===r.coats;
+  // cabinets + crown kitchen: cabinet wording in QuickBooks and the proposal
+  rooms.length=0; roomCount=0; document.getElementById('rooms-container').innerHTML=''; addRoom();
+  Object.assign(rooms[0],{name:'Kitchen',cabDoors:'24',crownLF:'55'}); rooms[0].surfaces={walls:true,ceiling:false,floor:false,trim:false}; recalcAll();
+  let cap=''; const real=navigator.clipboard.writeText; navigator.clipboard.writeText=t=>{cap=t;return Promise.resolve();};
+  bidScopeText=''; copyBidForQuickBooks(); navigator.clipboard.writeText=real;
+  out.qbCabinet = /bonding primer/.test(cap) && /crown molding/.test(cap) && !/minor wall repair/.test(cap);
+  openProProposal(); const sc=document.getElementById('pp-scope').value; _ppCloseModals();
+  out.proCabinet = /cabinet doors/.test(sc) && /crown molding/.test(sc) && !/patching/.test(sc);
+  out.shareFlat = !/\([^)]*\(/.test(_bidPlainBreakdown().text.split('\n')[0]);
+  // exterior: railings typed on a side are not asked for again
+  switchMode('exterior'); rooms.length=0; roomCount=0; document.getElementById('rooms-container').innerHTML=''; addRoom();
+  rooms[0].railSections=[{id:'rx',lf:'40'}]; job.railLF=''; recalcAll();
+  const inp=document.getElementById('job-rail-lf'), sp=document.getElementById('job-rail-sides');
+  out.railOnce = inp.style.display==='none' && /40 lf/.test(sp.textContent) && jobExtras().railTotal===320;
+  switchMode('interior');
+  return out;
+});
+ok(f2.footprint,'Ceiling on a 12,14,12,14 room fills 12 x 14 by itself (no silent $0 ceiling)');
+ok(f2.carries,'the next room starts with the same surfaces and coats');
+ok(f2.qbCabinet,'cabinets + crown job gets cabinet wording (primer, crown caulk) in QuickBooks');
+ok(f2.proCabinet,'cabinets + crown job gets cabinet scope bullets in the Pro Proposal');
+ok(f2.shareFlat,'Share / Text has no brackets inside brackets');
+ok(f2.railOnce,'railings entered on a side are not asked for again in Exterior Extras');
+
 console.log('5. Layout: no horizontal overflow, all tabs render');
 for (const w of [380,880]) {
   const q = w===380 ? p : await mk(880);

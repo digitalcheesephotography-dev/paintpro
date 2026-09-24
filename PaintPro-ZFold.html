@@ -1839,11 +1839,21 @@ let saveTimer = null;
 let saveIndicatorTimer = null;
 
 // Whole-job extras (doors and windows priced per unit; shutters + power wash for exterior)
-let job = { doorCount:'', doorPrice:'75', winCount:'', winPrice:'50',
+const JOB_DEFAULTS = { doorCount:'', doorPrice:'75', winCount:'', winPrice:'50',
             shutterCount:'', shutterPrice:'25', washSF:'', washRate:'0.20',
             // Deck railings are priced by the linear foot and stair treads by
             // the piece — how James already writes them on his paper sheet.
             railLF:'', railRate:'8.00', treadCount:'', treadPrice:'15' };
+let job = { ...JOB_DEFAULTS };
+// Push every whole-job extras value into its input box. Start New Job and
+// Clear used to reset the numbers but leave some boxes showing the old ones
+// (a rail rate box reading 9.00 while $8.00 was being priced).
+function _syncJobInputs() {
+  const map = { 'job-door-count':'doorCount', 'job-door-price':'doorPrice', 'job-win-count':'winCount', 'job-win-price':'winPrice',
+    'job-shutter-count':'shutterCount', 'job-shutter-price':'shutterPrice', 'job-wash-sf':'washSF', 'job-wash-rate':'washRate',
+    'job-rail-lf':'railLF', 'job-rail-rate':'railRate', 'job-tread-count':'treadCount', 'job-tread-price':'treadPrice' };
+  Object.entries(map).forEach(([id,k]) => { const el = document.getElementById(id); if (el) el.value = job[k] ?? ''; });
+}
 // Custom whole-job charges the Estimate Assistant (or manual add) puts on the
 // bid — e.g. Sheetrock repair, staining. [{label, amount}]
 let jobLineItems = [];
@@ -1854,26 +1864,26 @@ function updateJobField(key, val) {
 }
 
 function jobExtras() {
-  const dc  = parseInt(job.doorCount)    || 0;
-  const dp  = parseFloat(job.doorPrice)  || 0;
-  const wc  = parseInt(job.winCount)     || 0;
-  const wp  = parseFloat(job.winPrice)   || 0;
-  const sc  = parseInt(job.shutterCount) || 0;
-  const sp  = parseFloat(job.shutterPrice) || 0;
-  const wsf = parseFloat(job.washSF)     || 0;
-  const wr  = parseFloat(job.washRate)   || 0;
-  const rr  = parseFloat(job.railRate)   || 0;
-  const tp  = parseFloat(job.treadPrice) || 0;
+  const dc  = _posInt(job.doorCount);
+  const dp  = _pos(job.doorPrice);
+  const wc  = _posInt(job.winCount);
+  const wp  = _pos(job.winPrice);
+  const sc  = _posInt(job.shutterCount);
+  const sp  = _pos(job.shutterPrice);
+  const wsf = _pos(job.washSF);
+  const wr  = _pos(job.washRate);
+  const rr  = _pos(job.railRate);
+  const tp  = _pos(job.treadPrice);
   // Railings and treads are entered per side, the way they are written on the
   // paper sheet. The whole-job boxes in the extras card still work and are
   // added on top, so older saved jobs keep totalling exactly as before.
   let roomRailLF = 0, roomTreads = 0;
   rooms.forEach(r => {
-    (r.railSections||[]).forEach(x => { roomRailLF += parseFloat(x.lf)||0; });
-    roomTreads += parseInt(r.treadCount)||0;
+    (r.railSections||[]).forEach(x => { roomRailLF += _pos(x.lf); });
+    roomTreads += _posInt(r.treadCount);
   });
-  const rlf = (parseFloat(job.railLF)   || 0) + roomRailLF;
-  const tc  = (parseInt(job.treadCount) || 0) + roomTreads;
+  const rlf = _pos(job.railLF) + roomRailLF;
+  const tc  = _posInt(job.treadCount) + roomTreads;
   const shutterTotal = sc * sp;
   const washTotal    = wsf * wr;
   const railTotal    = rlf * rr;
@@ -3570,11 +3580,26 @@ function removeDeckSection(roomId, sectionId) {
   recalcRoom(roomId);
   markDirty();
 }
+// Typing into a length x width section box. The four update*Section
+// functions used to rebuild the whole list on every keystroke, which threw
+// away the box being typed in: "21" saved as "2", so a 21x14 deck went on the
+// bid as 2 sq ft. Now a keystroke only refreshes the sf labels beside the
+// boxes; the list is rebuilt only when a section is added or removed.
+function _refreshSectionLabels(room, listKey, totalId, totalWord) {
+  let total = 0;
+  (room[listKey]||[]).forEach(sec => {
+    const sf = (parseFloat(sec.l)||0) * (parseFloat(sec.w)||0); total += sf;
+    const lab = document.getElementById(sec.id+'_l')?.closest('.deck-sec-row')?.querySelector('.deck-sec-sf');
+    if (lab) lab.textContent = sf > 0 ? sf.toFixed(1)+' sf' : '';
+  });
+  const totEl = document.getElementById(`${room.id}_${totalId}`);
+  if (totEl) totEl.textContent = total > 0 ? `${total.toFixed(0)} ${totalWord}` : '';
+}
 function updateDeckSection(roomId, sectionId, field, val) {
   const room = rooms.find(r=>r.id===roomId); if(!room) return;
   const sec = (room.deckSections||[]).find(s=>s.id===sectionId); if(!sec) return;
   sec[field] = val;
-  renderDeckSections(roomId);
+  _refreshSectionLabels(room, 'deckSections', 'deck_total', 'sf total');
   recalcRoom(roomId);
   markDirty();
 }
@@ -3630,8 +3655,8 @@ function updatePergolaSection(roomId, sectionId, field, val) {
   const room = rooms.find(r=>r.id===roomId); if(!room) return;
   const sec = (room.pergolaSections||[]).find(s=>s.id===sectionId); if(!sec) return;
   sec[field] = val;
-  renderPergolaSections(roomId);
-  recalcRoom(roomId); recalcAll();
+  _refreshSectionLabels(room, 'pergolaSections', 'pergola_total', 'sf footprint');
+  recalcRoom(roomId);
   markDirty();
 }
 function renderPergolaSections(roomId) {
@@ -3776,7 +3801,7 @@ function updateSoffitSection(roomId, sectionId, field, val) {
   const room = rooms.find(r=>r.id===roomId); if(!room) return;
   const sec = (room.soffitSections||[]).find(s=>s.id===sectionId); if(!sec) return;
   sec[field] = val;
-  renderSoffitSections(roomId);
+  _refreshSectionLabels(room, 'soffitSections', 'soffit_total', 'sf total');
   recalcRoom(roomId);
   markDirty();
 }
@@ -3834,6 +3859,23 @@ function armSoffitShot(roomId, sectionId, field) {
 // The soffit/porch/deck counters reset to 0 on every reload, so after loading a
 // saved job the next "+ Add Section" handed out an id already in use and edits
 // landed on the wrong row. Seed each counter past the highest id in the job.
+// Wall ids come from one global counter that starts at 0 on every page load.
+// After reopening a job the next new wall was handed "w1" - an id Wall 1
+// already had - so typing into the new row changed Wall 1, the perimeter came
+// out short, and ✕ deleted both rows. Seed the counter past every id in the
+// job, and repair any duplicates that bug already saved into older jobs.
+function _repairWallIds() {
+  const seen = new Set();
+  let hi = 0;
+  rooms.forEach(r => (r.walls||[]).forEach(w => {
+    const m = /^w(\d+)$/.exec(w.id || ''); if (m) hi = Math.max(hi, +m[1]);
+  }));
+  wallCount = Math.max(wallCount, hi);
+  rooms.forEach(r => (r.walls||[]).forEach(w => {
+    if (!w.id || seen.has(w.id)) w.id = 'w' + (++wallCount);
+    seen.add(w.id);
+  }));
+}
 function _seedSectionCounters() {
   const highest = (pre) => rooms.reduce((m, r) =>
     [...(r.soffitSections||[]), ...(r.porchCeilSections||[]), ...(r.deckSections||[])]
@@ -3860,7 +3902,8 @@ function updatePorchSection(roomId, sectionId, field, val) {
   const room = rooms.find(r=>r.id===roomId); if(!room) return;
   const sec = (room.porchCeilSections||[]).find(s=>s.id===sectionId); if(!sec) return;
   sec[field] = val;
-  renderPorchSections(roomId); recalcRoom(roomId); markDirty();
+  _refreshSectionLabels(room, 'porchCeilSections', 'porch_ceil_total', 'sf total');
+  recalcRoom(roomId); markDirty();
 }
 function renderPorchSections(roomId) {
   const room = rooms.find(r=>r.id===roomId); if(!room) return;
@@ -4063,10 +4106,14 @@ const CAB_SPRAY_FACTOR = 1.5;
 // with no key for them. Fall back to the current global rate so those rooms
 // price at James's rate instead of silently at $0. Used for crown as well.
 function cabRate(r, key) { return (r && r[key] != null) ? +r[key] : rates[key]; }
+// Counts and lengths are never negative. A "-5" typed by mistake used to take
+// money off the bid (crown -52 was -$208; -3 doors was -$225).
+const _pos    = v => Math.max(0, parseFloat(v) || 0);
+const _posInt = v => Math.max(0, parseInt(v) || 0);
 function cabCalc(room, r) {
-  const doors   = parseInt(room.cabDoors)   || 0;
-  const drawers = parseInt(room.cabDrawers) || 0;
-  const boxes   = parseInt(room.cabBoxes)   || 0;
+  const doors   = _posInt(room.cabDoors);
+  const drawers = _posInt(room.cabDrawers);
+  const boxes   = _posInt(room.cabBoxes);
   return { doors, drawers, boxes,
            pieces: doors + drawers + boxes,
            sf:     doors*CAB_DOOR_SF + drawers*CAB_DRAWER_SF + boxes*CAB_BOX_SF,
@@ -4079,7 +4126,7 @@ const CAB_NONE = { doors:0, drawers:0, boxes:0, pieces:0, sf:0, total:0 };
 // Linear feet along the ceiling, priced at its own rate and never gated on the
 // Trim toggle (trim is baseboard and casing; crown is separate overhead work).
 function crownCalc(room, r) {
-  const lf = parseFloat(room.crownLF) || 0;
+  const lf = _pos(room.crownLF);
   return { lf, total: lf * cabRate(r, 'crown') };
 }
 const CROWN_NONE = { lf:0, total:0 };
@@ -4110,10 +4157,10 @@ function cabDesc(cab) {
 function calcExt(room) {
   const perimeter = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0), 0);
   const h        = parseFloat(room.height) || 0;
-  const soffitSF    = (room.soffitSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
-  const porchCeilSF = (room.porchCeilSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
-  const deckSF      = (room.deckSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
-  const pergolaSF   = (room.pergolaSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0), 0);
+  const soffitSF    = (room.soffitSections||[]).reduce((a,s)=>a+_pos(s.l)*_pos(s.w), 0);
+  const porchCeilSF = (room.porchCeilSections||[]).reduce((a,s)=>a+_pos(s.l)*_pos(s.w), 0);
+  const deckSF      = (room.deckSections||[]).reduce((a,s)=>a+_pos(s.l)*_pos(s.w), 0);
+  const pergolaSF   = (room.pergolaSections||[]).reduce((a,s)=>a+_pos(s.l)*_pos(s.w), 0);
   const c        = Number.isFinite(parseInt(room.coats)) ? parseInt(room.coats) : 1;
   // Each siding run can override the side height (gables, walk-out basements)
   const sidingSF = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0)*(parseFloat(w.ht)||h), 0);
@@ -4268,8 +4315,10 @@ function switchMode(mode) {
   // Leaving exterior clears exterior-only whole-job extras so they can't
   // carry phantom shutter / power-wash charges onto an interior bid.
   if (mode === 'interior') {
-    job.shutterCount = ''; job.washSF = '';
-    ['job-shutter-count','job-wash-sf','job-rail-lf','job-tread-count'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    // Rails and treads were cleared on screen but not in the numbers, so an
+    // interior bid carried $240 of phantom railings nobody could see.
+    job.shutterCount = ''; job.washSF = ''; job.railLF = ''; job.treadCount = '';
+    _syncJobInputs();
   }
   rooms.length = 0; roomCount = 0;
   document.getElementById('rooms-container').innerHTML = '';
@@ -4285,8 +4334,15 @@ function toggleRatesCard() {
   body.style.display = open ? 'block' : 'none';
   chev.style.transform = open ? 'rotate(180deg)' : '';
 }
+// "$2.00" or "2.00/sf" typed into a rate box means 2. A box cleared while
+// retyping is ignored rather than saved as $0 (which zeroed walls labor).
+function _rateVal(val) {
+  const v = parseFloat(String(val == null ? '' : val).replace(/[^0-9.]/g, ''));
+  return Number.isFinite(v) ? v : null;
+}
 function updateGlobalRate(key, val) {
-  const v = parseFloat(val) || 0;
+  const v = _rateVal(val);
+  if (v === null) return;
   if (estimatorMode === 'exterior') { extRates[key] = v; saveExtRates(); }
   else                              { rates[key] = v;    saveRates(); }
   rooms.forEach(r => {
@@ -4319,7 +4375,9 @@ function updateRoomRate(id, key, val) {
   const r = rooms.find(x=>x.id===id); if(!r) return;
   // Seed overrides from the rate table matching the room's mode
   if (!r.rates) r.rates = r.mode === 'exterior' ? { ...extRates } : { ...rates };
-  r.rates[key] = parseFloat(val) || 0;
+  const v = _rateVal(val);
+  if (v === null) return;
+  r.rates[key] = v;
   recalcRoom(id);
 }
 
@@ -4386,22 +4444,15 @@ function applyJobData(data) {
   rooms.length = 0;
   (data.rooms || []).forEach(r => rooms.push(r));
   roomCount = data.roomCount || rooms.length;
-  // Restore job extras
-  if (data.job) Object.assign(job, data.job);
+  _repairWallIds();   // before anything renders: DOM ids are built from wall ids
+  // Restore job extras. Start from defaults so a job saved before a field
+  // existed doesn't pick up the current job's value for it (an old snapshot
+  // was inheriting $240 of railings from whatever was on screen).
+  job = { ...JOB_DEFAULTS, ...(data.job || {}) };
   jobLineItems = (data.jobLineItems || []).map(li => ({ label: li.label, amount: li.amount }));
   assistantChat = data.assistantChat || [];
-  setVal('job-door-count',    job.doorCount);
-  setVal('job-door-price',    job.doorPrice);
-  setVal('job-win-count',     job.winCount);
-  setVal('job-win-price',     job.winPrice);
-  setVal('job-shutter-count', job.shutterCount);
-  setVal('job-shutter-price', job.shutterPrice || '25');
-  setVal('job-wash-sf',       job.washSF);
-  setVal('job-rail-lf',       job.railLF);
-  setVal('job-rail-rate',     job.railRate || '8.00');
-  setVal('job-tread-count',   job.treadCount);
-  setVal('job-tread-price',   job.treadPrice || '15');
-  setVal('job-wash-rate',     job.washRate || '0.20');
+  _syncJobInputs();
+  setVal('job-snapshot-name', data.name || '');
   // Re-render rooms
   const wrap = document.getElementById('rooms-container');
   if (wrap) wrap.innerHTML = '';
@@ -4477,8 +4528,8 @@ function renderJobsList() {
       </div>`;
   }).join('');
 }
-function saveSnapshot() {
-  const name = document.getElementById('job-snapshot-name').value.trim();
+function saveSnapshot(nameArg) {
+  const name = (typeof nameArg === 'string' ? nameArg : document.getElementById('job-snapshot-name').value).trim();
   if (!name) return showToast('Enter a name for this job','warn');
   const list = jobsLoad();
   // If a snapshot with the same name exists, update it; otherwise add new
@@ -4509,23 +4560,42 @@ function saveSnapshot() {
 function loadSnapshot(id) {
   const j = jobsLoad().find(x => x.id === id);
   if (!j) return;
-  // Don't lose the job currently on screen: if it's named, silently re-save it
-  // under its name; if it's unnamed but has measurements, ask first.
-  if (currentJobName && currentJobName !== j.name) {
-    const list = jobsLoad();
-    const cur = getJobSnapshot();
-    cur.name = currentJobName;
-    const i = list.findIndex(x => x.name === currentJobName);
-    if (i >= 0) { cur.id = list[i].id; cur.createdAt = list[i].createdAt; list[i] = cur; }
-    else { cur.id = 'j' + Date.now(); cur.createdAt = Date.now(); list.unshift(cur); }
-    jobsSave(list);
-  } else if (!currentJobName && rooms.some(r => r.walls?.some(w => w.ft) || r.height || r.floorLength)) {
-    if (!confirm('Current measurements are not saved as a named job and will be replaced. Load anyway?')) return;
-  }
+  // Don't lose the job currently on screen before replacing it.
+  if (currentJobName !== j.name && !_keepCurrentJob()) return;
   applyJobData(j);
   saveActiveJob();
   closeJobsModal();
   showToast(`📁 Loaded "${j.name}"`);
+}
+// Called before the screen is replaced by another job. A named job is re-saved
+// under its own name. An unnamed job with priced work is saved automatically
+// under "Client - Sep 24" (it used to be thrown away). Only an unnamed job with
+// no client name still asks. Returns false if James cancels.
+function _jobHasWork() {
+  return rooms.some(r => calc(r).valid || (r.walls||[]).some(w => parseFloat(w.ft) > 0)) || jobExtras().total > 0;
+}
+function _keepCurrentJob() {
+  if (currentJobName) { _writeSnapshotAs(currentJobName); return true; }
+  if (!_jobHasWork()) return true;
+  const client = (document.getElementById('client-name').value || '').trim();
+  if (!client) return confirm('This job has measurements but no client name, so it can\'t be saved to Jobs. Replace it anyway?');
+  const base = client + ' - ' + new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  const list = jobsLoad();
+  let name = base, k = 2;
+  while (list.some(x => x.name === name)) name = `${base} (${k++})`;
+  _writeSnapshotAs(name);
+  showToast(`💾 Saved "${name}" to Jobs`);
+  return true;
+}
+// Save what's on screen under an exact name, no prompts.
+function _writeSnapshotAs(name) {
+  const list = jobsLoad();
+  const cur = getJobSnapshot();
+  cur.name = name;
+  const i = list.findIndex(x => x.name === name);
+  if (i >= 0) { cur.id = list[i].id; cur.createdAt = list[i].createdAt; list[i] = cur; }
+  else { cur.id = 'j' + Date.now(); cur.createdAt = Date.now(); list.unshift(cur); }
+  jobsSave(list);
 }
 function deleteSnapshot(id) {
   const j = jobsLoad().find(x => x.id === id);
@@ -4535,9 +4605,12 @@ function deleteSnapshot(id) {
   renderJobsList();
 }
 function startNewJob() {
-  if (!confirm('Start a new blank job? The current job will stay saved under its name (if you named it). Unnamed work will be replaced.')) return;
-  // Save current as a snapshot first IF it has a name
-  if (currentJobName) saveSnapshot();
+  if (_jobHasWork() && !confirm('Start a new blank job? This one will be kept in Jobs.')) return;
+  // Save under the open job's OWN name. This used to call saveSnapshot(), which
+  // reads the Jobs box - still holding the last job's name - and overwrote a
+  // different client's saved job.
+  if (!_keepCurrentJob()) return;
+  const nameBox = document.getElementById('job-snapshot-name'); if (nameBox) nameBox.value = '';
   // Clear active state
   rooms.length = 0; roomCount = 0;
   bidScopeText = '';
@@ -4545,20 +4618,11 @@ function startNewJob() {
   bidAgentOpen = false;
   jobLineItems = []; assistantChat = [];
   renderLineItems(); renderAssistantMsgs();
-  job.doorCount = ''; job.winCount = '';
-  job.shutterCount = ''; job.shutterPrice = '25';
-  job.washSF = ''; job.washRate = '0.20';
-  job.railLF = ''; job.railRate = '8.00';
-  job.treadCount = ''; job.treadPrice = '15';
+  job = { ...JOB_DEFAULTS, doorPrice: job.doorPrice, winPrice: job.winPrice };  // keep his door/window prices
+  _syncJobInputs();
   document.getElementById('client-name').value = '';
   document.getElementById('job-address').value = '';
   document.getElementById('notes').value = '';
-  document.getElementById('job-door-count').value = '';
-  document.getElementById('job-win-count').value = '';
-  document.getElementById('job-shutter-count').value = '';
-  document.getElementById('job-shutter-price').value = '25';
-  document.getElementById('job-wash-sf').value = '';
-  document.getElementById('job-wash-rate').value = '0.20';
   document.getElementById('rooms-container').innerHTML = '';
   currentJobName = '';
   syncJobBadge();
@@ -4577,20 +4641,11 @@ function clearMeasurements() {
   bidAgentOpen = false;
   jobLineItems = []; assistantChat = [];
   renderLineItems(); renderAssistantMsgs();
-  job.doorCount = ''; job.winCount = '';
-  job.shutterCount = ''; job.shutterPrice = '25';
-  job.washSF = ''; job.washRate = '0.20';
-  job.railLF = ''; job.railRate = '8.00';
-  job.treadCount = ''; job.treadPrice = '15';
+  job = { ...JOB_DEFAULTS, doorPrice: job.doorPrice, winPrice: job.winPrice };
+  _syncJobInputs();
   // Clear all photo batches
   Object.keys(aiPhotoBatch).forEach(k => delete aiPhotoBatch[k]);
   document.getElementById('notes').value = '';
-  document.getElementById('job-door-count').value = '';
-  document.getElementById('job-win-count').value = '';
-  document.getElementById('job-shutter-count').value = '';
-  document.getElementById('job-shutter-price').value = '25';
-  document.getElementById('job-wash-sf').value = '';
-  document.getElementById('job-wash-rate').value = '0.20';
   document.getElementById('rooms-container').innerHTML = '';
   const bidOut = document.getElementById('bid-out');
   if (bidOut) { bidOut.innerHTML = ''; bidOut.className = ''; }
@@ -5304,7 +5359,7 @@ function recalcAll() {
   rooms.forEach(r => paintRoomSummary(r.id));
   const cs=rooms.map(calc);
   const ex = jobExtras();
-  const any = cs.some(c=>c.valid) || ex.doorCount>0 || ex.winCount>0 || ex.shutterCount>0 || ex.washSF>0;
+  const any = cs.some(c=>c.valid) || ex.total>0;
   const mat=cs.reduce((a,c)=>a+c.mat,0);
   const lab=cs.reduce((a,c)=>a+c.lab,0) + ex.total;
   const grand=mat+lab;
@@ -5353,6 +5408,20 @@ function _bidSurfLabel(key, mode) {
   return key[0].toUpperCase()+key.slice(1);
 }
 function _bidAreaDesc(r, c) {
+  if (r.mode === 'exterior') {
+    // Listed by what is actually charged. It used to list the toggles, so a
+    // side charged for 338 sf of deck and a pergola read just "Siding", and a
+    // Deck toggle left on with nothing measured claimed a deck.
+    const sq = a => (a||[]).reduce((t,x)=>t+Math.max(0,(parseFloat(x.l)||0)*(parseFloat(x.w)||0)),0);
+    const out = [];
+    if (r.surfaces.walls && c.wallSF > 0) out.push('Siding');
+    if (sq(r.soffitSections) > 0)     out.push('Soffit');
+    if (sq(r.porchCeilSections) > 0)  out.push('Porch Ceiling');
+    if (sq(r.deckSections) > 0)       out.push('Deck');
+    if (sq(r.pergolaSections) > 0)    out.push('Pergola');
+    if (r.surfaces.trim && c.trimLF > 0) out.push('Trim');
+    return out.join(', ');
+  }
   // Only list an interior surface the room is actually charged for. A
   // cabinets-only kitchen still has the default Walls toggle on, and
   // "Walls" on a bid with no wall square footage reads as work the client
@@ -5761,8 +5830,8 @@ function getBidContext() {
     ex.washSF       > 0 ? 'power wash '  + ex.washSF       + ' sf = $'        + ex.washTotal.toFixed(2)             : '',
   ].filter(Boolean);
 
-  const matTotal   = cs.reduce((a, c) => a + c.matCost,   0);
-  const laborTotal = cs.reduce((a, c) => a + c.laborCost, 0);
+  const matTotal   = cs.reduce((a, c) => a + c.mat, 0);
+  const laborTotal = cs.reduce((a, c) => a + c.lab, 0) + jobExtras().total;
   const grand      = cs.reduce((a, c) => a + c.total,     0) + ex.total;
 
   return `You are a professional painting bid consultant for Ingersoll Painting LLC (James Bailey, Hannibal NY, est. 1978).
@@ -7416,8 +7485,9 @@ function deleteContact() {
 function saveClientFromBid() {
   const name     = document.getElementById('client-name').value.trim();
   const address  = document.getElementById('job-address').value.trim();
-  const cs       = rooms.map(calc);
-  const grand    = cs.reduce((a,c)=>a+c.total,0);
+  // The whole bid, extras included. It used to save the rooms only, so the
+  // contact card showed $5,960 for a $6,610 bid.
+  const grand    = _bidPlainBreakdown().grand;
   const estimate = grand>0 ? fmt(grand) : '';
 
   if(!name) return showToast('Enter a client name first', 'warn');

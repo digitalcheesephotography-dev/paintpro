@@ -6055,6 +6055,10 @@ async function _sendProposal(bodyHtml, client, address, totalForDeposit){
     company:{ name:'Ingersoll Painting LLC', phone:'(315) 952-8259', site:'ingersollpaintingllc.com' },
     status:'sent', signerName:'', signatureDataUrl:'', acceptedAt:0
   };
+  // The total rides along so the signing page can show it right at the Accept
+  // button - the legal line says "I agree to ... its total" but the number sat
+  // far up the page. Display only; the signed document is bodyHtml.
+  if (totalForDeposit > 0) doc.total = Math.round(totalForDeposit * 100) / 100;
   const ej = loadEmailjsConfig();
   if (ej) doc.emailjs = ej;
   // Attach an online deposit when configured, the Worker URL is known, and we
@@ -6110,6 +6114,7 @@ function _bidTextToHtml(text){
       (logo ? `<img src="${logo}" alt="Ingersoll Painting" style="height:70px;margin:0 auto 6px;display:block"/>` : '')+
       `<div style="font-size:20px;font-weight:bold;letter-spacing:.5px">Ingersoll Painting LLC</div>`+
       `<div style="font-size:11px;color:#555">Hannibal, New York | Serving Central New York Since 1978</div>`+
+      `<div style="font-size:11px;color:#555">(315) 952-8259 | info@ingersollpaintingllc.com | ingersollpaintingllc.com</div>`+
     `</div>`+
     paras +
     `<div style="text-align:center;font-size:11px;color:#999;margin-top:18px">Thank you for the opportunity to work on your home. We look forward to it.</div>`+
@@ -6295,7 +6300,7 @@ ${isExt
   _proRecalc();
   s.querySelector('#pp-send').onclick  = () => { const v=_proCollect(); _sendProposal(proProposalHtml(v), v.client, v.address, v.total); };
   s.querySelector('#pp-pdf').onclick   = () => _proOpenPrint(proProposalHtml(_proCollect(), true));
-  s.querySelector('#pp-share').onclick = () => { const v=_proCollect(); const t = `${v.title} — ${v.company} — ${v.client}: ${fmt(v.total)}`; if(navigator.share) navigator.share({title:v.title, text:t}).catch(()=>{}); else showToast('Sharing not available here','warn'); };
+  s.querySelector('#pp-share').onclick = () => { const v=_proCollect(); const t = `${v.title} - ${v.company} - ${v.client}: ${fmt(v.total)}`; if(navigator.share) navigator.share({title:v.title, text:t}).catch(()=>{}); else showToast('Sharing not available here','warn'); };
 }
 function _proNum(id){ const el=document.getElementById(id); return el ? (parseFloat(el.value)||0) : 0; }
 let _proDefaultAreas = [];
@@ -6491,6 +6496,7 @@ function proProposalHtml(v, withSignature){
       ${v.logo ? `<img src="${v.logo}" alt="Ingersoll Painting" style="height:70px;margin:0 auto 6px;display:block"/>` : ''}
       <div style="font-size:20px;font-weight:bold;letter-spacing:.5px">Ingersoll Painting LLC</div>
       <div style="font-size:11px;color:#555">Hannibal, New York | Serving Central New York Since 1978</div>
+      <div style="font-size:11px;color:#555">(315) 952-8259 | info@ingersollpaintingllc.com | ingersollpaintingllc.com</div>
     </div>
     <div style="font-size:18px;font-weight:bold;text-align:center;margin-bottom:16px">${_esc(v.title)}</div>
     <table style="width:100%;font-size:12px;margin-bottom:16px"><tr>
@@ -6560,7 +6566,7 @@ function showProposalLinkModal(url, client, depositInfo){
   const share = document.createElement('button'); share.setAttribute('style','height:50px;background:var(--card);border:1.5px solid var(--blue);border-radius:8px;color:var(--blue);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer'); share.textContent = 'Share / Text';
   // Pass the link ONLY as `url` (not also inside `text`) — messaging apps append
   // the url after the text, which was pasting the link twice.
-  share.onclick = () => { if (navigator.share) navigator.share({ title:'Your painting proposal', text:"Here's your painting proposal from Ingersoll Painting — review and accept:", url }).catch(()=>{}); else { if (navigator.clipboard) navigator.clipboard.writeText(url); showToast('Link copied — paste into a text'); } };
+  share.onclick = () => { if (navigator.share) navigator.share({ title:'Your painting proposal', text:"Here's your painting proposal from Ingersoll Painting. Please review and accept:", url }).catch(()=>{}); else { if (navigator.clipboard) navigator.clipboard.writeText(url); showToast('Link copied — paste into a text'); } };
   grid.append(copy, share);
   s.append(link, grid);
 }
@@ -6793,7 +6799,7 @@ function saveBidPDF() {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Ingersoll Painting — Bid</title>
+<title>Ingersoll Painting - Bid</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:Georgia,'Times New Roman',serif;font-size:13px;line-height:1.7;color:#111;background:#fff;padding:24px 20px;max-width:700px;margin:0 auto}
@@ -7293,7 +7299,7 @@ function startEstimateFromClient(id) {
 function buildQuickTexts(c) {
   const name  = (c.name||'').split(' ')[0] || 'there';
   const phone = c.phone || '';
-  const sig   = `\n\n— Ingersoll Painting LLC\n(315) 952-8259`;
+  const sig   = `\n\nIngersoll Painting LLC\n(315) 952-8259`;
 
   const templates = [
     {
@@ -7302,11 +7308,11 @@ function buildQuickTexts(c) {
     },
     {
       label: '📋 Following up on your estimate',
-      body:  `Hi ${name}, this is James Bailey with Ingersoll Painting LLC. I wanted to follow up on the estimate I provided for your project. We take great pride in delivering quality work and would love the opportunity to work with you. Please don't hesitate to reach out with any questions — I'm happy to go over the details at your convenience. Looking forward to hearing from you!${sig}`
+      body:  `Hi ${name}, this is James Bailey with Ingersoll Painting LLC. I wanted to follow up on the estimate I provided for your project. We take great pride in delivering quality work and would love the opportunity to work with you. Please don't hesitate to reach out with any questions. I'm happy to go over the details at your convenience. Looking forward to hearing from you!${sig}`
     },
     {
       label: '📅 Confirming your scheduled date',
-      body:  `Hi ${name}, this is James Bailey with Ingersoll Painting LLC. I'm reaching out to confirm that we have your project scheduled and on our calendar. We will be in touch shortly with the specific date and arrival time. Thank you for choosing Ingersoll Painting — we look forward to taking care of your home!${sig}`
+      body:  `Hi ${name}, this is James Bailey with Ingersoll Painting LLC. I'm reaching out to confirm that we have your project scheduled and on our calendar. We will be in touch shortly with the specific date and arrival time. Thank you for choosing Ingersoll Painting. We look forward to taking care of your home!${sig}`
     },
     {
       label: '🚗 On our way',

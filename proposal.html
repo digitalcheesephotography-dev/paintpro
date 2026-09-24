@@ -73,7 +73,7 @@
     <label for="signer-name">Your full name</label>
     <input type="text" id="signer-name" autocomplete="name" placeholder="e.g. Dave Reau"/>
 
-    <label for="signer-email" style="margin-top:16px">Your email <span style="color:#9aa7b4">(optional — we'll send you a copy)</span></label>
+    <label for="signer-email" style="margin-top:16px">Your email <span style="color:#9aa7b4">(optional, we'll send you a copy)</span></label>
     <input type="text" id="signer-email" autocomplete="email" inputmode="email" placeholder="you@email.com"/>
 
     <label for="sigpad" style="margin-top:16px">Signature</label>
@@ -84,6 +84,7 @@
     </div>
 
     <div class="form-err" id="form-err"></div>
+    <div id="accept-total" style="display:none;margin-top:16px;padding:12px 14px;background:#f4f7fb;border:1px solid #d6e2ee;border-radius:10px;font-family:Georgia,serif;font-size:17px;display:none;justify-content:space-between;align-items:center"></div>
     <button class="accept" id="accept-btn" onclick="acceptProposal()">Accept &amp; Sign</button>
     <div class="legal" id="legal">
       By typing my name, signing above, and tapping “Accept &amp; Sign,” I agree to this painting proposal and its total.
@@ -133,19 +134,30 @@ function render(){
   $('loading').style.display='none';
   $('content').style.display='block';
   if (_data.company && _data.company.name) $('co-name').textContent = _data.company.name;
-  const contact = [ _data.company && _data.company.phone, _data.company && _data.company.site ].filter(Boolean).join('  ·  ');
-  $('co-contact').textContent = contact;
+  // Tappable: a homeowner on a phone should be one tap from calling or visiting.
+  const ph = _data.company && _data.company.phone, site = _data.company && _data.company.site;
+  const bits = [];
+  if (ph)   bits.push(`<a href="tel:${esc(String(ph).replace(/[^0-9+]/g,''))}" style="color:inherit">${esc(ph)}</a>`);
+  if (site) bits.push(`<a href="https://${esc(String(site).replace(/^https?:\/\//,''))}" style="color:inherit" target="_blank" rel="noopener">${esc(site)}</a>`);
+  $('co-contact').innerHTML = bits.join('  ·  ');
   // The bid body is the contractor's own generated HTML. Strip any interactive
   // controls here too, so proposals sent before the app-side fix still render
   // as clean, button-free paper for the client.
   const bt = document.createElement('div'); bt.innerHTML = _data.bodyHtml || '';
-  bt.querySelectorAll('button, input, textarea, select').forEach(el => el.remove());
+  // .bid-paper-sign: the paper signature lines; this page has its own Accept card.
+  bt.querySelectorAll('button, input, textarea, select, .bid-paper-sign').forEach(el => el.remove());
   $('paper').innerHTML = bt.innerHTML || '<p class="muted">This proposal has no content.</p>';
 
   if (_data.status === 'accepted') {
     showAccepted();
   } else {
     setupSignature();
+    // The price, right where they sign.
+    if (_data.total > 0) {
+      const t = $('accept-total');
+      t.innerHTML = `<span>Total Project Investment</span><strong>$${Number(_data.total).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong>`;
+      t.style.display = 'flex';
+    }
   }
   maybeDeposit();
   maybeQuickBooksPay();
@@ -264,7 +276,7 @@ function showAccepted(){
     b.insertAdjacentElement('afterend', btn);
     const note = document.createElement('div');
     note.setAttribute('style','max-width:720px;margin:8px auto 0;text-align:center;color:#6b7a8d;font-size:12px;font-family:Arial,sans-serif');
-    note.textContent = 'Tip: this link is your copy — reopen it anytime to see the signed proposal.';
+    note.textContent = 'Tip: this link is your copy. Reopen it anytime to see the signed proposal.';
     btn.insertAdjacentElement('afterend', note);
   }
 }

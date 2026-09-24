@@ -139,6 +139,8 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .deck-sec-row{display:flex;align-items:center;gap:6px;margin-bottom:8px}
 .deck-sec-num{font-size:12px;font-weight:700;color:var(--muted);min-width:20px}
 .crown-fill{height:40px;padding:0 12px;background:#0d2233;border:1.5px solid var(--blue);border-radius:8px;color:var(--blue);font-family:var(--font);font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer}
+.wall-tip{font-size:13px;color:var(--muted);line-height:1.4;padding:4px 2px 8px}
+.wall-tip.warn{color:var(--amber);font-weight:700}
 .cab-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
 .deck-sec-input{width:62px;height:40px;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:14px;text-align:center;outline:none;padding:0 4px}
 .deck-sec-sf{font-size:12px;color:var(--blue);font-weight:700;min-width:52px;text-align:right}
@@ -3152,7 +3154,7 @@ function renderRoom(room, idx) {
         <div id="${room.id}_soffit_sections"></div>
         <button class="add-wall-btn" onclick="addSoffitSection('${room.id}')">+ Add Section</button>
       </div>
-      <div id="${room.id}_porch_ceil_row" style="display:${room.surfaces.ceiling?'':'none'};margin-bottom:12px">
+      <div id="${room.id}_porch_ceil_row" style="display:${room.surfaces.ceiling||_qbSectSF(room.porchCeilSections)>0?'':'none'};margin-bottom:12px">
         <div class="walls-header">
           <span class="walls-label">Porch Ceiling (length × width)</span>
           <span class="walls-perimeter" id="${room.id}_porch_ceil_total"></span>
@@ -3160,7 +3162,7 @@ function renderRoom(room, idx) {
         <div id="${room.id}_porch_ceil_sections"></div>
         <button class="add-wall-btn" onclick="addPorchSection('${room.id}')">+ Add Section</button>
       </div>
-      <div id="${room.id}_deck_row" style="display:${room.surfaces.floor?'':'none'};margin-bottom:12px">
+      <div id="${room.id}_deck_row" style="display:${room.surfaces.floor||_qbSectSF(room.deckSections)>0?'':'none'};margin-bottom:12px">
         <div class="walls-header">
           <span class="walls-label">Deck / Porch FLOOR (length × width)</span>
           <span class="walls-perimeter" id="${room.id}_deck_total"></span>
@@ -3956,6 +3958,17 @@ function renderWalls(room) {
       container.appendChild(lab);
     }
   });
+  // A painter thinks "12x14 room" and types 12 and 14, which prices half the
+  // walls. Say it before the first wall goes in, and flag the two-wall case.
+  if (room.mode !== 'exterior' && room.walls.length < 3) {
+    const tip = document.createElement('div');
+    tip.className = 'wall-tip';
+    tip.textContent = room.walls.length === 2
+      ? 'Only 2 walls? A 12 x 14 room is 4 walls: 12, 14, 12, 14.'
+      : 'Add every wall. A 12 x 14 room is 4 walls: 12, 14, 12, 14.';
+    if (room.walls.length === 2) tip.classList.add('warn');
+    container.appendChild(tip);
+  }
   updatePerimeterDisplay(room);
 }
 
@@ -4002,12 +4015,16 @@ function toggleSurf(id, surf) {
   const btnId = surf==='floor' ? `${id}_sf` : `${id}_s${surf[0]}`;
   document.getElementById(btnId)?.classList.toggle('on', r.surfaces[surf]);
   if (r.mode === 'exterior') {
-    if (surf === 'ceiling') {
-      const el = document.getElementById(`${id}_porch_ceil_row`);
-      if (el) el.style.display = r.surfaces.ceiling ? '' : 'none';
-    } else if (surf === 'floor') {
-      const el = document.getElementById(`${id}_deck_row`);
-      if (el) el.style.display = r.surfaces.floor ? '' : 'none';
+    // Porch ceiling and deck are priced whenever they're measured (see calcExt),
+    // so turning the toggle off must not hide a section that is still on the
+    // bid - that left a charge on the total with nothing on screen to explain it.
+    const secs = surf === 'ceiling' ? r.porchCeilSections : surf === 'floor' ? r.deckSections : null;
+    if (secs) {
+      const el = document.getElementById(surf === 'ceiling' ? `${id}_porch_ceil_row` : `${id}_deck_row`);
+      const measured = _qbSectSF(secs) > 0;
+      if (el) el.style.display = (r.surfaces[surf] || measured) ? '' : 'none';
+      if (!r.surfaces[surf] && measured)
+        showToast(`${surf === 'ceiling' ? 'Porch ceiling' : 'Deck'} is measured, so it stays on the bid. Remove its sections to take it off.`, 'warn');
     }
   } else {
     // Interior: show/hide floor/ceiling dimension inputs
@@ -4133,7 +4150,9 @@ function calcExt(room) {
             + (room.surfaces.trim    ? trimLF*r.trim        : 0);
 
   const totalSF = (room.surfaces.walls?sidingSF:0)+soffitSF+porchCeilSF+deckSF+pergolaSF;
-  const valid   = sidingSF>0 || soffitSF>0 || deckSF>0 || pergolaSF>0;
+  // Porch ceiling is priced on measurement alone, so it has to count here too;
+  // otherwise the side's labor was in the total but its row missing from the bid.
+  const valid   = sidingSF>0 || soffitSF>0 || porchCeilSF>0 || deckSF>0 || pergolaSF>0;
   return {wallSF:sidingSF, floorSF:soffitSF+deckSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, cab:CAB_NONE, crown:CROWN_NONE, valid};
 }
 
@@ -4232,8 +4251,12 @@ function syncRatesUI() {
 function switchMode(mode) {
   if (estimatorMode === mode) return;
   const label = mode === 'exterior' ? 'Exterior' : 'Interior';
-  const hasData = rooms.some(r => r.walls.length > 0 ||
-    (r.mode === 'exterior' ? (r.soffitSections||[]).length || (r.deckSections||[]).length : r.floorLength || r.floorWidth));
+  // Anything that prices counts. This used to look only at walls, soffit, deck
+  // and floor size, so a cabinets-only kitchen or a railings-only side was
+  // wiped by one tap on the other mode with no warning.
+  const hasData = rooms.some(r => r.walls.length > 0 || calc(r).valid || r.floorLength || r.floorWidth ||
+    (r.railSections||[]).some(x => parseFloat(x.lf) > 0) || parseInt(r.treadCount) > 0 ||
+    (r.porchCeilSections||[]).length || (r.pergolaSections||[]).length);
   if (hasData && !confirm(`Switch to ${label} mode? Current room data will be cleared.`)) return;
   estimatorMode = mode;
   document.getElementById('mode-btn-int').classList.toggle('active', mode === 'interior');
@@ -5318,9 +5341,63 @@ function toggleBid() {
   if(bidOpen) renderBid();
 }
 
+// What one room/side is actually being charged for, in plain words. The on-
+// screen bid, Share / Text and Email to Client all read this, so a customer
+// gets the same description whichever way the bid reaches them. Before this,
+// Share and Email listed the surface TOGGLES ("walls") instead of the work,
+// never mentioned cabinets or crown, and printed phantom "0 sf" rooms.
+function _bidSurfLabel(key, mode) {
+  // Exterior 'ceiling' toggle is the Porch Ceiling in the UI (not the soffit);
+  // the soffit is a separate always-measured section added below.
+  if (mode === 'exterior') return key==='walls'?'Siding':key==='ceiling'?'Porch Ceiling':key==='floor'?'Deck':'Trim';
+  return key[0].toUpperCase()+key.slice(1);
+}
+function _bidAreaDesc(r, c) {
+  // Only list an interior surface the room is actually charged for. A
+  // cabinets-only kitchen still has the default Walls toggle on, and
+  // "Walls" on a bid with no wall square footage reads as work the client
+  // is buying but isn't. Exterior keeps its existing toggle-based list.
+  let surfs = Object.entries(r.surfaces).filter(([k,v]) => {
+    if (!v) return false;
+    if (r.mode === 'exterior') return true;
+    if (k === 'walls') return c.wallSF  > 0;
+    if (k === 'trim')  return c.trimLF  > 0;
+    return c.floorSF > 0;   // ceiling and floor both come off the footprint
+  }).map(([k])=>_bidSurfLabel(k,r.mode)).join(', ');
+  // Soffit is charged whenever it's measured (independent of the surface toggles),
+  // so list it on the exterior bid when the room actually has soffit area.
+  if (r.mode === 'exterior' && (r.soffitSections||[]).some(s => (parseFloat(s.l)||0)*(parseFloat(s.w)||0) > 0)) {
+    surfs = surfs ? surfs + ', Soffit' : 'Soffit';
+  }
+  if (c.crown.lf > 0) {
+    surfs = (surfs ? surfs + ', ' : '') + 'Crown molding, caulked and painted (' + c.crown.lf + ' lin ft)';
+  }
+  if (c.cab.pieces > 0) {
+    surfs = (surfs ? surfs + ', ' : '') + 'Cabinets (' + cabDesc(c.cab) + ')';
+  }
+  return surfs;
+}
+// "About the Product" for the bid, built from the paint actually specified on
+// the room cards. It used to say "Benjamin Moore paints are used throughout"
+// on every bid whatever the rooms said - the bid rules say never to assume a
+// product.
+function _bidProductNames() {
+  const out = [];
+  rooms.forEach(r => { if (!calc(r).valid) return; const p = _qbProduct(r.product); if (p && !out.includes(p)) out.push(p); });
+  return out;
+}
+function _bidAboutText() {
+  const names = _bidProductNames();
+  if (!names.length) return '';
+  const isExt = estimatorMode === 'exterior';
+  return _qbList(names) + (names.length > 1 ? ' are' : ' is') + ' used on this project, chosen for '
+    + (isExt ? 'strong adhesion, weather resistance and a finish that holds its color through Central New York seasons.'
+             : 'smooth, even coverage and a durable, washable finish that keeps its color.');
+}
+
 function renderBid() {
-  const client = document.getElementById('client-name').value || '[Client Name]';
-  const addr   = document.getElementById('job-address').value || '[Job Address]';
+  const client = document.getElementById('client-name').value || '';
+  const addr   = document.getElementById('job-address').value || '';
   const notes  = document.getElementById('notes').value;
   const date   = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
   const cs     = rooms.map(calc);
@@ -5329,45 +5406,17 @@ function renderBid() {
   const lab    = cs.reduce((a,c)=>a+c.lab,0) + ex.total;
   const grand  = mat+lab;
 
-  const surfLabel = (key, mode) => {
-    // Exterior 'ceiling' toggle is the Porch Ceiling in the UI (not the soffit);
-    // the soffit is a separate always-measured section added below.
-    if (mode === 'exterior') return key==='walls'?'Siding':key==='ceiling'?'Porch Ceiling':key==='floor'?'Deck':'Trim';
-    return key[0].toUpperCase()+key.slice(1);
-  };
-
   // Room rows — one per room with surface breakdown
   const roomRows = rooms.map((r,i) => {
     const c     = cs[i];
     if (!c.valid) return ''; // skip empty/unfilled rooms so the bid has no phantom $0.00 rows
-    // Only list an interior surface the room is actually charged for. A
-    // cabinets-only kitchen still has the default Walls toggle on, and
-    // "Walls" on a bid with no wall square footage reads as work the client
-    // is buying but isn't. Exterior keeps its existing toggle-based list.
-    let surfs = Object.entries(r.surfaces).filter(([k,v]) => {
-      if (!v) return false;
-      if (r.mode === 'exterior') return true;
-      if (k === 'walls') return c.wallSF  > 0;
-      if (k === 'trim')  return c.trimLF  > 0;
-      return c.floorSF > 0;   // ceiling and floor both come off the footprint
-    }).map(([k])=>surfLabel(k,r.mode)).join(', ');
-    // Soffit is charged whenever it's measured (independent of the surface toggles),
-    // so list it on the exterior bid when the room actually has soffit area.
-    if (r.mode === 'exterior' && (r.soffitSections||[]).some(s => (parseFloat(s.l)||0)*(parseFloat(s.w)||0) > 0)) {
-      surfs = surfs ? surfs + ', Soffit' : 'Soffit';
-    }
-    if (c.crown.lf > 0) {
-      surfs = (surfs ? surfs + ', ' : '') + 'Crown molding, caulked and painted (' + c.crown.lf + ' lin ft)';
-    }
-    if (c.cab.pieces > 0) {
-      surfs = (surfs ? surfs + ', ' : '') + 'Cabinets (' + cabDesc(c.cab) + ')';
-    }
+    const surfs = _bidAreaDesc(r, c);
     const short = r.product.replace(/ \(Int\)| \(Ext\)| \(Cabinets\/Trim\)/g,'');
-    const sf    = c.totalSF > 0 ? c.totalSF.toFixed(0)+' sf' : '—';
+    const sf    = c.totalSF > 0 ? c.totalSF.toFixed(0)+' sf' : '';
     return `
       <tr style="border-bottom:1px solid #e5e7eb">
         <td style="padding:8px 6px;font-weight:700;font-size:13px">${_esc(r.name)}</td>
-        <td style="padding:8px 6px;font-size:12px;color:#555">${surfs||'—'}</td>
+        <td style="padding:8px 6px;font-size:12px;color:#555">${surfs}</td>
         <td style="padding:8px 6px;font-size:12px">${_esc(short)}</td>
         <td style="padding:8px 6px;font-size:12px;text-align:center">${r.coats}</td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${sf}</td>
@@ -5380,63 +5429,63 @@ function renderBid() {
       <tr style="border-bottom:1px solid #e5e7eb">
         <td style="padding:8px 6px;font-weight:700;font-size:13px">Doors</td>
         <td style="padding:8px 6px;font-size:12px;color:#555">${ex.doorCount} units</td>
-        <td style="padding:8px 6px;font-size:12px">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.doorPrice)} ea</td>
+        <td style="padding:8px 6px;font-size:12px"></td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center"></td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right"></td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.doorTotal)}</td>
       </tr>` : '')
     + (ex.winCount > 0 ? `
       <tr style="border-bottom:1px solid #e5e7eb">
         <td style="padding:8px 6px;font-weight:700;font-size:13px">Windows</td>
         <td style="padding:8px 6px;font-size:12px;color:#555">${ex.winCount} units</td>
-        <td style="padding:8px 6px;font-size:12px">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.winPrice)} ea</td>
+        <td style="padding:8px 6px;font-size:12px"></td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center"></td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right"></td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.winTotal)}</td>
       </tr>` : '')
     + (ex.shutterCount > 0 ? `
       <tr style="border-bottom:1px solid #e5e7eb">
         <td style="padding:8px 6px;font-weight:700;font-size:13px">Shutters</td>
         <td style="padding:8px 6px;font-size:12px;color:#555">${ex.shutterCount} units</td>
-        <td style="padding:8px 6px;font-size:12px">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.shutterTotal / ex.shutterCount)} ea</td>
+        <td style="padding:8px 6px;font-size:12px"></td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center"></td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right"></td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.shutterTotal)}</td>
       </tr>` : '')
     + (ex.washSF > 0 ? `
       <tr style="border-bottom:1px solid #e5e7eb">
         <td style="padding:8px 6px;font-weight:700;font-size:13px">Power Wash</td>
         <td style="padding:8px 6px;font-size:12px;color:#555">${ex.washSF.toFixed(0)} sq ft</td>
-        <td style="padding:8px 6px;font-size:12px">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.washTotal/ex.washSF)}/sf</td>
+        <td style="padding:8px 6px;font-size:12px"></td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center"></td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right"></td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.washTotal)}</td>
       </tr>` : '')
     + (ex.railTotal > 0 ? `
       <tr style="border-bottom:1px solid #e5e7eb">
         <td style="padding:8px 6px;font-weight:700;font-size:13px">Railings</td>
         <td style="padding:8px 6px;font-size:12px;color:#555">${ex.railLF.toFixed(0)} linear ft</td>
-        <td style="padding:8px 6px;font-size:12px">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.railTotal/ex.railLF)}/lf</td>
+        <td style="padding:8px 6px;font-size:12px"></td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center"></td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right"></td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.railTotal)}</td>
       </tr>` : '')
     + (ex.treadTotal > 0 ? `
       <tr style="border-bottom:1px solid #e5e7eb">
         <td style="padding:8px 6px;font-weight:700;font-size:13px">Steps / Treads</td>
         <td style="padding:8px 6px;font-size:12px;color:#555">${ex.treadCount} treads</td>
-        <td style="padding:8px 6px;font-size:12px">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.treadTotal/ex.treadCount)} ea</td>
+        <td style="padding:8px 6px;font-size:12px"></td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center"></td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right"></td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(ex.treadTotal)}</td>
       </tr>` : '')
     + (ex.lineItems || []).filter(li => (parseFloat(li.amount)||0) !== 0).map(li => `
       <tr style="border-bottom:1px solid #e5e7eb">
         <td style="padding:8px 6px;font-weight:700;font-size:13px">${_esc(li.label)}</td>
-        <td style="padding:8px 6px;font-size:12px;color:#555">—</td>
-        <td style="padding:8px 6px;font-size:12px">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:center">—</td>
-        <td style="padding:8px 6px;font-size:12px;text-align:right">—</td>
+        <td style="padding:8px 6px;font-size:12px;color:#555"></td>
+        <td style="padding:8px 6px;font-size:12px"></td>
+        <td style="padding:8px 6px;font-size:12px;text-align:center"></td>
+        <td style="padding:8px 6px;font-size:12px;text-align:right"></td>
         <td style="padding:8px 6px;font-size:12px;text-align:right">${fmt(parseFloat(li.amount)||0)}</td>
       </tr>`).join('');
 
@@ -5451,7 +5500,7 @@ function renderBid() {
           info@ingersollpaintingllc.com &nbsp;|&nbsp; ingersollpaintingllc.com
         </div>
         <div style="margin-top:8px;font-size:11px;color:#888;letter-spacing:2px;text-transform:uppercase">
-          Family Owned Since 1978 — Licensed &amp; Insured
+          Family Owned Since 1978 · Licensed &amp; Insured
         </div>
       </div>
 
@@ -5495,21 +5544,22 @@ function renderBid() {
       <!-- TOTALS -->
       <div style="border-top:2px solid #111;padding-top:10px;margin-bottom:16px">
         <div style="display:flex;justify-content:space-between;font-size:13px;color:#555;margin-bottom:4px">
-          <span>Materials &amp; Supplies</span><span>${fmt(mat)}</span>
+          <span>Paint &amp; Materials</span><span>${fmt(mat)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:13px;color:#555;margin-bottom:8px">
-          <span>Labor</span><span>${fmt(lab)}</span>
+          <span>Project Services</span><span>${fmt(lab)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:20px;font-weight:700;border-top:1px solid #ddd;padding-top:8px">
           <span>Total Estimate</span><span>${fmt(grand)}</span>
         </div>
       </div>
 
+      ${_bidAboutText() ? `
       <!-- ABOUT THE PRODUCT -->
       <div style="margin-bottom:14px;font-size:12px">
         <div style="font-weight:700;margin-bottom:4px">About the Product</div>
-        <div style="color:#444">Benjamin Moore paints are used throughout this project. Known for exceptional coverage, durability, and color retention — backed by one of the most trusted names in the industry.</div>
-      </div>
+        <div style="color:#444">${_esc(_bidAboutText())}</div>
+      </div>` : ''}
 
       ${notes ? `
       <div style="margin-bottom:14px;font-size:12px">
@@ -5520,11 +5570,13 @@ function renderBid() {
       <!-- WARRANTY + DISCLAIMER -->
       <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:12px;font-size:11px;color:#555;margin-bottom:14px;line-height:1.7">
         <strong>1-Year Workmanship Warranty.</strong> Ingersoll Painting LLC stands behind the quality of our work. Any workmanship defects will be addressed at no charge within one year of project completion.<br><br>
-        <strong>Paint &amp; Materials Disclaimer.</strong> Based on the size and specifics of your project, the paint cost and materials are an estimate. Pricing may be adjusted if more paint and materials are needed. Labor costs are estimated based on the expected scope of work. If unforeseen issues arise during the project, adjustments may be necessary.<br><br><strong>Additional Coats.</strong> This estimate covers up to two coats. If more than two coats are required for full coverage, an additional charge of 50% will apply.
+        <strong>Paint &amp; Materials Disclaimer.</strong> Based on the size and specifics of your project, the paint cost &amp; materials are an estimate. Pricing may be adjusted if more paint &amp; materials are needed. Labor costs are estimated also, based on the expected scope of work. If unforeseen issues arise during the project, adjustments may be necessary.<br><br><strong>Additional Coats.</strong> This estimate covers up to two coats. If more than two coats are required for full coverage, an additional charge of 50% will apply.
       </div>
 
-      <!-- SIGNATURE LINE -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;font-size:12px;margin-bottom:16px">
+      <!-- SIGNATURE LINE: paper copies only. createProposal strips it, because
+           the signing page has its own Accept & Sign card and two signature
+           areas on one document confused the client. -->
+      <div class="bid-paper-sign" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;font-size:12px;margin-bottom:16px">
         <div>
           <div style="border-bottom:1px solid #111;margin-bottom:4px;height:32px"></div>
           <div style="color:#555">Client Signature</div>
@@ -5831,8 +5883,11 @@ async function createProposal(){
   if (!bidEl || !bidEl.classList.contains('visible')) { showToast('Generate a bid first', 'warn'); return; }
   const tmp = document.createElement('div'); tmp.innerHTML = bidEl.innerHTML;
   // The client proposal is display-only paper — strip every interactive control.
-  tmp.querySelectorAll('button, input, textarea, select, .no-print').forEach(el => el.remove());
-  const client  = document.getElementById('client-name').value || 'Client';
+  tmp.querySelectorAll('button, input, textarea, select, .no-print, .bid-paper-sign').forEach(el => el.remove());
+  const client  = (document.getElementById('client-name').value || '').trim();
+  // A proposal the client signs must carry their name - it used to go out
+  // reading "[Client Name]".
+  if (!client) { showToast('Add the client name at the top first', 'warn'); document.getElementById('client-name')?.focus(); return; }
   const address = document.getElementById('job-address').value || '';
   // Grand total (rooms + job extras) — used to compute an optional deposit.
   let grand = 0;
@@ -6135,21 +6190,36 @@ function openProProposal(imp){
   const impSvc   = imp ? (imp.areas||[]).reduce((s,a)=>s+a.items.reduce((t,i)=>t+i.amount,0),0) : 0;
   const labTotal = imp ? impSvc : cs.reduce((a,c)=>a+(c.lab||0),0) + (ex.total||0);
   const totalGal = imp ? 0 : cs.reduce((a,c)=>a+(c.gal||0),0);
-  const prodObj  = PRODUCTS.find(x => x.name === ((rooms[0] && rooms[0].product))) || { price:65 };
-  const costGal  = imp ? 0 : prodObj.price; // app stores paint COST per gallon
+  // Paint is priced from what the bid actually charges, summed across every
+  // room's own product. It used to take rooms[0]'s price for every gallon and
+  // fold paint in at cost, so a Regal Select living room plus an Advance
+  // kitchen came out $153.60 under the bid the proposal was made from.
+  const paintBid = imp ? 0 : cs.reduce((a,c)=>a+(c.mat||0),0);
+  const retailGal = totalGal > 0 ? paintBid / totalGal : 0;   // bid price per gallon (cost x MARKUP)
+  const costGal   = retailGal / MARKUP;                        // James's cost per gallon
+  _proPaintBid = paintBid;
+  _proPaintDefaults = { gal: totalGal.toFixed(2), retail: retailGal.toFixed(2) };
   const client  = (imp && imp.client)  || document.getElementById('client-name').value || '';
   const address = (imp && imp.address) || document.getElementById('job-address').value || '';
   const isExt   = estimatorMode === 'exterior';
-  const prod    = imp ? (imp.product||'') : ((rooms[0] && rooms[0].product) || '').replace(/ \(Int\)| \(Ext\)| \(Cabinets\/Trim\)/g,'').trim();
+  const prod    = imp ? (imp.product||'') : _qbList(_bidProductNames());
+  // Interior and exterior prep are different jobs; the default scope used to
+  // promise scraping and landscaping protection on an interior kitchen, and
+  // always said "two full coats" whatever the rooms said.
+  const maxCoats = rooms.reduce((m,r)=>Math.max(m, parseInt(r.coats)||0), 0) || 2;
+  const coatsWord = ['','one full coat','two full coats','three full coats'][maxCoats] || (maxCoats+' full coats');
   const defTitle = (imp && imp.title) || (isExt?'Exterior':'Interior')+' Painting Proposal';
   const defScope = (imp ? imp.scope : bidScopeText) ||
     `This proposal covers the ${isExt?'exterior':'interior'} painting as described.
 
 Our work will include:
 
-- Thorough surface preparation, scraping and sanding of loose, peeling, or flaking paint
-- Protection of landscaping, walkways, and surrounding surfaces throughout the project
-- Application of two full coats of quality paint
+${isExt
+? `- Thorough surface preparation, scraping and sanding of loose, peeling, or flaking paint
+- Protection of landscaping, walkways, and surrounding surfaces throughout the project`
+: `- Surface preparation, patching and sanding as needed
+- Protection of floors, furniture, and fixtures throughout the project`}
+- Application of ${coatsWord} of quality paint
 - Daily cleanup and complete removal of all project debris when the work is finished`;
   const defAbout = (imp && imp.about) || (prod
     ? (isExt
@@ -6195,12 +6265,12 @@ Our work will include:
       <input type="checkbox" id="pp-show-paint" onchange="_proTogglePaint()" style="width:22px;height:22px;accent-color:var(--blue)"/>
       Show the paint &amp; gallon breakdown to the customer
     </label>
-    <div id="pp-paint-note" style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:12px">Off: the proposal shows one all-inclusive price and never prints a gallon count. The paint cost is folded into Project Services, so the total is identical either way.</div>
+    <div id="pp-paint-note" style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:12px">Off: one all-inclusive price that matches your bid. No gallon count is printed.</div>
     <div id="pp-paint-fields" style="display:none">
       ${lbl('Paint product name (shown on the paint line)')}${inp('pp-product', prod)}
       ${lbl('Gallons')}${money('pp-gal', totalGal)}
-      ${lbl('Retail price per gallon  ($, what the store charges — edit to your real retail)')}${money('pp-retail', costGal * MARKUP)}
-      ${lbl('Your cost per gallon  ($, set below retail to show a Volume Discount)')}${money('pp-cost', costGal)}
+      ${lbl('Retail price per gallon ($, what your bid charges)')}${money('pp-retail', retailGal)}
+      ${lbl('Your cost per gallon ($, set below retail to show a Volume Discount)')}${money('pp-cost', costGal)}
     </div>
     <div id="pp-svc-single" style="display:none">
       ${lbl('Project Services  ($, labor as one number)')}${money('pp-svc', labTotal)}
@@ -6229,6 +6299,7 @@ Our work will include:
 }
 function _proNum(id){ const el=document.getElementById(id); return el ? (parseFloat(el.value)||0) : 0; }
 let _proDefaultAreas = [];
+let _proPaintBid = 0, _proPaintDefaults = null;   // what the bid charges for paint
 // Itemized labor lines for one room, using the same math as calc()/calcExt().
 function _proRoomItems(room){
   const items=[]; const push=(l,a)=>{ if(a>0) items.push({label:l, amount:Math.round(a*100)/100}); };
@@ -6338,17 +6409,32 @@ function _proTogglePaint(){
   const box  = document.getElementById('pp-paint-fields');
   const note = document.getElementById('pp-paint-note');
   if (box)  box.style.display = on ? '' : 'none';
-  if (note) note.textContent = on
-    ? 'On: the proposal itemises the paint line and the Volume Discount, and prints the gallon count.'
-    : 'Off: the proposal shows one all-inclusive price and never prints a gallon count. The paint cost is folded in, so the total is identical either way.';
   _proRecalc();
+}
+// Showing the paint line passes the Volume Paint Discount to the customer (the
+// section 5 bid format), which takes that discount off the bid total. That is
+// a real pricing choice, so the modal states it in dollars instead of letting
+// the proposal quietly come in under the bid.
+function _proPaintNote(){
+  const note = document.getElementById('pp-paint-note'); if (!note) return;
+  const on = !!(document.getElementById('pp-show-paint')||{}).checked;
+  if (!on) { note.textContent = 'Off: one all-inclusive price that matches your bid. No gallon count is printed.'; note.style.color = ''; return; }
+  const gal = _proNum('pp-gal'), disc = gal * Math.max(0, _proNum('pp-retail') - _proNum('pp-cost'));
+  note.textContent = disc > 0
+    ? `On: prints the paint line at retail and your Volume Paint Discount. That discount takes ${fmt(disc)} off your bid total.`
+    : 'On: prints the paint line and gallon count at retail.';
+  note.style.color = disc > 0 ? 'var(--amber)' : '';
 }
 
 // What the paint adds to the total: gallons x YOUR cost (retail minus the
 // volume discount nets back to cost). Used to keep the total identical when
 // the paint line is hidden.
 function _proPaintCost(){
-  return _proNum('pp-gal') * _proNum('pp-cost');
+  const g = document.getElementById('pp-gal'), rt = document.getElementById('pp-retail');
+  // Untouched fields: use the bid's exact paint figure, so the rounded
+  // per-gallon price can't drift the total by a few cents.
+  if (_proPaintDefaults && g && rt && g.value === _proPaintDefaults.gal && rt.value === _proPaintDefaults.retail) return _proPaintBid;
+  return _proNum('pp-gal') * _proNum('pp-retail');
 }
 
 function _proRecalc(){
@@ -6357,6 +6443,7 @@ function _proRecalc(){
   const total = gal*retail - gal*Math.max(0,retail-cost)
               + _proServicesTotal() + (showPaint ? 0 : _proPaintCost()); // paint stays in the total either way
   const el = document.getElementById('pp-total'); if (el) el.textContent = fmt(Math.max(0,total));
+  _proPaintNote();
 }
 function _proCollect(){
   const g = id => (document.getElementById(id)||{}).value || '';
@@ -6365,11 +6452,14 @@ function _proCollect(){
   const areas=_proAreasData();
   // Hidden: the paint line disappears from the document but its cost stays in
   // the total, folded into services. Shown: services is labour only.
-  const svc=_proServicesTotal() + (showPaint ? 0 : _proPaintCost());
+  const paintFolded = showPaint ? 0 : _proPaintCost();
+  const svc=_proServicesTotal() + paintFolded;
   const perGal = Math.max(0, retail-cost);
+  const maxCoats = rooms.reduce((m,r)=>Math.max(m, parseInt(r.coats)||0), 0) || 2;
   const paintRetail = gal*retail, discount = gal*perGal;
   return { title:g('pp-title'), client:g('pp-client'), address:g('pp-addr'), scope:g('pp-scope'), about:g('pp-about'),
-    product:g('pp-product'), gal, retail, cost, svc, areas, perGal, paintRetail, discount,
+    product:g('pp-product'), gal, retail, cost, svc, areas, perGal, paintRetail, discount, paintFolded,
+    isExt: estimatorMode === 'exterior', coats: maxCoats,
     total:Math.max(0, paintRetail - discount + svc), company:'Ingersoll Painting LLC',
     logo:(document.querySelector('header img')||{}).src || '' };
 }
@@ -6422,7 +6512,12 @@ function proProposalHtml(v, withSignature){
               + a.items.map(i => `<tr><td style="padding:6px 0 6px 14px">${_esc(i.label||'')}</td><td style="padding:6px 0;text-align:right;white-space:nowrap">${money(i.amount||0)}</td></tr>`).join('')
               + (a.items.length > 1 ? `<tr><td style="padding:6px 0 8px 14px;font-weight:bold;border-top:1px solid #ddd">${nm} subtotal</td><td style="padding:6px 0 8px;text-align:right;font-weight:bold;white-space:nowrap;border-top:1px solid #ddd">${money(sub)}</td></tr>` : '');
           }).join('')
-        : `<tr><td style="padding:8px 0">Project Services<div style="font-size:11px;color:#777">Complete surface preparation including scraping and sanding of loose and peeling paint, protection of landscaping and surrounding surfaces, application of two coats, and full cleanup</div></td><td style="padding:8px 0;text-align:right;white-space:nowrap">${money(v.svc)}</td></tr>`}
+          // Paint folded into the price still gets a line, so a client adding
+          // up the rooms lands on the total instead of an unexplained gap.
+          + (v.paintFolded > 0 ? `<tr><td colspan="2" style="padding:7px 10px;background:#eaf6fc;font-weight:bold">Paint &amp; Materials</td></tr><tr><td style="padding:6px 0 6px 14px">All paint and materials for the project</td><td style="padding:6px 0;text-align:right;white-space:nowrap">${money(v.paintFolded)}</td></tr>` : '')
+        : `<tr><td style="padding:8px 0">Project Services<div style="font-size:11px;color:#777">${v.isExt
+            ? 'Complete surface preparation including scraping and sanding of loose and peeling paint, protection of landscaping and surrounding surfaces'
+            : 'Complete surface preparation, protection of floors, furniture and fixtures'}, application of ${['','one coat','two coats','three coats'][v.coats]||(v.coats+' coats')}, and full cleanup</div></td><td style="padding:8px 0;text-align:right;white-space:nowrap">${money(v.svc)}</td></tr>`}
       <tr style="border-top:2px solid #111"><td style="padding:10px 0;font-weight:bold;font-size:15px">Total Project Investment</td><td style="padding:10px 0;text-align:right;font-weight:bold;font-size:15px;white-space:nowrap">${money(v.total)}</td></tr>
     </table>
     ${saveCallout}
@@ -6720,22 +6815,40 @@ td{padding:4px 5px;border-bottom:1px solid #eee;white-space:nowrap}
   setTimeout(() => URL.revokeObjectURL(url), 15000);
 }
 
+// Plain-text breakdown for Share / Text and Email. Same rows and the same
+// total as the on-screen bid. Both used to total the rooms only, so doors,
+// windows, washing, railings, treads and every custom charge were missing
+// from what the customer received, and the number came in under the bid.
+function _bidPlainBreakdown() {
+  const cs = rooms.map(calc), ex = jobExtras();
+  const lines = [];
+  rooms.forEach((r,i) => {
+    const c = cs[i]; if (!c.valid) return;
+    const desc = _bidAreaDesc(r, c);
+    lines.push(`${(r.name||'').trim() || 'Area'}${desc ? ' (' + desc + ')' : ''}: ${fmt(c.total)}`);
+  });
+  const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+  if (ex.doorTotal > 0)    lines.push(`Doors (${ex.doorCount}): ${fmt(ex.doorTotal)}`);
+  if (ex.winTotal > 0)     lines.push(`Windows (${ex.winCount}): ${fmt(ex.winTotal)}`);
+  if (ex.shutterTotal > 0) lines.push(`Shutters (${ex.shutterCount}): ${fmt(ex.shutterTotal)}`);
+  if (ex.washTotal > 0)    lines.push(`Power washing (${Math.round(ex.washSF)} sq ft): ${fmt(ex.washTotal)}`);
+  if (ex.railTotal > 0)    lines.push(`Railings (${Math.round(ex.railLF)} lin ft): ${fmt(ex.railTotal)}`);
+  if (ex.treadTotal > 0)   lines.push(`Steps and treads (${plural(ex.treadCount,'tread')}): ${fmt(ex.treadTotal)}`);
+  (ex.lineItems || []).forEach(li => { if (li.amount) lines.push(`${li.label}: ${fmt(li.amount)}`); });
+  const grand = cs.reduce((a,c)=>a+c.mat+c.lab,0) + ex.total;
+  return { text: lines.join('\n'), grand };
+}
+
 function shareBid() {
-  const client = document.getElementById('client-name').value || 'Client';
+  const client = document.getElementById('client-name').value.trim();
   const addr   = document.getElementById('job-address').value || '';
   const date   = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  const cs     = rooms.map(calc);
-  const grand  = cs.reduce((a,c)=>a+c.total,0);
-
-  // Build plain-text version for sharing
-  const roomLines = rooms.map((r,i) => {
-    const c     = cs[i];
-    const surfs = Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>k).join(', ');
-    return `${r.name} (${surfs||'walls'}): ${c.totalSF.toFixed(0)} sf — ${fmt(c.total)}`;
-  }).join('\n');
+  const bd     = _bidPlainBreakdown();
+  const grand  = bd.grand;
+  const roomLines = bd.text;
 
   const text = `INGERSOLL PAINTING LLC
-Estimate for ${client}
+${client ? 'Estimate for ' + client : 'Painting Estimate'}
 ${addr}
 Date: ${date}
 
@@ -6750,13 +6863,13 @@ Family Owned Since 1978`;
 
   if (navigator.share) {
     navigator.share({
-      title: `Ingersoll Painting — Estimate for ${client}`,
+      title: client ? `Ingersoll Painting - Estimate for ${client}` : 'Ingersoll Painting - Estimate',
       text: text,
     }).catch(()=>{});
   } else {
     // Fallback — copy to clipboard
     navigator.clipboard.writeText(text).then(()=>{
-      showToast('Copied to clipboard — paste into a text or email');
+      showToast('Copied - paste it into a text or email');
     }).catch(()=>{
       showToast('Use Save as PDF to share', 'warn');
     });
@@ -6767,23 +6880,19 @@ function emailBid() {
   const client = document.getElementById('client-name').value.trim() || '';
   const addr   = document.getElementById('job-address').value.trim() || '';
   const date   = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  const cs     = rooms.map(calc);
-  const grand  = cs.reduce((a,c)=>a+c.total,0);
+  const bd     = _bidPlainBreakdown();
+  const grand  = bd.grand;
 
   const contacts = loadContacts();
   const match    = client ? contacts.find(c=>c.name.toLowerCase()===client.toLowerCase()) : null;
   const toEmail  = match?.email || '';
 
-  const roomLines = rooms.map((r,i)=>{
-    const c = cs[i];
-    const surfs = Object.entries(r.surfaces).filter(([,v])=>v).map(([k])=>k).join(', ');
-    return `${r.name} (${surfs||'walls'}): ${c.totalSF.toFixed(0)} sf - ${fmt(c.total)}`;
-  }).join('\n');
+  const roomLines = bd.text;
 
   const subject = encodeURIComponent(`Ingersoll Painting LLC - Estimate for ${client||'Your Project'}`);
   const body    = encodeURIComponent(
     `Dear ${client||'Valued Customer'},\n\nThank you for the opportunity to provide this estimate. Please review the details below.\n\n` +
-    `---\nINGERSOLL PAINTING LLC\nEstimate for ${client}\n${addr}\nDate: ${date}\n\n` +
+    `---\nINGERSOLL PAINTING LLC\n${client ? 'Estimate for ' + client : 'Painting Estimate'}\n${addr}\nDate: ${date}\n\n` +
     `PROJECT BREAKDOWN\n${roomLines}\n\nTOTAL ESTIMATE: ${fmt(grand)}\n\n---\n` +
     `1-Year Workmanship Warranty\n(315) 952-8259 | ingersollpaintingllc.com\nFamily Owned Since 1978\n\n` +
     `Thank you for choosing Ingersoll Painting LLC`

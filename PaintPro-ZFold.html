@@ -426,7 +426,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 <div id="tab-bar">
   <button class="tab-btn active" id="tab-estimate" onclick="switchTab('estimate')" aria-label="Estimator tab">📐 ESTIMATE</button>
   <button class="tab-btn" id="tab-contacts" onclick="switchTab('contacts')" aria-label="Clients tab">👥 CLIENTS<span id="followup-badge" style="display:none;background:#c0392b;color:#fff;border-radius:10px;font-size:10px;padding:2px 6px;margin-left:5px;vertical-align:middle;line-height:1.4"></span></button>
-  <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')" aria-label="Menu tab" style="font-size:20px;min-width:54px;padding:0 8px">☰<span id="proposal-badge" style="display:none;background:#f59e0b;color:#111;border-radius:10px;font-size:10px;font-weight:700;padding:2px 5px;margin-left:2px;vertical-align:middle;line-height:1.4"></span></button>
+  <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')" aria-label="Menu tab">☰ MENU<span id="proposal-badge" style="display:none;background:#f59e0b;color:#111;border-radius:10px;font-size:10px;font-weight:700;padding:2px 5px;margin-left:2px;vertical-align:middle;line-height:1.4"></span></button>
 </div>
 
 <main id="estimator-section">
@@ -1013,34 +1013,23 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   <div id="menu-quick-actions" style="margin-bottom:18px">
     <div style="font-family:var(--head);font-size:26px;color:var(--blue);letter-spacing:1.5px;margin-bottom:12px">☰ MENU</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <button onclick="openJobsModal()"      style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">📁 Jobs</button>
-      <button onclick="openProposalsModal()" style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">📄 Proposals &amp; Signatures</button>
-      <button onclick="openDocsInbox()"      style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">📥 Shared Files</button>
-      <button onclick="openBringInBid()"     style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">📥 Bring In a Bid</button>
-      <button onclick="openReelKit()"        style="grid-column:1/-1;height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer">🎬 Make a Reel</button>
+      <button onclick="openJobsModal()"      style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">📁 Jobs</button>
+      <button onclick="openProposalsModal()" style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">✍️ Proposals</button>
+      <button onclick="openBringInBid()"     style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">📥 Bring In a Bid</button>
+      <button onclick="openReelKit()"        style="height:70px;background:var(--panel);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">🎬 Make a Reel</button>
     </div>
+    <!-- Refresh App is what James is told to tap after every update, so it is
+         one tap here instead of a card to find, open, then tap. -->
+    <button onclick="forceRefresh()"
+            style="width:100%;height:52px;margin-top:10px;background:var(--card);border:1.5px solid var(--blue);border-radius:12px;color:var(--blue);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">
+      🔄 Refresh App <span style="font-weight:600;color:var(--muted);font-size:13px">(get the latest version)</span>
+    </button>
+    <div id="refresh-status" style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px"></div>
     <!-- Setup status — shows at a glance what still needs connecting -->
     <div id="setup-status" style="margin-top:16px"></div>
 
-    <div style="font-family:var(--head);font-size:19px;color:var(--muted);letter-spacing:1.5px;margin:18px 0 8px">⚙ SETTINGS</div>
-    <input type="text" id="settings-search" placeholder="🔍 Search settings (try: key, deposit, backup)"
-           aria-label="Search settings" autocomplete="off" oninput="filterSettings(this.value)"
-           style="width:100%;background:var(--dark);border:1.5px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;outline:none;margin-bottom:4px"/>
-    <div id="settings-no-match" style="display:none;color:var(--muted);font-size:13px;padding:10px 2px">No settings match that. Try a shorter word.</div>
   </div>
 
-  <!-- Refresh / Update the app -->
-  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
-    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🔄 Refresh App</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">
-      If the app looks out of date or a new feature isn't showing up, tap this to pull the latest version. It clears the saved copy and reloads fresh — your jobs and data are not touched.
-    </div>
-    <button onclick="forceRefresh()"
-            style="width:100%;height:52px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">
-      🔄 Refresh to Latest Version
-    </button>
-    <div id="refresh-status" style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px"></div>
-  </div>
 
   <!-- App Lock (PIN + fingerprint) -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
@@ -1086,7 +1075,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 
   <!-- Pay by Card (QuickBooks) -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
-    <div style="font-family:var(--head);font-size:20px;color:#2ca01c;margin-bottom:4px">💳 Pay by Card (QuickBooks)</div>
+    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">💳 QuickBooks Pay Link</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">
       Paste a reusable QuickBooks payment link and a <strong style="color:var(--text)">💳 Pay by Card</strong> button appears on your bids, so a customer can pay on the spot. Get one in QuickBooks under <em>Get paid → Payment links</em> (QuickBooks Payments must be switched on).
     </div>
@@ -1101,10 +1090,10 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 
   <!-- AI Photo Estimator -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
-    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🤖 AI Photo Estimator</div>
+    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🤖 AI Key</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">
-      Tap "📷 AI Estimate from Photo" on any room card to have AI analyze a photo and fill in the measurements.
-      Costs less than $0.01 per photo. Get a free API key at <strong style="color:var(--blue)">console.anthropic.com</strong>
+      Turns on the AI: the photo scan (📷 Photos &amp; Video on a room), the Estimate Assistant, and Bring In a Bid.
+      About a cent per photo. Get a key at <a href="https://console.anthropic.com" target="_blank" rel="noopener" style="color:var(--blue)">https://console.anthropic.com</a>
     </div>
     <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Anthropic API Key</label>
     <input type="password" id="settings-anthropic-key" placeholder="sk-ant-api03-..."
@@ -1120,7 +1109,8 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
       </button>
     </div>
     <div id="settings-key-status" style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:14px"></div>
-    <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Proxy URL <span style="color:var(--border)">(optional — AI works with just the key; only needed for online card payments)</span></label>
+    <details style="margin-top:4px"><summary style="font-size:13px;color:var(--muted);cursor:pointer;padding:10px 0;min-height:44px">Advanced</summary>
+    <label style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px">Proxy URL <span style="color:var(--muted)">(leave blank; the AI works with just the key)</span></label>
     <input type="url" id="settings-proxy-url" placeholder="https://paintpro-ai.yourname.workers.dev"
            style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:13px 14px;color:var(--text);font-family:var(--font);font-size:14px;margin-bottom:10px"/>
     <button onclick="saveProxyUrl()"
@@ -1139,12 +1129,13 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
        style="display:block;margin-top:8px;text-align:center;color:var(--blue);font-size:13px;text-decoration:none">
       📋 View / copy worker code →
     </a>
+    </details>
   </div>
 
   <!-- Firebase / Account -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
-    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🔐 Account</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Signed in on this device. Data syncs automatically with Lisa's PC.</div>
+    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🔐 Sign In / Sign Out</div>
+    <div id="acct-status-text" style="font-size:13px;color:var(--muted);margin-bottom:14px"></div>
     <button onclick="signOut()" style="background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:14px;padding:10px 18px;cursor:pointer">Sign Out</button>
   </div>
 
@@ -1156,7 +1147,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div style="font-size:13px;color:var(--muted);line-height:1.8">
       <div>PaintPro — Ingersoll Painting LLC</div>
       <div>Built for James Bailey · Hannibal, NY</div>
-      <div style="margin-top:8px;color:var(--border)">v2026.06</div>
+      <div style="margin-top:8px;color:var(--muted)">v2026.09</div>
     </div>
   </div>
 
@@ -1164,15 +1155,15 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
       <div style="display:flex;align-items:center;gap:8px">
-        <div style="font-family:var(--head);font-size:20px;color:var(--blue)">🔑 Account Vault</div>
+        <div style="font-family:var(--head);font-size:20px;color:var(--blue)">🔑 Saved Passwords</div>
         <span id="vault-status" title="No master password set yet" style="font-size:15px;cursor:default">⚠️</span>
       </div>
       <div style="display:flex;gap:8px">
-        <button id="vault-lock-btn" onclick="_vaultLock()"
+        <button id="vault-lock-btn" onclick="event.stopPropagation();_vaultLock()"
                 style="display:none;height:38px;padding:0 12px;background:transparent;border:1.5px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:13px;cursor:pointer">
           🔒 Lock
         </button>
-        <button onclick="openAccountModal(null)"
+        <button onclick="event.stopPropagation();openAccountModal(null)"
                 style="height:38px;padding:0 16px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer">
           + Add
         </button>
@@ -1187,7 +1178,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
     <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">💾 Backup &amp; Restore</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">
-      Save all your jobs, clients, projects, notes, materials, and settings to a file. Restore anytime or move to a new phone.
+      Save all your jobs, clients, materials lists and prices to a file. Restore anytime, or move to a new phone.
     </div>
     <button onclick="backupToDrive()"
             style="width:100%;height:50px;background:var(--green);border:none;border-radius:8px;color:#fff;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px">
@@ -1200,7 +1191,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
       ⬆️ Restore from Backup
     </button>
     <div style="font-size:11px;color:var(--muted);line-height:1.6;background:var(--dark);border-radius:8px;padding:10px 12px">
-      Backup includes: all saved jobs, clients, projects, notes, materials, apt pricing, and labor rates.<br>
+      Backup includes: all saved jobs, clients, materials lists and your prices.<br>
       <strong style="color:var(--amber)">Restore overwrites all current data — back up first!</strong><br>
       <span style="color:var(--muted)">API key and account vault are <em>not</em> included — re-enter them after restore.</span>
     </div>
@@ -1208,14 +1199,10 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 
   <!-- Privacy & Your Data -->
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
-    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🛡️ Privacy &amp; Your Data</div>
+    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">🗑️ Erase All Data</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">
-      Get a full copy of everything stored, or permanently erase it. Erasing removes your data from this device <strong>and</strong> the cloud — it cannot be undone.
+      Permanently erases everything from this phone <strong>and</strong> the cloud. It cannot be undone. Download a backup first (Backup, above).
     </div>
-    <button onclick="backupToDrive()"
-            style="width:100%;height:50px;background:transparent;border:1.5px solid var(--blue);border-radius:8px;color:var(--blue);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px">
-      📤 Export All My Data
-    </button>
     <button onclick="deleteAllMyData()"
             style="width:100%;height:50px;background:transparent;border:1.5px solid var(--red);border-radius:8px;color:var(--red);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">
       🗑️ Delete All My Data
@@ -1420,7 +1407,6 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
   <div class="dbg-header">
     <div class="dbg-title">Manual Entry &amp; Debug</div>
     <div style="display:flex;gap:8px;align-items:center">
-      <button id="signout-btn" onclick="signOut()" style="display:none;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:var(--font);font-size:13px;padding:6px 10px;cursor:pointer" aria-label="Sign out">Sign Out</button>
       <button class="dbg-close" onclick="closeDebug()" aria-label="Close debug panel">✕ Close</button>
     </div>
   </div>
@@ -1453,18 +1439,13 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div style="font-size:13px;color:var(--text);line-height:1.9;margin-bottom:10px">
       <div>"<b>estimator</b>" or "<b>measure</b>"</div>
       <div>"<b>clients</b>" or "<b>contacts</b>"</div>
-      <div>"<b>projects</b>"</div>
       <div>"<b>materials</b>" or "<b>shopping list</b>"</div>
-      <div>"<b>notes</b>"</div>
-      <div>"<b>apt pricing</b>" or "<b>apartment</b>"</div>
     </div>
 
     <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--blue);margin-bottom:6px;font-weight:700">Add New</div>
     <div style="font-size:13px;color:var(--text);line-height:1.9;margin-bottom:10px">
       <div>"<b>add room</b>" or "<b>new room</b>"</div>
       <div>"<b>add client</b>" or "<b>new contact</b>"</div>
-      <div>"<b>add project</b>"</div>
-      <div>"<b>add note</b>"</div>
       <div>"<b>add materials</b>" or "<b>new list</b>"</div>
     </div>
 
@@ -1516,19 +1497,6 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     <div id="dbg-log">Waiting…</div>
   </div>
 
-  <!-- AI Settings -->
-  <div class="dbg-card">
-    <div class="dbg-card-title">🤖 AI Photo Estimator</div>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5">
-      Enter your Anthropic API key to enable "📷 AI Estimate from Photo" on each room card.
-      Get a free key at <strong style="color:var(--blue)">console.anthropic.com</strong>.
-      Saved to this device only.
-    </p>
-    <input type="password" id="anthropic-key-input" placeholder="sk-ant-api03-..."
-           style="width:100%;background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:11px 12px;color:var(--text);font-family:var(--font);font-size:14px;margin-bottom:8px"
-           oninput="localStorage.setItem('ingersoll_anthropic_key_v1',this.value)"/>
-    <div style="font-size:11px;color:var(--muted)">Key is stored locally on this device and never sent anywhere except Anthropic's API.</div>
-  </div>
 
   <!-- Error Log -->
   <div class="dbg-card">
@@ -1621,7 +1589,7 @@ window.onerror = function(msg, src, line, col, err) {
     '<div style="font-size:16px;font-weight:bold;margin-bottom:12px">⚠ PaintPro Error</div>',
     '<div><b>Message:</b> ' + short + '</div>',
     '<div><b>Line:</b> ' + line + ' &nbsp;<b>Col:</b> ' + col + '</div>',
-    '<div style="margin-top:16px;font-size:12px;color:#6b7a8d">Error saved to log. Reload the app and open ⚙ Settings → Error Log to copy it for Claude.</div>',
+    '<div style="margin-top:16px;font-size:12px;color:#6b7a8d">Error saved to log. Reload the app, tap ⚙ on the laser bar, and copy the Error Log for Claude.</div>',
     '</div>',
   ].join('');
   return true;
@@ -2166,7 +2134,10 @@ function loadDepositConfig(){
   try { const d = JSON.parse(localStorage.getItem(DEPOSIT_KEY)); return d && typeof d === 'object' ? d : null; }
   catch { return null; }
 }
-function depositEnabled(){ const d = loadDepositConfig(); return !!(d && d.enabled && d.pct > 0); }
+// Stripe deposits are retired (CLAUDE.md section 17; payments = QuickBooks). Hard
+// false, so a stale ingersoll_deposit_v1 on the phone can't bring the deposit
+// line back into the QuickBooks copy or the proposal.
+function depositEnabled(){ return false; }
 function loadQbPayLink(){ return (localStorage.getItem(QB_PAYLINK_KEY) || '').trim(); }
 // Removing the Stripe card also removed the only input that wrote the
 // QuickBooks pay link, so James's chosen payment path could never be turned
@@ -2205,7 +2176,7 @@ function saveDepositConfig(){
 // Open the reusable QuickBooks payment link (in-person / hand-the-phone use).
 function payByCardQuickBooks(){
   const link = loadQbPayLink();
-  if (!link){ showToast('Add your QuickBooks payment link in ⚙️ Settings → Payments', 'warn'); switchTab('settings'); return; }
+  if (!link){ showToast('Add your QuickBooks payment link first', 'warn'); switchTab('settings'); openSettingsCard(/QuickBooks Pay Link/i); return; }
   window.open(link, '_blank');
 }
 // Fill the payment inputs from saved config when Settings opens.
@@ -4947,8 +4918,13 @@ async function openBringInBid() {
   if (!docs.length) {
     const tip = document.createElement('p');
     tip.setAttribute('style', 'color:var(--muted);font-size:12px;line-height:1.6');
-    tip.textContent = 'Tip: from any app, tap Share and pick PaintPro — the file lands here.';
+    tip.textContent = 'Tip: from any app, tap Share and pick PaintPro. The file lands here.';
     s.appendChild(tip);
+    const all0 = document.createElement('button');
+    all0.setAttribute('style', 'width:100%;height:44px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer');
+    all0.textContent = '📂 Shared Files';
+    all0.onclick = () => openDocsInbox();
+    s.appendChild(all0);
   } else {
     docs.slice(0, 6).forEach(rec => {
       const row = document.createElement('div');
@@ -5247,7 +5223,7 @@ async function scanNotesFile(file) {
   if (!file) return;
   const apiKey = localStorage.getItem('ingersoll_anthropic_key_v1') || '';
   if (!apiKey) {
-    showToast('⚠️ Add your Anthropic API key in ⚙️ Settings first', 'warn');
+    showToast('⚠️ Add your AI key first: ☰ MENU → Setup → AI Key', 'warn');
     return;
   }
   showToast('📝 Reading your notes…');
@@ -6646,13 +6622,13 @@ function openProposalsModal(){
   s.appendChild(title);
   // Always-available: send a bid you wrote outside the app (e.g. from a chat).
   const wb = document.createElement('button'); wb.setAttribute('style','width:100%;height:48px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;margin-bottom:14px');
-  wb.textContent = '✍️ Send a Written Bid for Signature';
-  wb.onclick = sendWrittenBid;
+  wb.textContent = '📥 Bring In a Bid';
+  wb.onclick = () => { _ppCloseModals(); openBringInBid(); };
   s.appendChild(wb);
   const list = proposalsLoad();
   if (!list.length) {
     const e = document.createElement('p'); e.setAttribute('style','color:var(--muted);font-size:14px;line-height:1.5');
-    e.textContent = 'No proposals sent yet. Generate a bid and tap "Send for Signature," or paste a written bid above.';
+    e.textContent = 'No proposals sent yet. Make a bid and tap "Send for Signature", or bring one in from a Claude chat above.';
     s.appendChild(e); return;
   }
   list.forEach(pr => {
@@ -7083,11 +7059,13 @@ function savePrintSecret() {
 // setup sat next to daily tools with no grouping, so nothing was findable.
 // Each card is sorted into a named group; anything unmatched falls to the end
 // so a newly-added card is never lost.
+// Everyday tools first; things set once and never touched again are folded
+// away under SETUP so they stop pushing the useful cards off the screen.
 const SETTINGS_GROUPS = [
-  { name: '🔧 SET UP (ONE TIME)', match: [/AI Photo|Estimator/i, /Pay by Card/i, /Email Client/i] },
-  { name: '🧰 TOOLS',             match: [/Visualizer/i] },
-  { name: '🔐 ACCOUNT & DATA',    match: [/Account Vault/i, /Account/i, /App Lock/i, /Backup/i, /Privacy/i] },
-  { name: 'ℹ️ APP',               match: [/About/i] },
+  { name: '🧰 TOOLS',              match: [/Color Visualizer/i, /Saved Passwords/i] },
+  { name: '💾 BACKUP',             match: [/Backup/i] },
+  { name: '⚙️ SETUP (SET ONCE)',   collapsed: true,
+    match: [/AI Key/i, /QuickBooks Pay Link/i, /Email Client/i, /App Lock/i, /Sign In/i, /Erase All Data/i, /About/i] },
 ];
 function _settingsCardTitle(card) {
   const h = card.firstElementChild;
@@ -7105,7 +7083,7 @@ function organizeSettingsMenu() {
   const rest   = cards.filter(c => !pinned.includes(c));
   const used = new Set();
   const buckets = SETTINGS_GROUPS.map(g => ({
-    name: g.name,
+    name: g.name, collapsed: !!g.collapsed,
     cards: g.match.flatMap(rx => rest.filter(c => !used.has(c) && rx.test(_settingsCardTitle(c)) && (used.add(c), true))),
   }));
   const leftovers = rest.filter(c => !used.has(c));
@@ -7121,8 +7099,27 @@ function organizeSettingsMenu() {
     h.textContent = bk.name;
     frag.appendChild(h);
     bk.cards.forEach(c => frag.appendChild(c));
+    if (bk.collapsed) {
+      h.classList.add('settings-group-fold');
+      h.setAttribute('role', 'button');
+      h.style.cursor = 'pointer';
+      h.style.minHeight = '44px';
+      h.style.display = 'flex'; h.style.alignItems = 'center'; h.style.justifyContent = 'space-between';
+      const chev = document.createElement('span'); chev.className = 'fold-chev'; chev.textContent = '▸';
+      h.appendChild(chev);
+      h.onclick = () => _toggleSettingsGroup(h);
+      bk.cards.forEach(c => { c.style.display = 'none'; });
+    }
   });
   sec.appendChild(frag);
+}
+// Open or close a folded group: everything after its heading up to the next.
+function _toggleSettingsGroup(h, open) {
+  const o = open === undefined ? h.dataset.open !== '1' : !!open;
+  h.dataset.open = o ? '1' : '0';
+  const chev = h.querySelector('.fold-chev'); if (chev) chev.textContent = o ? '▾' : '▸';
+  let el = h.nextElementSibling;
+  while (el && !el.classList.contains('settings-group-head')) { el.style.display = o ? '' : 'none'; el = el.nextElementSibling; }
 }
 
 // Live filter across every menu card — type "key", "deposit", "backup" and only
@@ -7159,8 +7156,10 @@ function openSettingsCard(titleRx) {
     c.tagName === 'DIV' && !c.classList.contains('settings-group-head') &&
     c.id !== 'menu-quick-actions' && titleRx.test(_settingsCardTitle(c)));
   if (!card) return;
-  const search = document.getElementById('settings-search');
-  if (search && search.value) { search.value = ''; filterSettings(''); }
+  // Unfold its group first, or there is nothing on screen to scroll to.
+  let h = card.previousElementSibling;
+  while (h && !h.classList.contains('settings-group-head')) h = h.previousElementSibling;
+  if (h && h.classList.contains('settings-group-fold') && h.dataset.open !== '1') _toggleSettingsGroup(h, true);
   const header = card.firstElementChild;
   const body = card.children[1];
   if (header && body && body.style.display === 'none') header.click();
@@ -7184,10 +7183,17 @@ function renderSetupStatus() {
       act: () => { if (typeof signOut === 'function' && !signedIn) location.reload(); } },
     { ok: hasKey, okText: 'AI connected — photo scan & assistant ready',
       badText: 'AI not connected — tap to add your key',
-      act: () => openSettingsCard(/AI Photo|Estimator/i) },
+      act: () => openSettingsCard(/AI Key/i) },
   ];
   const allGood = rows.every(r => r.ok);
   el.innerHTML = '';
+  // The sign-in card says what is actually true, not a hard-coded "signed in".
+  const acct = document.getElementById('acct-status-text');
+  if (acct) acct.textContent = signedIn
+    ? 'Signed in. Your jobs, clients and rates sync to your account.'
+    : 'Not signed in. Your work is saved on this phone only.';
+  // All green means nothing to do - say nothing and leave the space for work.
+  if (allGood) return;
   const wrap = document.createElement('div');
   wrap.setAttribute('style', `background:var(--panel);border:1.5px solid ${allGood ? 'var(--green)' : 'var(--amber)'};border-radius:12px;padding:12px 14px`);
   const head = document.createElement('div');
@@ -7568,7 +7574,7 @@ Scale anchors: interior door=6.8 ft tall/2.8 ft wide; light switch plate=4.5 inc
 async function callAI(messages, model = 'claude-sonnet-4-6', max_tokens = 1024, system = null) {
   const apiKey   = localStorage.getItem('ingersoll_anthropic_key_v1') || '';
   const proxyUrl = localStorage.getItem('ingersoll_proxy_url_v1') || '';
-  if (!apiKey) throw new Error('No API key — add one in ⚙️ Settings');
+  if (!apiKey) throw new Error('No AI key yet. Add one in ☰ MENU → Setup → AI Key');
 
   const payload = { model, max_tokens, messages };
   if (system) payload.system = system;
@@ -7597,7 +7603,7 @@ async function callAI(messages, model = 'claude-sonnet-4-6', max_tokens = 1024, 
       });
       if (!resp.ok && resp.status >= 500 && apiKey) resp = await direct();
     } catch (_) {
-      if (!apiKey) throw new Error('Could not reach the AI proxy — check the Proxy URL in ⚙️ Settings');
+      if (!apiKey) throw new Error('Could not reach the AI proxy — check the Proxy URL in ☰ MENU → Setup → AI Key → Advanced');
       resp = await direct();
     }
   } else {
@@ -9891,7 +9897,6 @@ function processVoiceCommand(transcript, measureOnly = false) {
     if (/estimat|measure/i.test(t)&&!/add/i.test(t))         { switchTab('estimate');                          return showToast('📐 Estimator'); }
     if (/\bcontact|client/i.test(t)&&!/add|new/i.test(t))    { switchTab('contacts');switchSubnav('clients');  return showToast('👥 Clients'); }
     if (/\bmaterial|shopping|supply list|supplies list/i.test(t)&&!/add|new/i.test(t)) { switchTab('contacts');switchSubnav('materials'); return showToast('🛒 Materials'); }
-    if (/pricing|apartment|apt/i.test(t))                    { switchTab('apt');                               return showToast('🏢 Apt Pricing'); }
     if (/add room|new room|add side|new side/i.test(t))       { switchTab('estimate');addRoom();                return showToast(estimatorMode==='exterior'?'Side added':'Room added'); }
     if (/exterior mode|switch.*exterior|outside mode/i.test(t)) { switchTab('estimate');switchMode('exterior');  return; }
     if (/interior mode|switch.*interior|inside mode/i.test(t))  { switchTab('estimate');switchMode('interior');  return; }
@@ -10180,12 +10185,15 @@ function _saveMemoNote() {
   if (client) parts.push(client);
   if (addr)   parts.push(addr);
   const body   = memoLines.map(l => l.text).join('\n');
-  const note   = { id:'memo'+Date.now(), title:parts.join(' — '), body, createdAt:memoStartTime, updatedAt:Date.now() };
-  const notes  = notesLoad();
-  notes.unshift(note);
-  notesSave(notes);
-  if (document.getElementById('sub-notes')?.style.display !== 'none') renderNotes();
-  showToast('🎙 Memo saved — tap CLIENTS → NOTES to view');
+  // Memos went to the retired Notes tab, where nothing could show them again.
+  // They now go into this job's own Notes box (under the rooms), which saves
+  // with the job and prints on the bid.
+  const box = document.getElementById('notes');
+  if (box) {
+    box.value = (box.value.trim() ? box.value.trim() + '\n\n' : '') + '🎙 ' + date + ': ' + body;
+    markDirty();
+  }
+  showToast('🎙 Memo added to this job\'s Notes');
 }
 
 function _updateMemoPreview() {

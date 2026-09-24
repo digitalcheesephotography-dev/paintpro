@@ -21,7 +21,7 @@ re-teach you any of the following. It is all already decided.**
 | 6 | The app has **three tabs**: ESTIMATE, CLIENTS, ☰ MENU. Clients sub-nav is **Clients \| Materials** only. |
 | 7 | **Deploy = commit to `main`.** Netlify picks it up in ~60s. Then tell him: **☰ MENU → 🔄 Refresh App** — he cannot see a change until he taps it. |
 | 8 | **Never ask him to paste the HTML.** Read it yourself. Other sessions push here too — if a push is rejected, fetch and rebase. Never force over someone else's work. |
-| 9 | **Verify before you claim.** This app prices real jobs; a wrong number costs money. Drive it with Playwright at **380px** (Fold cover) and **880px** (unfolded). Check the Robin Caster benchmark in section 7 after any exterior math change. |
+| 9 | **Verify before you claim.** This app prices real jobs; a wrong number costs money. **Run `node tests/regress.mjs` before every push** (serve the folder on :8123 first; see the file's header). It checks the Robin Caster benchmark, totals agreement, persistence, data safety and layout at **380px** (Fold cover) and **880px** (unfolded). Then look at screenshots yourself. |
 | 10 | **Bid documents:** Georgia font only, **no em dashes**, Project Services is ONE number, never show hourly rates / man-hours / crew size. Full rules in section 5. |
 | 11 | **No secrets in the app or the repo.** API keys are device-local; `STRIPE_SECRET_KEY` lives only as a Cloudflare env var. |
 | 12 | **He talks to you by voice-to-text.** Messages are short and sometimes garbled ("stores" = doors). Lead with the answer, skip preamble, don't ask five questions when one will do, and don't ask anything you could reasonably infer. |
@@ -87,6 +87,9 @@ paintpro/
 ├── CLAUDE-quickbooks-clients.md  # Companion: rebuilding the Clients tab from QuickBooks
 ├── README.md                 # Effectively empty
 │
+│  ── Dev only (never shipped to the phone) ────────────
+├── tests/regress.mjs         # Regression gate: node tests/regress.mjs (see section 16)
+│
 │  ── Retired ─────────────────────────────────────────
 ├── hearsay.html              # OLD APP - "HearSay" standalone note taker. Not part of PaintPro,
 ├── hearsay.webmanifest       #   not linked from it. Left in the repo but no longer worked on.
@@ -136,7 +139,7 @@ paintpro/
 | `--card`     | `#1a2030` | Inner card backgrounds                   |
 | `--border`   | `#252c3a` | Borders                                  |
 | `--text`     | `#e2e8f0` | Primary text                             |
-| `--muted`    | `#6b7a8d` | Secondary/helper text                    |
+| `--muted`    | `#8a9bb0` | Secondary/helper text (was `#6b7a8d`; a few hard-coded copies of the old value remain) |
 
 ### Fonts
 - `--head: 'Bebas Neue', sans-serif` — all-caps headings, brand displays
@@ -197,19 +200,20 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 ### Top-level tabs (`#tab-bar`)
 1. **ESTIMATE** (`#tab-estimate` → `#estimator-section`) — room-by-room measurements + doors/windows + bid generation
 2. **CLIENTS** (`#tab-contacts` → `#contacts-section`) — sub-nav: **Clients | Materials** only (Projects and Notes were retired — see section 17)
-3. **☰ MENU** (`#tab-settings` → `#settings-section`) — quick actions (Jobs, Proposals & Signatures, Shared Files, Bring In a Bid, **🎬 Make a Reel**), a **setup-status strip** (`renderSetupStatus()`: signed-in + AI-key readiness, each row taps through to the card that fixes it via `openSettingsCard(rx)`), a **live search box** (`filterSettings()`), then settings cards sorted into named groups by `organizeSettingsMenu()` / `SETTINGS_GROUPS` (Refresh App pinned first; unmatched cards fall into "⋯ MORE" so a new card is never lost). Old layout was 15 ungrouped collapsed cards in arbitrary order.
+3. **☰ MENU** (`#tab-settings` → `#settings-section`, tab labelled "☰ MENU") — rebuilt Sep 24 2026 to fit on one phone screen. Top: **four tiles** (📁 Jobs, ✍️ Proposals, 📥 Bring In a Bid, 🎬 Make a Reel) and a one-tap **🔄 Refresh App** button under them (`forceRefresh()`, status in `#refresh-status`). Shared Files has no tile; it is reached from Bring In a Bid (which links to it even when empty) and from `openDocsInbox()`. The **setup-status strip** (`renderSetupStatus()`) renders **nothing when everything is green** and only shows rows that need doing, each tapping through via `openSettingsCard(rx)`. **No search box** (it was removed; `filterSettings()` remains, unused). Cards are sorted by `organizeSettingsMenu()` / `SETTINGS_GROUPS` into **🧰 TOOLS** (Color Visualizer, Saved Passwords), **💾 BACKUP** (Backup & Restore) and **⚙️ SETUP (SET ONCE)**, which is **folded** (`collapsed:true` → `_toggleSettingsGroup`) and holds AI Key, QuickBooks Pay Link, Email Client a Copy, App Lock, Sign In / Sign Out, Erase All Data, About. `openSettingsCard` unfolds the group first. Unmatched cards still fall into "⋯ MORE" so a new card is never lost. **Card titles are matched by regex, so renaming a card means updating `SETTINGS_GROUPS` and any `openSettingsCard(/…/)` call.**
 ### Estimator tab order (top to bottom)
 1. **📁 Jobs button** (`#current-job-badge`) — opens the saved-jobs modal; label reflects currently-loaded snapshot name when set
 2. Client name + Job address inputs
 3. **💲 Labor Rates card** (collapsible, whole-job default $/sf — see section 7.1)
-4. Room cards (each: name, walls, height, floor/ceiling dims, surface toggles, product, coats, **✓ DONE — NEXT ROOM** button, optional per-room rate override)
+4. Room cards (each: name, walls with an "add every wall" hint and a two-wall warning, height with an inline 📐, surface toggles, **＋ Crown molding / Cabinets** fold (opens by itself when the room has any), product, coats, photos, **✓ DONE — NEXT ROOM** button, "Different prices for this room" override). On the folded screen the price badge sits on its own line under the room name.
 5. `+ ADD ROOM / AREA` button
 6. **🚪 🪟 Doors & Windows card** (whole-job, not per-room)
 7. Notes textarea
 8. **● Save indicator** (`#save-indicator`) — shows last-save time
 9. Materials/Labor/Total totals strip (auto-shows when there's data)
-10. `GENERATE BID SUMMARY` button (auto-shows when there's data)
-11. Bid output (`#bid-out`) — appears when generate is tapped
+10. `SHOW BID` / `HIDE BID` button (`#gen-btn`, auto-shows when anything is priced incl. custom-charge-only jobs); on the phone it scrolls to the bid
+11. Bid output (`#bid-out`). Actions under it: **one blue ✍️ Send for Signature**, a 2x2 grid (📗 QuickBooks, 💬 Share / Text, ⬇️ Save PDF, 📄 Pro Proposal), and **More** (`<details>`, `_bidMoreOpen` keeps it open across re-renders): Pay by Card, Email, Save Client, Sent Proposals, AI description, Bid Agent. All `.bid-act` / `.bid-act.primary`; do not add inline-coloured buttons back. At ≤430px the bid table hides the Product / Coats / Sq Ft columns (the PDF and sent copy keep them).
+- **Layout:** the header is NOT sticky; `#tab-bar` pins at `top:0`. (A sticky 88px header with the tab bar stuck at 52px hid the tabs on scroll.)
 
 ### Clients tab sub-nav (`switchSubnav()`)
 - `subnav-clients` → `#sub-clients` — contact list with status filters
@@ -232,6 +236,9 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 - Named snapshots saved to `ingersoll_jobs_v1` array via `saveSnapshot()`
 - `getJobSnapshot()` / `applyJobData()` must be updated together when adding new persistent fields
 - Save indicator (`#save-indicator`) shows last-save timestamp — always visible
+- **Replacing the job on screen** (Start New Job, loading another job) goes through `_keepCurrentJob()`: a named job is re-saved under **its own name** (`_writeSnapshotAs(currentJobName)`); an unnamed job with priced work and a client name is saved automatically as "Client - Sep 24" (deduped with " (2)"); only an unnamed, client-less job still asks. `saveSnapshot(nameArg)` takes an optional name. **Never call `saveSnapshot()` with no argument from code**: it reads the Jobs box, which can hold a *different* job's name. That bug overwrote another client's saved job (fixed Sep 24 2026).
+- **Wall ids** come from one global `wallCount` that restarts at 0 on page load. `_repairWallIds()` runs in `applyJobData()` before anything renders: it seeds `wallCount` past every `w\d+` id and re-ids duplicates. Without it the first wall added after a reload got "w1" and edits landed on Wall 1.
+- **Whole-job extras** reset from `JOB_DEFAULTS` (`job = {...JOB_DEFAULTS, ...data.job}` on load, so an old snapshot can't inherit today's railings); `_syncJobInputs()` pushes every extras value into its box.
 
 ### 7.3 Interior vs Exterior mode
 - `estimatorMode`: `'interior'` | `'exterior'`
@@ -329,7 +336,7 @@ Cabinets are the one interior surface nobody prices by the square foot, so they 
 ### 7.14 Crown molding — built
 Crown molding is charged by the **linear foot at its own rate**, separate from Trim. Trim is the baseboard and casing at $3.50/lf; crown is overhead work off a ladder, cut tight to the ceiling, often a multi-piece profile. Lumping it into the flat trim rate under-bid it.
 
-- **Room field:** `room.crownLF` (interior only), an input on the room card between the surface toggles and the cabinets block. Rides inside the room object, so the job snapshot carries it with no change.
+- **Room field:** `room.crownLF` (interior only), an input on the room card between the surface toggles and the cabinets block. Crown and cabinets sit together inside the **＋ Crown molding / Cabinets** fold (`#{room}_extras`, `roomHasExtras` / `showRoomExtras`); it opens by itself when either has a value, and `room.showExtras` keeps it open once used. Rides inside the room object, so the job snapshot carries it with no change.
 - **Rate:** `rates.crown`, **$4.00/lf — James's own rate, given Sep 23 2026, and it covers CAULKING AND PAINTING.** The caulk line top and bottom is most of the work, so the bid row and the proposal line both read "Crown molding, caulked and painted", and the QuickBooks scope sentence names caulking of the crown seams whenever crown is in the job. Editable in the Labor Rates card (inside the interior-only `rate-cab-fields` block) and per room in the custom-rate grid. `INT_ONLY_RATE_KEYS = ['crown', ...CAB_RATE_KEYS]` is the list that hides on exterior and syncs to the room inputs; `cabRate(r,'crown')` gives the same legacy-override fallback cabinets get.
 - **⟲ Perimeter button** (`crownUsePerimeter`) fills the box with the sum of the room's wall widths, because that is the run crown takes in a normal room and James has already measured those walls. Still editable for a room where crown stops at a cased opening. Toasts a warning instead of writing 0 if no walls are measured yet.
 - **Charged on top of the Trim toggle, and never gated on one.** A room can carry both (baseboard AND crown), which is the normal case; the card says so under the input. `crown.lf > 0` also makes a room `valid`, so a crown-only hallway bids on its own.
@@ -372,7 +379,8 @@ When a correction fires, the voice strip shows the corrected text with a ✦ mar
 ### Number parsing (`parseSpokenNumber`)
 - Handles digits, word numbers, hyphenated compounds ("thirty-two"), feet-inches shorthand ("twelve five" = 12'5"), decimal ("twelve point five"), fractions ("twelve and a half")
 - Hyphenated compound resolves to whole number BEFORE feet-inches shorthand check
-- `wordToNum()` handles multi-word compounds and "hundred" as multiplier
+- Spoken hundreds are handled at the top of `parseSpokenNumber` ("two hundred fifty" = 250; this branch only runs when "hundred" is said). They used to parse as 2.1.
+- **Correction (Sep 24 2026):** a spaced "thirty two" actually returns **32**, not 30'2"; that has been the behaviour for a while and nobody has complained. Feet-inches shorthand applies to forms like "twelve five". Don't "fix" it without asking James.
 
 ### Measurement commands
 Flexible — keyword can come before OR after the number:
@@ -395,8 +403,9 @@ Exterior: `front side` / `left side` / `name it garage` / `call it back`
 ### Other commands
 - Doors: `six doors` / `doors six` / `add seventeen doors`
 - Windows: `eight windows` / `put twelve windows`
-- Navigation: `estimator` / `clients` / `projects` / `notes` / `materials` / `apt pricing`
-- Add new: `add room` / `add client` / `add project` / `add note` / `add material`
+- Navigation: `estimator` / `clients` / `materials` (the `projects`, `notes` and `apt` / `pricing` routes were removed; "pricing" used to open the retired APT screen)
+- Add new: `add room` / `add client` / `add material`
+- **Voice memos** (🎙 button) append to the job's own Notes box (`#notes`), which saves with the job and prints on the bid. They used to go to the retired Notes tab, where nothing could show them.
 - Exterior: `siding forty by nine` / `six shutters` / `railing thirty` / `power wash 250`
 - Exterior advance: `next side` / `next` / `done`
 
@@ -505,7 +514,13 @@ IndexedDB: `paintpro-photos` database, object store `photos`, keyed by photo ID 
 `addJobLineItem`, `removeJobLineItem`, `renderLineItems`, `buildEstimateSummary`, `sendEstimateAssistant`, `renderAssistantMsgs`, `clearEstimateAssistant` (whole-job AI that adds custom charges like Sheetrock and can update any room by name; replaces the removed per-room AI chat)
 
 ### Calculation & bid generation
-`calc`, `recalcAll`, `recalcRoom`, `jobExtras`, `renderBid`, `toggleBid`, `shareBid`, `saveClientFromBid`, `copyBidForQuickBooks`
+`calc`, `recalcAll`, `recalcRoom`, `jobExtras`, `renderBid`, `toggleBid`, `shareBid`, `emailBid`, `saveClientFromBid`, `copyBidForQuickBooks`, `_bidAreaDesc` (what a room/side includes, used by every copy), `_bidSurfLabel`, `_bidPlainBreakdown` (text lines + the bid's grand total for Share/Email/Save Client), `_bidProductNames`, `_bidAboutText`, `_pos` / `_posInt` (never-negative number parsing), `_rateVal` ("$2.00" → 2; blank → ignored)
+
+### Jobs, walls and inputs (data safety)
+`_keepCurrentJob`, `_writeSnapshotAs`, `_jobHasWork`, `_repairWallIds`, `JOB_DEFAULTS`, `_syncJobInputs`, `_refreshSectionLabels`, `roomHasExtras`, `showRoomExtras`, `_needAiKey`
+
+### Menu
+`organizeSettingsMenu`, `SETTINGS_GROUPS`, `_toggleSettingsGroup`, `openSettingsCard`, `renderSetupStatus`, `buildSettingsAccordion`
 
 ### Railings, treads, pergolas & shot rounding
 `shotFt`, `addPergolaSection`, `removePergolaSection`, `updatePergolaSection`, `renderPergolaSections`, `armPergolaShot`, `addRailSection`, `removeRailSection`, `updateRailSection`, `renderRailSections`, `updateRoomTreads`, `armRailShot`, `_railId`, `_seedSectionCounters` (the last one reseeds the soffit/porch/deck id counters after a job loads - they reset to 0 on reload, so "+ Add Section" on a loaded job used to hand out an id already in use and edits landed on the wrong row)
@@ -591,7 +606,7 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
 ### Voice recognition
 - Web Speech sometimes mishears domain-specific words. The `VOICE_CORRECTIONS` table handles the most common ones. If a new word consistently fails, add it there first.
 - Voice patterns should always strip leading filler verbs before matching.
-- **Number parser must handle hyphenated compounds.** Chrome returns "thirty-two" with a hyphen. `wordToNum`/`parseSpokenNumber` normalize hyphens and resolve compounds. A hyphenated form resolves to the whole number (32) while a *spaced* "thirty two" is treated as the feet-inches shorthand (30'2"). Don't break this disambiguation.
+- **Number parser must handle hyphenated compounds.** Chrome returns "thirty-two" with a hyphen. `wordToNum`/`parseSpokenNumber` normalize hyphens and resolve compounds (see section 8 for how spaced forms actually behave).
 - Voice is continuous (`recognition.continuous = true`, restarts on `onend`) — mic stays on between commands.
 - `maxAlternatives = 3` — the best alternative (one whose corrected form contains a known keyword) is selected, not just the top guess.
 - `voiceLastMeasurement` tracks the last measurement for undo; reset to `null` after undo or when voice stops.
@@ -604,6 +619,13 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
 - Requires HTTPS — won't work on `file://`. Netlify provides HTTPS automatically.
 - The DISTO D2's BLE characteristics aren't well-documented; the app uses a candidate list (`BLE_CANDIDATES`) and falls back to subscribing to every notify characteristic.
 - **Measurement discoverability matters.** Every measurable field should have its own 📐 shoot button rather than relying on the dropdown.
+
+### Every copy of the bid carries one total (learned Sep 24 2026)
+- The on-screen bid, Share / Text, Email, Save Client, the QuickBooks copy and the Professional Proposal must all total `mat + roomLab + jobExtras().total`. Share and Email used to total the rooms only (missing doors, windows and every custom charge), and the proposal priced all paint at `rooms[0]`'s product at cost. Use `_bidPlainBreakdown()` for text copies and `_bidAreaDesc(r, c)` for "what this room includes"; `tests/regress.mjs` section 6 checks all of them.
+- The proposal's paint: hidden (default) folds in **exactly the bid's paint charge** (`_proPaintBid`) plus a "Paint & Materials" line so the lines add up. Showing the paint line applies James's **Volume Paint Discount** (section 5), which takes that discount off the bid total; `_proPaintNote()` states the dollar amount in the composer. Whether customers get that discount is James's call, not a bug.
+
+### Never rebuild an input while it is being typed in
+- Re-rendering a list from its own `oninput` destroys the focused box: deck/soffit/porch/pergola sections saved "21 x 14" as "2 x 1" this way. On input, update the data and the labels (`_refreshSectionLabels`); re-render only on add/remove.
 
 ### Data persistence
 - The active job auto-saves to `ingersoll_active_job_v1` on every change. **Anything the user enters in the field must survive a phone reboot, accidental tab close, or low-battery shutdown.**
@@ -624,7 +646,16 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
 - **Railing $8.00/lf and tread $15 each are placeholder defaults** — James should replace them with his own pricing. (Pergola's $6.00/sf is researched — see the pergola notes in section 7.)
 - **Lowe's price lookup is intentionally NOT in the app.** Materials list → 📋 copy → paste into a Claude chat → prices back. Don't add live price lookup.
 - **Logo-based PWA icons are current.** The old "IP monogram" placeholders are obsolete.
-- **Offered and deferred, still worth doing:** carry the rest of a room's settings (product, coats, surface toggles) forward to the next room — ceiling height already does; and the bid's ~12-button stack in 9 colours needs one clear primary action (the audit found "Send this Bid for Signature" sitting 4th of 12, ~2,748px down the page).
+- **Offered and deferred, still worth doing:** carry the rest of a room's settings (product, coats, surface toggles) forward to the next room — ceiling height already does. (The bid's button stack was fixed Sep 24 2026.)
+- **Sep 24 2026 six-reviewer audit: found but deliberately NOT done** (ask James before doing any):
+  - Collapse the laser bar when no laser has connected (~115px of every screen). Kept: James uses the laser.
+  - Put per-room "Different prices" and "Remove" behind a ⋯ menu; Photos & Video as a small icon.
+  - Collapse the Estimate Assistant to a single "+ Extra charge" line.
+  - Send the Professional Proposal format for signature by default instead of the plain bid (it reads better on a phone). Product decision.
+  - Cabinets are priced in the room's one paint product, so a kitchen with Regal Select walls prices its cabinet gallons as Regal Select, not Advance.
+  - Typing `12'6` into a wall box stores 126 ft (the number input drops the apostrophe).
+  - proposal.html labels and buttons use Arial (web chrome, not the bid document); the signature image isn't shown on the page after signing, only in the download.
+  - A handful of hard-coded `#6b7a8d` greys on white inside the Bid Agent panel are below 4.5:1 contrast.
 - **Tom Skeffington's $9,169 exterior proposal is deliberately NOT in QuickBooks** — James asked to hold. There is no "Skeffington" customer there, and the connector's fuzzy search confidently offers three *wrong* Toms (McConkey 99.6%, Johnston, Needle). **Never trust `best_match` on a name that isn't an exact hit.**
 - **Most of James's estimates from the last 8–10 months live in past Claude chats**, not in QuickBooks or the app.
 
@@ -634,7 +665,7 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
 
 1. **Read this file, especially section 17.** A lot was cut from this app on purpose. Do not offer to rebuild it.
 2. The repo is the source of truth — `git log --oneline -30` shows recent work. Don't ask James to paste the HTML; read it.
-3. **Verify before you claim.** This app prices real jobs; a wrong number costs money. Drive the running app with Playwright — serve the folder, load `PaintPro-ZFold.html`, block `gstatic`/`googleapis`, and use a **380px** viewport for the Fold cover screen and **880px** unfolded.
+3. **Verify before you claim.** This app prices real jobs; a wrong number costs money. Serve the folder (`npx --yes http-server -p 8123 -s -c-1 . &`) and run **`node tests/regress.mjs`**; add a check there for anything you fix. Then drive the running app with Playwright yourself — load `PaintPro-ZFold.html`, block `gstatic`/`googleapis`, and use a **380px** viewport for the Fold cover screen and **880px** unfolded — and look at the screenshots.
 4. Deploy = commit to `main`; Netlify picks it up in ~60s. **Other sessions push to this repo too** — if a push is rejected, fetch and rebase onto `origin/main`. Never force over someone else's work.
 5. Tell James to pull changes with **⚙️ Settings → 🔄 Refresh App** (he cannot see a change until he does).
 
@@ -665,7 +696,9 @@ James cut these after using the app on real jobs. **Do not rebuild them, do not 
 
 ---
 
-*Last updated: September 23, 2026 — **Crown molding added (section 7.14):** $4.00/lf, James's own rate covering caulking and painting, charged per room on top of Trim rather than buried in the flat trim rate, with a one-tap fill from the room perimeter. The interior QuickBooks scope sentence also stopped promising minor wall repair on a job with no wall work. Earlier history below.*
+*Last updated: September 24, 2026 — **Six-reviewer audit and fixes.** Six reviewers ran the app in Playwright: James in the field, a first-time painter, a menu architect, the homeowner receiving the bid, a QA tester, and a mobile/accessibility designer. Shipped in seven verified batches: every copy of the bid now carries the same total (Share, Email, Save Client and the Pro Proposal were under it); three data-loss bugs (wall ids colliding after a reload, Start New Job overwriting another client's job, exterior section boxes keeping only the first digit); six wrong-number bugs (phantom railings after a mode switch, negatives subtracting money, "$2.00" rates saving $0, old jobs inheriting extras, stale extras boxes, extras-only jobs with no bid button); customer-facing text to the section 5 rules; the menu cut to one screen with retired-feature leaks plugged (voice opening APT, memos going to the retired Notes); the phone layout (tabs pin, bid prices on screen, one primary bid action, contrast, tap targets); and a shorter room card. Added `tests/regress.mjs`. Deferred items are listed in section 15. Earlier history below.*
+
+*Previously the same week: September 23, 2026 — **Crown molding added (section 7.14):** $4.00/lf, James's own rate covering caulking and painting, charged per room on top of Trim rather than buried in the flat trim rate, with a one-tap fill from the room perimeter. The interior QuickBooks scope sentence also stopped promising minor wall repair on a job with no wall work. Earlier history below.*
 
 *Previously the same day: **Cabinet rates set to James's own numbers:** $100 a door front and $40 a drawer front, each covering the full piece (off, sand, prime, two coats, rehang), and the cabinets-only QuickBooks scope sentence now names the bonding primer because he specified it. The $50 box/frame rate is still a placeholder. Earlier history below.*
 

@@ -341,6 +341,15 @@ const tr=await p.evaluate(()=>{
   return {rowShown, auto, typedLF:typed.trimLF, typedLab:+(typed.lab-off).toFixed(2), onlyValid:only.valid, onlyLab:+only.lab.toFixed(2)};
 });
 ok(tr.rowShown,'turning on Trim (Baseboard) shows a box to type the footage');
+const tv=await p.evaluate(()=>{
+  rooms.length=0; roomCount=0; document.getElementById('rooms-container').innerHTML=''; addRoom();
+  const r=rooms[0]; r.surfaces.trim=false; renderWalls(r);
+  const row=document.getElementById(r.id+'_trim_row'); const visible=row.offsetParent!==null && getComputedStyle(row).display!=='none';
+  const box=document.getElementById(r.id+'_trimLF'); box.value='30'; box.dispatchEvent(new Event('input',{bubbles:true}));
+  return {visible, on:r.surfaces.trim, btn:document.getElementById(r.id+'_st').classList.contains('on'), lf:calc(r).trimLF, valid:calc(r).valid};
+});
+ok(tv.visible,'baseboard box shows on a new room without tapping anything');
+ok(tv.on && tv.btn && tv.lf===30 && tv.valid,'typing 30 in the baseboard box turns Baseboard on and prices 30 ft');
 ok(tr.auto===52,'blank trim box uses the walls all the way around (52 ft)');
 ok(tr.typedLF===40 && tr.typedLab===140,'typed 40 ft of trim prices at 40 x $3.50 = $140 ('+tr.typedLab+')');
 ok(tr.onlyValid && tr.onlyLab===140,'a trim-only room with no walls still bids');

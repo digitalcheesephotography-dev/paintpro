@@ -3356,16 +3356,16 @@ function renderRoom(room, idx) {
       <!-- Trim footage. Blank = the walls measured all the way around, which
            is how trim was always priced; a typed number replaces it for a room
            where the baseboard stops at cabinets, a tub or an opening. -->
-      <div id="${room.id}_trim_row" style="display:${room.surfaces.trim?'':'none'};margin-bottom:12px">
+      <div id="${room.id}_trim_row" style="margin-bottom:12px">
         <div class="walls-header">
           <span class="walls-label">${isExt?'Trim':'Baseboard'} (linear ft)</span>
           <span class="walls-perimeter" id="${room.id}_trim_total"></span>
         </div>
         <input type="number" id="${room.id}_trimLF" value="${room.trimLF||''}" min="0" step="0.01"
           inputmode="decimal" placeholder="${room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0),0)||0}" aria-label="Linear feet of trim in this room"
-          oninput="updateField('${room.id}','trimLF',this.value)"
+          oninput="updateTrimLF('${room.id}',this.value)"
           class="deck-sec-input" style="width:100%"/>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4">Type the feet, or leave blank to use the walls all the way around.</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4">Type the feet and it's added. Or tap ${isExt?'Trim':'Baseboard'} above and leave this blank to use the walls all the way around.</div>
       </div>
       <!-- Doors and windows are counted room by room (James, Oct 2026) and
            added up in the Doors & Windows card, which keeps the price each. -->
@@ -4130,12 +4130,22 @@ function clearSurfaceNote(id) {
   if (wrap) wrap.style.display = 'none';
   markDirty();
 }
+// The baseboard box is always on the card (James could not find it behind the
+// toggle). Typing a footage turns Baseboard on, so the number is never ignored.
+function updateTrimLF(id, val) {
+  const r = rooms.find(r=>r.id===id); if (!r) return;
+  r.trimLF = val;
+  if (_pos(val) > 0 && !r.surfaces.trim) {
+    r.surfaces.trim = true;
+    document.getElementById(`${id}_st`)?.classList.add('on');
+  }
+  recalcRoom(id);
+}
 function toggleSurf(id, surf) {
   const r=rooms.find(r=>r.id===id); if(!r) return;
   r.surfaces[surf]=!r.surfaces[surf];
   const btnId = surf==='floor' ? `${id}_sf` : `${id}_s${surf[0]}`;
   document.getElementById(btnId)?.classList.toggle('on', r.surfaces[surf]);
-  if (surf === 'trim') { const tr = document.getElementById(`${id}_trim_row`); if (tr) tr.style.display = r.surfaces.trim ? '' : 'none'; }
   if (r.mode === 'exterior') {
     // Porch ceiling and deck are priced whenever they're measured (see calcExt),
     // so turning the toggle off must not hide a section that is still on the

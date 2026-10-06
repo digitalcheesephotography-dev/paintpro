@@ -393,6 +393,38 @@ ok(dw.roomTot==='$300.00','room card shows its own doors + windows price ('+dw.r
 ok(dw.legacy===7,'an older job\'s whole-job door count still adds on top (got '+dw.legacy+')');
 ok(dw.reload===7,'per-room doors survive a save and reload (got '+dw.reload+')');
 ok(dw.vb==='6','voice "six doors" goes on the open room (got '+dw.vb+')');
+// Closets (James, Oct 2026): walls, ceiling and baseboard inside each room's closets
+const cl=await p.evaluate(()=>{
+  switchMode('interior'); rooms.length=0; roomCount=0; document.getElementById('rooms-container').innerHTML='';
+  job={...JOB_DEFAULTS}; _syncJobInputs(); addRoom();
+  const r=rooms[0]; r.height='8'; r.name='Bedroom';
+  ['14','12','14','12'].forEach((f,i)=>r.walls.push({id:'cw'+i,ft:f,ht:''})); renderWalls(r);
+  const base=calc(r).lab;
+  addCloset(r.id); const id=r.closets[0].id;
+  const wBox=document.getElementById(id+'_l'); wBox.value='6'; wBox.dispatchEvent(new Event('input',{bubbles:true}));
+  const sameBox = document.getElementById(id+'_l')===wBox;   // not rebuilt while typing
+  document.getElementById(id+'_w').value='2'; updateCloset(r.id,id,'w','2');
+  const c1=calc(r), add=+(c1.lab-base).toFixed(2);
+  // walls 2*(6+2)*8=128sf*1.85=236.80, ceiling 12sf*1.65=19.80, baseboard 16lf*3.50=56 => 312.60
+  toggleClosetSurf(r.id,'ceiling'); const noCeil=+(calc(r).lab-base).toFixed(2);
+  toggleClosetSurf(r.id,'ceiling');
+  renderBid(); const bid=document.getElementById('bid-out').textContent;
+  const items=_proRoomItems(r), proSum=+items.reduce((a,i)=>a+i.amount,0).toFixed(2);
+  const snap=JSON.parse(JSON.stringify(getJobSnapshot())); applyJobData(snap);
+  const reload=+(calc(rooms[0]).lab-base).toFixed(2), boxBack=document.getElementById(rooms[0].closets[0].id+'_l')?.value;
+  // laser: width then depth
+  const r2=rooms[0]; addCloset(r2.id); const id2=r2.closets[1].id;
+  armClosetShot(r2.id,id2,'l'); applyMeasurement(5.2,'5.2 ft'); applyMeasurement(3,'3 ft');
+  const shot=[r2.closets[1].l, r2.closets[1].w];
+  return {add, sameBox, noCeil, bidSays:/Closet \(walls, ceiling, baseboard\)/.test(bid), proSum, lab:+c1.lab.toFixed(2), reload, boxBack, shot};
+});
+ok(cl.add===312.6,'a 6 x 2 closet at 8 ft adds walls $236.80 + ceiling $19.80 + baseboard $56 = $312.60 (got '+cl.add+')');
+ok(cl.sameBox,'typing a closet size does not rebuild the box being typed in');
+ok(cl.noCeil===292.8,'closet Ceiling button off takes the ceiling off (got '+cl.noCeil+')');
+ok(cl.bidSays,'bid lists "Closet (walls, ceiling, baseboard)" on the room');
+ok(cl.proSum===cl.lab,'proposal room lines add up to the bid with a closet ('+cl.proSum+' vs '+cl.lab+')');
+ok(cl.reload===312.6 && cl.boxBack==='6','closet survives a save and reload with its boxes filled');
+ok(+cl.shot[0]===5 && +cl.shot[1]===3,'laser shoots closet width then depth (got '+cl.shot.join(' x ')+')');
 
 console.log('5. Layout: no horizontal overflow, all tabs render');
 for (const w of [380,880]) {

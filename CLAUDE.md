@@ -355,6 +355,12 @@ Crown molding is charged by the **linear foot at its own rate**, separate from T
 
 **Verified Sep 23 2026** at 380px and 880px: a 14x12 room at 9 ft with walls + trim + crown prices walls $865.80, trim $182.00, crown $208.00 (52 lf perimeter, one-tap filled); a crown-only hallway is valid and bids; a `room.rates` override saved before crown existed still prices at the global rate, not $0; persistence survives reload; **Robin Caster exterior benchmark unchanged at 738 / 702 / 772 / 865, 2,541 sf siding, 3,077 sf grand, $576 railings, $345 treads** with `c.crown.total` 0 on every side.
 
+### 7.15 Closets - built (Oct 6 2026)
+Every interior room card has a **Closets (width x depth)** section: **+ Add Closet** adds a row (`room.closets = [{id, l:width, w:depth}]`, each with laser buttons that auto-advance width -> depth via `closetShotTarget`), and three closet buttons **Walls / Ceiling / Baseboard** (`room.closetSurf`, all on by default) choose what gets painted. Height is the room's ceiling height. Per closet: walls = 2(W+D) x H, ceiling = W x D, baseboard = 2(W+D) lf, all at the **room's own rates**. A 6x2 closet at 8 ft adds $236.80 + $19.80 + $56.00 = $312.60.
+- `closetCalc(room, r)` -> `{count, on:{walls,ceiling,trim}, lab, parts}`; `CLOSET_NONE` for exterior. Labor goes into the room's `lab`; closet sf counts in `totalSF`; gallons merge into the room's wall/ceiling/trim gallon counts so a closet doesn't round up a whole extra gallon. A closet-only room is `valid`.
+- Shows on the bid row and the proposal as "Closet (walls, ceiling, baseboard)" (`_closetLabel`), and in the QuickBooks per-room block. No door-opening deduction, the same as rooms.
+- Helpers: `addCloset`, `removeCloset`, `updateCloset` (updates labels only, never rebuilds the box being typed in), `toggleClosetSurf`, `renderClosets`, `armClosetShot`.
+
 ### 7.7 Backup & Restore
 - `buildBackup()` serializes all localStorage keys + IndexedDB photos into a JSON blob
 - `backupToDrive()` triggers a download of the backup JSON

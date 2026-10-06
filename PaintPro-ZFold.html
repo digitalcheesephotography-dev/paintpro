@@ -2854,6 +2854,28 @@ function applyMeasurement(feet, disp) {
     return;
   }
 
+  // Armed closet shot (width, then depth)
+  if (closetShotTarget) {
+    const croom = rooms.find(r=>r.id===closetShotTarget.roomId);
+    const sec   = croom?.closets?.find(s=>s.id===closetShotTarget.sectionId);
+    if (sec) {
+      sec[closetShotTarget.field] = shotFt(feet);
+      renderClosets(croom.id);
+      recalcRoom(croom.id);
+      markDirty();
+      showToast(`${disp} → Closet ${closetShotTarget.field==='l'?'Width':'Depth'} · ${croom.name}`);
+      if (closetShotTarget.field === 'l') {
+        closetShotTarget = {...closetShotTarget, field:'w'};
+        document.getElementById(`${sec.id}_w_shoot`)?.classList.add('active');
+        showToast('📐 Now shoot Closet Depth');
+        return;
+      }
+    }
+    document.querySelectorAll('.closet-shoot.active').forEach(b=>b.classList.remove('active'));
+    closetShotTarget = null;
+    return;
+  }
+
   // Armed pergola shot
   if (pergolaShotTarget) {
     const groom = rooms.find(r=>r.id===pergolaShotTarget.roomId);
@@ -2873,8 +2895,8 @@ function applyMeasurement(feet, disp) {
         return;
       }
     }
-    document.querySelectorAll('.pergola-shoot.active').forEach(b=>b.classList.remove('active'));
-    pergolaShotTarget = null;
+    document.querySelectorAll('.pergola-shoot.active, .closet-shoot.active').forEach(b=>b.classList.remove('active'));
+    pergolaShotTarget = null; closetShotTarget = null;
     return;
   }
 
@@ -3120,6 +3142,7 @@ function addRoom() {
   renderDeckSections(room.id);
   renderRailSections(room.id);
   renderPergolaSections(room.id);
+  renderClosets(room.id);
   renderAIPhotoStrip(room.id);
   refreshRoomSelect();
   rooms.forEach(r => { if(r.id!==id) setOpen(r.id,false); });
@@ -3169,6 +3192,7 @@ function renderRoom(room, idx) {
   const s2 = 'Ceiling';
   const s3 = isExt ? 'Deck'    : 'Floor';
   const s4 = isExt ? 'Trim'    : 'Baseboard';
+  const cs = room.closetSurf || CLOSET_SURF_DEFAULT;
 
   // Migrate old soffit field → soffitSections array
   if (!room.soffitSections) {
@@ -3385,6 +3409,20 @@ function renderRoom(room, idx) {
               oninput="updateField('${room.id}','winCount',this.value)"/></label>
         </div>
       </div>
+      ${isExt ? '' : `
+      <div id="${room.id}_closet_row" style="margin-bottom:12px">
+        <div class="walls-header">
+          <span class="walls-label">Closets (width × depth)</span>
+          <span class="walls-perimeter" id="${room.id}_closet_total"></span>
+        </div>
+        <div class="surface-row" id="${room.id}_closet_surf" style="display:${(room.closets||[]).length?'':'none'};margin-bottom:8px">
+          <button class="surf-btn${cs.walls?' on':''}" id="${room.id}_cs_walls" onclick="toggleClosetSurf('${room.id}','walls')" aria-label="Closet walls">Walls</button>
+          <button class="surf-btn${cs.ceiling?' on':''}" id="${room.id}_cs_ceiling" onclick="toggleClosetSurf('${room.id}','ceiling')" aria-label="Closet ceiling">Ceiling</button>
+          <button class="surf-btn${cs.trim?' on':''}" id="${room.id}_cs_trim" onclick="toggleClosetSurf('${room.id}','trim')" aria-label="Closet baseboard">Baseboard</button>
+        </div>
+        <div id="${room.id}_closet_sections"></div>
+        <button class="add-wall-btn" onclick="addCloset('${room.id}')">+ Add Closet</button>
+      </div>`}
 
       ${dimSection}
 
@@ -3507,6 +3545,7 @@ let deckShotTarget   = null;
 let soffitShotTarget = null;
 let porchShotTarget  = null; // {roomId, sectionId, field:'l'|'w'} for porch ceiling section shots
 let railShotTarget   = null; // {roomId, sectionId} for railing linear-foot shots
+let closetShotTarget = null; // {roomId, sectionId, field:'l'|'w'} for closet width/depth shots
 let pergolaShotTarget= null; // {roomId, sectionId, field:'l'|'w'} for pergola footprint shots
 const aiPhotoBatch = {}; // roomId → [{data: base64, type: 'image/jpeg'}]
 
@@ -3542,8 +3581,8 @@ function setReshootTarget(roomId, wallId) {
   soffitShotTarget = null;
   porchShotTarget = null;
   railShotTarget = null;
-  pergolaShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active').forEach(b=>b.classList.remove('active'));
+  pergolaShotTarget = null; closetShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active, .closet-shoot.active').forEach(b=>b.classList.remove('active'));
   if(reshootTarget && reshootTarget.roomId===roomId && reshootTarget.wallId===wallId) {
     // Toggle off
     reshootTarget = null;
@@ -3569,8 +3608,8 @@ function armWallHt(roomId, wallId) {
   soffitShotTarget = null;
   porchShotTarget = null;
   railShotTarget = null;
-  pergolaShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active').forEach(b=>b.classList.remove('active'));
+  pergolaShotTarget = null; closetShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active, .closet-shoot.active').forEach(b=>b.classList.remove('active'));
   if (wallHtTarget && wallHtTarget.roomId === roomId && wallHtTarget.wallId === wallId) {
     wallHtTarget = null; // toggle off
     showToast('Height shot cancelled — back to Next Wall', 'warn');
@@ -3591,8 +3630,8 @@ function armDimShot(roomId, field) {
   soffitShotTarget = null;
   porchShotTarget = null;
   railShotTarget = null;
-  pergolaShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active').forEach(b=>b.classList.remove('active'));
+  pergolaShotTarget = null; closetShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active, .closet-shoot.active').forEach(b=>b.classList.remove('active'));
   const idx = rooms.findIndex(r=>r.id===roomId);
   if (idx < 0) return;
   // Route the next shot to this room + field
@@ -3713,6 +3752,98 @@ function renderDeckSections(roomId) {
   if(totEl) totEl.textContent = total>0 ? `${total.toFixed(0)} sf total` : '';
 }
 // ── Pergola / arbor footprints (length × width) ─────
+// ── Closets (interior) ─────────────────────────────
+// A closet is width x depth at the room's ceiling height. Its walls, ceiling
+// and baseboard are priced at the room's own rates, switched by the three
+// closet buttons (all on by default). l = width, w = depth.
+const CLOSET_SURF_DEFAULT = { walls:true, ceiling:true, trim:true };
+function closetCalc(room, r) {
+  const list = room.closets || [];
+  const h = parseFloat(room.height) || 0;
+  const s = room.closetSurf || CLOSET_SURF_DEFAULT;
+  let wallSF = 0, ceilSF = 0, lf = 0, count = 0;
+  list.forEach(cl => {
+    const w = _pos(cl.l), d = _pos(cl.w); if (!(w > 0 || d > 0)) return;
+    count++; const per = 2 * (w + d);
+    wallSF += per * h; ceilSF += w * d; lf += per;
+  });
+  const on = { walls: s.walls ? wallSF : 0, ceiling: s.ceiling ? ceilSF : 0, trim: s.trim ? lf : 0 };
+  const lab = on.walls * r.walls + on.ceiling * r.ceiling + on.trim * r.trim;
+  const parts = [on.walls > 0 && 'walls', on.ceiling > 0 && 'ceiling', on.trim > 0 && 'baseboard'].filter(Boolean);
+  return { count, wallSF, ceilSF, lf, on, lab, parts };
+}
+const CLOSET_NONE = { count:0, wallSF:0, ceilSF:0, lf:0, on:{walls:0,ceiling:0,trim:0}, lab:0, parts:[] };
+function _closetLabel(cl) { return (cl.count > 1 ? cl.count + ' closets' : 'Closet') + ' (' + cl.parts.join(', ') + ')'; }
+function addCloset(roomId) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  if (!room.closets) room.closets = [];
+  room.closets.push({id:'cls_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), l:'', w:''});
+  renderClosets(roomId);
+  recalcRoom(roomId);
+  markDirty();
+}
+function removeCloset(roomId, sectionId) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  room.closets = (room.closets||[]).filter(s=>s.id!==sectionId);
+  renderClosets(roomId);
+  recalcRoom(roomId);
+  markDirty();
+}
+function updateCloset(roomId, sectionId, field, val) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  const sec = (room.closets||[]).find(s=>s.id===sectionId); if(!sec) return;
+  sec[field] = val;
+  _refreshSectionLabels(room, 'closets', 'closet_area_unused', '');   // row labels only - never rebuild a box being typed in
+  recalcRoom(roomId);
+  markDirty();
+}
+function toggleClosetSurf(roomId, key) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  room.closetSurf = { ...(room.closetSurf || CLOSET_SURF_DEFAULT) };
+  room.closetSurf[key] = !room.closetSurf[key];
+  document.getElementById(`${roomId}_cs_${key}`)?.classList.toggle('on', room.closetSurf[key]);
+  recalcRoom(roomId);
+  markDirty();
+}
+function renderClosets(roomId) {
+  const room = rooms.find(r=>r.id===roomId); if(!room) return;
+  const container = document.getElementById(`${roomId}_closet_sections`); if(!container) return;
+  const list = room.closets || [];
+  container.innerHTML = '';
+  list.forEach((sec, i) => {
+    const sf = (parseFloat(sec.l)||0) * (parseFloat(sec.w)||0);
+    const row = document.createElement('div');
+    row.className = 'deck-sec-row';
+    row.innerHTML = `
+      <span class="deck-sec-num">#${i+1}</span>
+      <div style="display:flex;align-items:center;gap:4px;flex:1">
+        <input type="number" id="${sec.id}_l" value="${sec.l||''}" min="0" step="0.01" inputmode="decimal"
+          placeholder="W ft" aria-label="Closet width" oninput="updateCloset('${roomId}','${sec.id}','l',this.value)" class="deck-sec-input"/>
+        <button class="deck-shoot closet-shoot" id="${sec.id}_l_shoot" onclick="armClosetShot('${roomId}','${sec.id}','l')" aria-label="Shoot closet width">📐</button>
+        <span style="color:var(--muted);font-size:12px">×</span>
+        <input type="number" id="${sec.id}_w" value="${sec.w||''}" min="0" step="0.01" inputmode="decimal"
+          placeholder="D ft" aria-label="Closet depth" oninput="updateCloset('${roomId}','${sec.id}','w',this.value)" class="deck-sec-input"/>
+        <button class="deck-shoot closet-shoot" id="${sec.id}_w_shoot" onclick="armClosetShot('${roomId}','${sec.id}','w')" aria-label="Shoot closet depth">📐</button>
+        <span class="deck-sec-sf">${sf>0?sf.toFixed(1)+' sf':''}</span>
+      </div>
+      <button class="wall-remove" onclick="removeCloset('${roomId}','${sec.id}')" aria-label="Remove closet">✕</button>`;
+    container.appendChild(row);
+  });
+  const surf = document.getElementById(`${roomId}_closet_surf`);
+  if (surf) surf.style.display = list.length ? '' : 'none';
+}
+function armClosetShot(roomId, sectionId, field) {
+  reshootTarget = null; wallHtTarget = null; deckShotTarget = null;
+  soffitShotTarget = null; porchShotTarget = null; railShotTarget = null; pergolaShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active, .closet-shoot.active').forEach(b=>b.classList.remove('active'));
+  if (closetShotTarget && closetShotTarget.sectionId===sectionId && closetShotTarget.field===field) {
+    closetShotTarget = null; showToast('Closet shot cancelled', 'warn'); return;
+  }
+  closetShotTarget = {roomId, sectionId, field};
+  document.getElementById(`${sectionId}_${field}_shoot`)?.classList.add('active');
+  showToast(`📐 Shoot closet ${field==='l'?'Width':'Depth'}`);
+}
+
 function addPergolaSection(roomId, l='', w='') {
   const room = rooms.find(r=>r.id===roomId); if(!room) return;
   if (!room.pergolaSections) room.pergolaSections = [];
@@ -3766,11 +3897,11 @@ function renderPergolaSections(roomId) {
   if(totEl) totEl.textContent = total>0 ? `${total.toFixed(0)} sf footprint` : '';
 }
 function armPergolaShot(roomId, sectionId, field) {
-  reshootTarget = null; wallHtTarget = null; deckShotTarget = null;
+  reshootTarget = null; wallHtTarget = null; deckShotTarget = null; closetShotTarget = null;
   soffitShotTarget = null; porchShotTarget = null; railShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active, .closet-shoot.active').forEach(b=>b.classList.remove('active'));
   if (pergolaShotTarget && pergolaShotTarget.sectionId===sectionId && pergolaShotTarget.field===field) {
-    pergolaShotTarget = null; showToast('Pergola shot cancelled', 'warn'); return;
+    pergolaShotTarget = null; closetShotTarget = null; showToast('Pergola shot cancelled', 'warn'); return;
   }
   pergolaShotTarget = {roomId, sectionId, field};
   document.getElementById(`${sectionId}_${field}_shoot`)?.classList.add('active');
@@ -3844,8 +3975,8 @@ function armRailShot(roomId, sectionId) {
   deckShotTarget = null;
   soffitShotTarget = null;
   porchShotTarget = null;
-  pergolaShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active').forEach(b=>b.classList.remove('active'));
+  pergolaShotTarget = null; closetShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active, .closet-shoot.active').forEach(b=>b.classList.remove('active'));
   if (railShotTarget && railShotTarget.sectionId===sectionId) {
     railShotTarget = null;
     showToast('Railing shot cancelled', 'warn');
@@ -3920,8 +4051,8 @@ function armSoffitShot(roomId, sectionId, field) {
   deckShotTarget = null;
   porchShotTarget = null;
   railShotTarget = null;
-  pergolaShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active').forEach(b=>b.classList.remove('active'));
+  pergolaShotTarget = null; closetShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active, .closet-shoot.active').forEach(b=>b.classList.remove('active'));
   if (soffitShotTarget && soffitShotTarget.sectionId===sectionId && soffitShotTarget.field===field) {
     soffitShotTarget = null;
     showToast('Ceiling shot cancelled', 'warn');
@@ -4014,8 +4145,8 @@ function renderPorchSections(roomId) {
 function armPorchShot(roomId, sectionId, field) {
   reshootTarget = null; wallHtTarget = null; deckShotTarget = null; soffitShotTarget = null;
   railShotTarget = null;
-  pergolaShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active').forEach(b=>b.classList.remove('active'));
+  pergolaShotTarget = null; closetShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active, .closet-shoot.active').forEach(b=>b.classList.remove('active'));
   if (porchShotTarget && porchShotTarget.sectionId===sectionId && porchShotTarget.field===field) {
     porchShotTarget = null; showToast('Porch ceiling shot cancelled', 'warn'); return;
   }
@@ -4030,8 +4161,8 @@ function armDeckShot(roomId, sectionId, field) {
   soffitShotTarget = null;
   porchShotTarget = null;
   railShotTarget = null;
-  pergolaShotTarget = null;
-  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active').forEach(b=>b.classList.remove('active'));
+  pergolaShotTarget = null; closetShotTarget = null;
+  document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active, .closet-shoot.active').forEach(b=>b.classList.remove('active'));
   if (deckShotTarget && deckShotTarget.sectionId===sectionId && deckShotTarget.field===field) {
     deckShotTarget = null;
     showToast('Deck shot cancelled', 'warn');
@@ -4329,7 +4460,7 @@ function calcExt(room) {
   // Porch ceiling is priced on measurement alone, so it has to count here too;
   // otherwise the side's labor was in the total but its row missing from the bid.
   const valid   = sidingSF>0 || soffitSF>0 || porchCeilSF>0 || deckSF>0 || pergolaSF>0 || (room.surfaces.trim && trimLF>0);
-  return {wallSF:sidingSF, floorSF:soffitSF+deckSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, cab:CAB_NONE, crown:CROWN_NONE, valid};
+  return {wallSF:sidingSF, floorSF:soffitSF+deckSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, cab:CAB_NONE, crown:CROWN_NONE, closet:CLOSET_NONE, valid};
 }
 
 function calc(room) {
@@ -4351,12 +4482,15 @@ function calc(room) {
   // sections follow. If James counted the pieces, they get painted.
   const cab = cabCalc(room, r);
   const crown = crownCalc(room, r);
+  const closet = closetCalc(room, r);
 
   const p      = PRODUCTS.find(x=>x.name===room.product) || PRODUCTS[0];
-  const gWall  = room.surfaces.walls   ? Math.ceil(wallSF*c/p.cov)  : 0;
-  const gCeil  = room.surfaces.ceiling ? Math.ceil(floorSF*c/p.cov) : 0;
+  // Closet surfaces join the room's own wall / ceiling / trim gallons so a
+  // small closet does not round up to a whole extra gallon by itself.
+  const gWall  = Math.ceil(((room.surfaces.walls   ? wallSF  : 0) + closet.on.walls)  *c/p.cov);
+  const gCeil  = Math.ceil(((room.surfaces.ceiling ? floorSF : 0) + closet.on.ceiling)*c/p.cov);
   const gFloor = room.surfaces.floor   ? Math.ceil(floorSF*c/p.cov) : 0;
-  const gTrim  = room.surfaces.trim    ? Math.ceil(trimLF*c/p.cov)  : 0;
+  const gTrim  = Math.ceil(((room.surfaces.trim    ? trimLF  : 0) + closet.on.trim)   *c/p.cov);
   const gCab   = cab.sf > 0 ? Math.ceil(cab.sf*CAB_SPRAY_FACTOR*c/p.cov) : 0;
   // Crown counts a linear foot as a square foot for coverage, the same
   // convention gTrim already uses for baseboard and casing.
@@ -4373,15 +4507,17 @@ function calc(room) {
             + (room.surfaces.floor   ? floorSF*r.floor   : 0)
             + (room.surfaces.trim    ? trimLF*r.trim     : 0)
             + crown.total
-            + cab.total;
+            + cab.total
+            + closet.lab;
 
   // Cabinet square footage is a coverage estimate for the gallon count, not a
   // measured surface, so it stays out of the sf shown on the bid.
-  const totalSF = (room.surfaces.walls?wallSF:0)+(room.surfaces.ceiling?floorSF:0)+(room.surfaces.floor?floorSF:0);
+  const totalSF = (room.surfaces.walls?wallSF:0)+(room.surfaces.ceiling?floorSF:0)+(room.surfaces.floor?floorSF:0)
+                + closet.on.walls + closet.on.ceiling;
   // A kitchen where only the cabinets are being painted is a whole job on its
   // own. Without this it measured 0 sf, failed `valid`, and dropped off the bid.
-  const valid   = wallSF>0 || floorSF>0 || cab.pieces>0 || crown.lf>0 || (room.surfaces.trim && trimLF>0);
-  return {wallSF, floorSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, cab, crown, valid};
+  const valid   = wallSF>0 || floorSF>0 || cab.pieces>0 || crown.lf>0 || (room.surfaces.trim && trimLF>0) || closet.lab>0;
+  return {wallSF, floorSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, cab, crown, closet, valid};
 }
 
 // ── Labor rate controls ──
@@ -4585,7 +4721,7 @@ function applyJobData(data) {
   // Re-render rooms
   const wrap = document.getElementById('rooms-container');
   if (wrap) wrap.innerHTML = '';
-  rooms.forEach((r, i) => { renderRoom(r, i); renderWalls(r); renderSoffitSections(r.id); renderPorchSections(r.id); renderDeckSections(r.id); renderRailSections(r.id); renderPergolaSections(r.id); renderAIPhotoStrip(r.id); renderRoomPhotoStrip(r.id); });
+  rooms.forEach((r, i) => { renderRoom(r, i); renderWalls(r); renderSoffitSections(r.id); renderPorchSections(r.id); renderDeckSections(r.id); renderRailSections(r.id); renderPergolaSections(r.id); renderClosets(r.id); renderAIPhotoStrip(r.id); renderRoomPhotoStrip(r.id); });
   _seedSectionCounters();
   refreshRoomSelect();
   bidScopeText = data.bidScopeText || '';
@@ -5490,6 +5626,8 @@ function paintRoomSummary(id) {
   if(cabTot) cabTot.textContent = c.cab.pieces>0 ? `${c.cab.pieces} pcs · ${fmt(c.cab.total)}` : '';
   const crownTot=document.getElementById(`${id}_crown_total`);
   if(crownTot) crownTot.textContent = c.crown.lf>0 ? `${c.crown.lf} lf · ${fmt(c.crown.total)}` : '';
+  const clTot=document.getElementById(`${id}_closet_total`);
+  if(clTot) clTot.textContent = c.closet.lab>0 ? fmt(c.closet.lab) : '';
   const dwTot=document.getElementById(`${id}_dw_total`);
   if(dwTot){ const d=_posInt(room.doorCount), w=_posInt(room.winCount);
     dwTot.textContent = (d||w) ? fmt(d*_pos(job.doorPrice) + w*_pos(job.winPrice)) : ''; }
@@ -5639,6 +5777,7 @@ function _bidAreaDesc(r, c) {
   if (c.cab.pieces > 0) {
     surfs = (surfs ? surfs + ', ' : '') + 'Cabinets (' + cabDesc(c.cab) + ')';
   }
+  if (c.closet.lab > 0) surfs = (surfs ? surfs + ', ' : '') + _closetLabel(c.closet);
   return surfs;
 }
 // "About the Product" for the bid, built from the paint actually specified on
@@ -6243,7 +6382,8 @@ function copyBidForQuickBooks(){
     // the scope in its place. Still no rate and no per-room price.
     const cb = doneCs[i].cab.pieces > 0 ? ' - ' + cabDesc(doneCs[i].cab) : '';
     const cr = doneCs[i].crown.lf > 0 ? ' - ' + _qbNum(doneCs[i].crown.lf) + ' lin ft crown molding' : '';
-    return '  ' + ((r.name||'').trim() || (isExt ? 'Side' : 'Room')) + sf + cr + cb;
+    const cl = doneCs[i].closet.lab > 0 ? ' - ' + _closetLabel(doneCs[i].closet).toLowerCase() : '';
+    return '  ' + ((r.name||'').trim() || (isExt ? 'Side' : 'Room')) + sf + cr + cb + cl;
   });
   const sideBlock = sideLines.length ? [(isExt ? 'Sides' : 'Rooms') + ' included:'].concat(sideLines) : [];
 
@@ -6616,6 +6756,8 @@ function _proRoomItems(room){
     if (crown.lf) push('Crown molding, caulked and painted (' + crown.lf + ' lin ft)', crown.total);
     const cab = cabCalc(room, r);
     if (cab.pieces) push('Cabinets (' + cabDesc(cab) + ')', cab.total);
+    const closet = closetCalc(room, r);
+    if (closet.lab) push(_closetLabel(closet), closet.lab);
   }
   return items;
 }

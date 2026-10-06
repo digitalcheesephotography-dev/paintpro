@@ -5554,6 +5554,8 @@ function _bidSurfLabel(key, mode) {
   // Exterior 'ceiling' toggle is the Porch Ceiling in the UI (not the soffit);
   // the soffit is a separate always-measured section added below.
   if (mode === 'exterior') return key==='walls'?'Siding':key==='ceiling'?'Porch Ceiling':key==='floor'?'Deck':'Trim';
+  // Interior trim is the baseboard (James, Oct 2026: the bid says so).
+  if (key === 'trim') return 'Baseboard Trim';
   return key[0].toUpperCase()+key.slice(1);
 }
 function _bidAreaDesc(r, c) {
@@ -6164,7 +6166,8 @@ function copyBidForQuickBooks(){
     }
   });
   const surf = (isExt ? ['siding','soffits','porch ceilings','decks','pergolas','trim']
-                      : ['walls','ceilings','floors','trim','crown molding','cabinets']).filter(s => hit[s]);
+                      : ['walls','ceilings','floors','trim','crown molding','cabinets']).filter(s => hit[s])
+                        .map(s => (!isExt && s === 'trim') ? 'baseboard trim' : s);
   const coats    = done.reduce((m,r)=>Math.max(m, parseInt(r.coats)||1), 1);
   const coatWord = ['','one full coat','two full coats','three full coats'][coats] || (coats + ' full coats');
   const prods = [];
@@ -6537,6 +6540,8 @@ function _proRoomItems(room){
   const items=[]; const push=(l,a)=>{ if(a>0) items.push({label:l, amount:Math.round(a*100)/100}); };
   const h = parseFloat(room.height)||0;
   const runLF = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0), 0);
+  // Typed trim footage wins over the wall run, exactly as calc() prices it.
+  const trimRun = _pos(room.trimLF) > 0 ? _pos(room.trimLF) : runLF;
   const runSF = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0)*(parseFloat(w.ht)||h), 0);
   if (room.mode === 'exterior') {
     const r = room.rates || extRates;
@@ -6553,14 +6558,14 @@ function _proRoomItems(room){
     push('Deck', deckSF*r.floor);
     push('Pergola', (room.pergolaSections||[]).reduce((a,s)=>a+(parseFloat(s.l)||0)*(parseFloat(s.w)||0),0)
                     * (r.pergola != null ? r.pergola : extRates.pergola));
-    if (room.surfaces.trim)    push('Trim', runLF*r.trim);
+    if (room.surfaces.trim)    push('Trim', trimRun*r.trim);
   } else {
     const r = room.rates || rates;
     const floorSF=(parseFloat(room.floorLength)||0)*(parseFloat(room.floorWidth)||0);
     if (room.surfaces.walls)   push('Walls', runSF*r.walls);
     if (room.surfaces.ceiling) push('Ceiling', floorSF*r.ceiling);
     if (room.surfaces.floor)   push('Floor', floorSF*r.floor);
-    if (room.surfaces.trim)    push('Trim', runLF*r.trim);
+    if (room.surfaces.trim)    push('Baseboard trim', trimRun*r.trim);
     // Measured/counted, not toggled - same rule calc() prices by, so the
     // client's itemized total can't come in under the bid.
     const crown = crownCalc(room, r);

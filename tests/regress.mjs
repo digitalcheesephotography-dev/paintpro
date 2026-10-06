@@ -344,6 +344,15 @@ ok(tr.rowShown,'turning on Trim shows a box to type the footage');
 ok(tr.auto===52,'blank trim box uses the walls all the way around (52 ft)');
 ok(tr.typedLF===40 && tr.typedLab===140,'typed 40 ft of trim prices at 40 x $3.50 = $140 ('+tr.typedLab+')');
 ok(tr.onlyValid && tr.onlyLab===140,'a trim-only room with no walls still bids');
+const tb=await p.evaluate(()=>{
+  const r=rooms[0]; ['14','12','14','12'].forEach((f,i)=>r.walls.push({id:'tb'+i,ft:f,ht:''})); recalcAll();
+  const c=calc(r); const items=_proRoomItems(r);
+  const proSum=items.reduce((a,i)=>a+i.amount,0);
+  renderBid(); const bid=document.getElementById('bid-out').textContent;
+  return {match:Math.abs(proSum-(c.lab - (c.crown.total||0) - (c.cab.total||0)))<0.01, labels:items.map(i=>i.label).join('|'), bidSays:/Baseboard Trim/.test(bid), bidOld:/\bTrim\b/.test(bid.replace(/Baseboard Trim/g,'').replace(/Cabinets\/Trim/g,''))};
+});
+ok(tb.match,'typed trim footage: proposal room lines add up to the bid ('+tb.labels+')');
+ok(tb.bidSays && !tb.bidOld,'interior bid says "Baseboard Trim", not just "Trim"');
 
 console.log('5. Layout: no horizontal overflow, all tabs render');
 for (const w of [380,880]) {

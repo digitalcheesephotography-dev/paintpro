@@ -422,6 +422,7 @@ Exterior: `front side` / `left side` / `name it garage` / `call it back`
 ---
 
 ## 9. Pricing defaults
+- Trim = $3.50/linear ft. Turning on **Trim** shows a **Baseboard / Trim (linear ft)** box (`room.trimLF`). Blank = the walls all the way around (how trim was always priced); a typed number replaces it. A trim-only room is `valid`. Added Oct 6 2026 because James had a Trim toggle with nowhere to type the footage.
 - Door = **$75 each**
 - Window = **$50 each**
 - Crown molding = **$4.00/linear ft** (James's own rate — covers caulking and painting), charged on top of Trim (see 7.14)

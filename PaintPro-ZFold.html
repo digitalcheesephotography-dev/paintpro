@@ -3106,7 +3106,7 @@ function addRoom() {
         surfaces:defSurf,
         product: extProduct, coats:defCoats, rates:null, open:true, mode:'exterior', photos:[] }
     : { id, name, walls:[], height:defHt, floorLength:'', floorWidth:'',
-        crownLF:'', cabDoors:'', cabDrawers:'', cabBoxes:'',
+        trimLF:'', crownLF:'', cabDoors:'', cabDrawers:'', cabBoxes:'',
         surfaces:defSurf,
         product: PRODUCTS[0].name, coats:defCoats, rates:null, open:true, photos:[] };
   rooms.push(room);
@@ -3348,6 +3348,20 @@ function renderRoom(room, idx) {
         <button class="surf-btn${room.surfaces.ceiling?' on':''}" id="${room.id}_sc" onclick="toggleSurf('${room.id}','ceiling')" aria-label="Toggle ${isExt?'Porch Ceiling':'Ceiling'}">${isExt?'Porch Ceil':'Ceiling'}</button>
         <button class="surf-btn${room.surfaces.floor?' on':''}" id="${room.id}_sf" onclick="toggleSurf('${room.id}','floor')" aria-label="Toggle ${s3}">${s3}</button>
         <button class="surf-btn${room.surfaces.trim?' on':''}" id="${room.id}_st" onclick="toggleSurf('${room.id}','trim')" aria-label="Toggle trim">${s4}</button>
+      </div>
+      <!-- Trim footage. Blank = the walls measured all the way around, which
+           is how trim was always priced; a typed number replaces it for a room
+           where the baseboard stops at cabinets, a tub or an opening. -->
+      <div id="${room.id}_trim_row" style="display:${room.surfaces.trim?'':'none'};margin-bottom:12px">
+        <div class="walls-header">
+          <span class="walls-label">${isExt?'Trim':'Baseboard / Trim'} (linear ft)</span>
+          <span class="walls-perimeter" id="${room.id}_trim_total"></span>
+        </div>
+        <input type="number" id="${room.id}_trimLF" value="${room.trimLF||''}" min="0" step="0.01"
+          inputmode="decimal" placeholder="${room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0),0)||0}" aria-label="Linear feet of trim in this room"
+          oninput="updateField('${room.id}','trimLF',this.value)"
+          class="deck-sec-input" style="width:100%"/>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4">Type the feet, or leave blank to use the walls all the way around.</div>
       </div>
 
       ${dimSection}
@@ -4099,6 +4113,7 @@ function toggleSurf(id, surf) {
   r.surfaces[surf]=!r.surfaces[surf];
   const btnId = surf==='floor' ? `${id}_sf` : `${id}_s${surf[0]}`;
   document.getElementById(btnId)?.classList.toggle('on', r.surfaces[surf]);
+  if (surf === 'trim') { const tr = document.getElementById(`${id}_trim_row`); if (tr) tr.style.display = r.surfaces.trim ? '' : 'none'; }
   if (r.mode === 'exterior') {
     // Porch ceiling and deck are priced whenever they're measured (see calcExt),
     // so turning the toggle off must not hide a section that is still on the
@@ -4246,7 +4261,7 @@ function calcExt(room) {
   const c        = Number.isFinite(parseInt(room.coats)) ? parseInt(room.coats) : 1;
   // Each siding run can override the side height (gables, walk-out basements)
   const sidingSF = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0)*(parseFloat(w.ht)||h), 0);
-  const trimLF   = perimeter;
+  const trimLF   = _pos(room.trimLF) > 0 ? _pos(room.trimLF) : perimeter;
 
   const p     = PRODUCTS.find(x=>x.name===room.product) || PRODUCTS[4] || PRODUCTS[0];
   const gSid  = room.surfaces.walls ? Math.ceil(sidingSF*c/p.cov) : 0;
@@ -4281,7 +4296,7 @@ function calcExt(room) {
   const totalSF = (room.surfaces.walls?sidingSF:0)+soffitSF+porchCeilSF+deckSF+pergolaSF;
   // Porch ceiling is priced on measurement alone, so it has to count here too;
   // otherwise the side's labor was in the total but its row missing from the bid.
-  const valid   = sidingSF>0 || soffitSF>0 || porchCeilSF>0 || deckSF>0 || pergolaSF>0;
+  const valid   = sidingSF>0 || soffitSF>0 || porchCeilSF>0 || deckSF>0 || pergolaSF>0 || (room.surfaces.trim && trimLF>0);
   return {wallSF:sidingSF, floorSF:soffitSF+deckSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, cab:CAB_NONE, crown:CROWN_NONE, valid};
 }
 
@@ -4297,7 +4312,7 @@ function calc(room) {
   // vaulted sections) — blank per-wall height falls back to the room height.
   const wallSF  = room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0)*(parseFloat(w.ht)||h), 0);
   const floorSF = fL * fW;         // ceiling/floor: length × width
-  const trimLF  = perimeter;
+  const trimLF  = _pos(room.trimLF) > 0 ? _pos(room.trimLF) : perimeter;
 
   const r   = room.rates || rates;
   // Counted, never gated on a surface toggle - the same rule the exterior
@@ -4333,7 +4348,7 @@ function calc(room) {
   const totalSF = (room.surfaces.walls?wallSF:0)+(room.surfaces.ceiling?floorSF:0)+(room.surfaces.floor?floorSF:0);
   // A kitchen where only the cabinets are being painted is a whole job on its
   // own. Without this it measured 0 sf, failed `valid`, and dropped off the bid.
-  const valid   = wallSF>0 || floorSF>0 || cab.pieces>0 || crown.lf>0;
+  const valid   = wallSF>0 || floorSF>0 || cab.pieces>0 || crown.lf>0 || (room.surfaces.trim && trimLF>0);
   return {wallSF, floorSF, trimLF, gal, mat, lab, total:mat+lab, totalSF, cab, crown, valid};
 }
 
@@ -5443,6 +5458,10 @@ function paintRoomSummary(id) {
   if(cabTot) cabTot.textContent = c.cab.pieces>0 ? `${c.cab.pieces} pcs · ${fmt(c.cab.total)}` : '';
   const crownTot=document.getElementById(`${id}_crown_total`);
   if(crownTot) crownTot.textContent = c.crown.lf>0 ? `${c.crown.lf} lf · ${fmt(c.crown.total)}` : '';
+  const trimTot=document.getElementById(`${id}_trim_total`);
+  if(trimTot) trimTot.textContent = room.surfaces.trim && c.trimLF>0 ? `${+c.trimLF.toFixed(1)} lf · ${fmt(c.trimLF*((room.rates||modeRates(room.mode)).trim||0))}` : '';
+  const trimBox=document.getElementById(`${id}_trimLF`);
+  if(trimBox) trimBox.placeholder = String(+room.walls.reduce((a,w)=>a+(parseFloat(w.ft)||0),0).toFixed(1) || 0);
 
   if(c.valid){
     // Mini summary inside card

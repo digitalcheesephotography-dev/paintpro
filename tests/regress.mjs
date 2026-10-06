@@ -355,6 +355,35 @@ ok(tb.match,'typed trim footage: proposal room lines add up to the bid ('+tb.lab
 ok(tb.bidSays && !tb.bidOld,'interior bid says "Baseboard Trim", not just "Trim"');
 const btn=await p.evaluate(()=>({int:document.getElementById(rooms[0].id+'_st').textContent.trim()}));
 ok(btn.int==='Baseboard','interior trim button reads "Baseboard" (got '+btn.int+')');
+// Doors & windows per room (James, Oct 2026), added up at the end
+const dw=await p.evaluate(()=>{
+  switchMode('interior'); rooms.length=0; roomCount=0; document.getElementById('rooms-container').innerHTML='';
+  job={...JOB_DEFAULTS}; _syncJobInputs();
+  addRoom(); addRoom();
+  const a=rooms[0], b=rooms[1];
+  ['14','12','14','12'].forEach((f,i)=>{a.walls.push({id:'da'+i,ft:f,ht:''}); b.walls.push({id:'db'+i,ft:f,ht:''});});
+  updateField(a.id,'doorCount','2'); updateField(a.id,'winCount','3'); updateField(b.id,'doorCount','1');
+  const ex=jobExtras();
+  const hasBoxes=!!document.getElementById(a.id+'_doorCount') && !!document.getElementById(b.id+'_winCount');
+  const card=document.getElementById('job-door-rooms').textContent, legacyHidden=document.getElementById('job-door-count').style.display==='none';
+  const roomTot=document.getElementById(a.id+'_dw_total').textContent;
+  // old job with a whole-job count still totals the same, plus the rooms
+  job.doorCount='4'; const ex2=jobExtras();
+  // survives save + reload of the snapshot
+  const snap=JSON.parse(JSON.stringify(getJobSnapshot())); job.doorCount='';
+  applyJobData(snap); const ex3=jobExtras();
+  // voice "six doors" lands on the open room
+  setOpen(rooms[1].id, true); processVoiceCommand('six doors');
+  const vb=rooms[1].doorCount;
+  return {hasBoxes, dc:ex.doorCount, wc:ex.winCount, dt:ex.doorTotal, wt:ex.winTotal, card, legacyHidden, roomTot, legacy:ex2.doorCount, reload:ex3.doorCount, vb};
+});
+ok(dw.hasBoxes,'every room card has its own Doors and Windows boxes');
+ok(dw.dc===3 && dw.wc===3 && dw.dt===225 && dw.wt===150,'rooms add up: 3 doors $225, 3 windows $150 (got '+dw.dc+'/'+dw.wc+' $'+dw.dt+'/$'+dw.wt+')');
+ok(/3 \(rooms\)/.test(dw.card) && dw.legacyHidden,'whole-job card shows the rooms\' total instead of a box to retype ('+dw.card+')');
+ok(dw.roomTot==='$300.00','room card shows its own doors + windows price ('+dw.roomTot+')');
+ok(dw.legacy===7,'an older job\'s whole-job door count still adds on top (got '+dw.legacy+')');
+ok(dw.reload===7,'per-room doors survive a save and reload (got '+dw.reload+')');
+ok(dw.vb==='6','voice "six doors" goes on the open room (got '+dw.vb+')');
 
 console.log('5. Layout: no horizontal overflow, all tabs render');
 for (const w of [380,880]) {

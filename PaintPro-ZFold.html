@@ -549,10 +549,11 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 
     <!-- DOORS & WINDOWS (whole job) -->
     <div id="dw-card" style="background:var(--card);border:1.5px solid var(--border);border-radius:var(--r);padding:14px;margin-top:14px;margin-bottom:14px">
-      <div style="font-family:var(--head);font-size:14px;color:var(--text);letter-spacing:1.5px;margin-bottom:10px">🚪 🪟 DOORS &amp; WINDOWS (whole job)</div>
+      <div style="font-family:var(--head);font-size:14px;color:var(--text);letter-spacing:1.5px;margin-bottom:10px">🚪 🪟 DOORS &amp; WINDOWS (all rooms, price each)</div>
 
       <div style="display:grid;grid-template-columns:80px 1fr auto 1fr auto;gap:6px;align-items:center;margin-bottom:8px">
         <div style="font-size:13px;font-weight:700;color:var(--text)">🚪 Doors</div>
+        <span id="job-door-rooms" class="job-sides-lf"></span>
         <input type="number" id="job-door-count" min="0" inputmode="numeric" placeholder="0"
           aria-label="Door count"
           oninput="updateJobField('doorCount',this.value)"
@@ -567,6 +568,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 
       <div style="display:grid;grid-template-columns:80px 1fr auto 1fr auto;gap:6px;align-items:center">
         <div style="font-size:13px;font-weight:700;color:var(--text)">🪟 Windows</div>
+        <span id="job-win-rooms" class="job-sides-lf"></span>
         <input type="number" id="job-win-count" min="0" inputmode="numeric" placeholder="0"
           aria-label="Window count"
           oninput="updateJobField('winCount',this.value)"
@@ -1870,9 +1872,11 @@ function updateJobField(key, val) {
 }
 
 function jobExtras() {
-  const dc  = _posInt(job.doorCount);
+  // Doors and windows are counted per room. The whole-job count boxes still
+  // add on top, so a job saved before this totals exactly as it did.
+  const dc  = _posInt(job.doorCount) + rooms.reduce((a,r)=>a+_posInt(r.doorCount),0);
   const dp  = _pos(job.doorPrice);
-  const wc  = _posInt(job.winCount);
+  const wc  = _posInt(job.winCount)  + rooms.reduce((a,r)=>a+_posInt(r.winCount),0);
   const wp  = _pos(job.winPrice);
   const sc  = _posInt(job.shutterCount);
   const sp  = _pos(job.shutterPrice);
@@ -3106,7 +3110,7 @@ function addRoom() {
         surfaces:defSurf,
         product: extProduct, coats:defCoats, rates:null, open:true, mode:'exterior', photos:[] }
     : { id, name, walls:[], height:defHt, floorLength:'', floorWidth:'',
-        trimLF:'', crownLF:'', cabDoors:'', cabDrawers:'', cabBoxes:'',
+        trimLF:'', doorCount:'', winCount:'', crownLF:'', cabDoors:'', cabDrawers:'', cabBoxes:'',
         surfaces:defSurf,
         product: PRODUCTS[0].name, coats:defCoats, rates:null, open:true, photos:[] };
   rooms.push(room);
@@ -3362,6 +3366,24 @@ function renderRoom(room, idx) {
           oninput="updateField('${room.id}','trimLF',this.value)"
           class="deck-sec-input" style="width:100%"/>
         <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4">Type the feet, or leave blank to use the walls all the way around.</div>
+      </div>
+      <!-- Doors and windows are counted room by room (James, Oct 2026) and
+           added up in the Doors & Windows card, which keeps the price each. -->
+      <div id="${room.id}_dw_row" style="margin-bottom:12px">
+        <div class="walls-header">
+          <span class="walls-label">Doors &amp; Windows ${isExt?'on this side':'in this room'}</span>
+          <span class="walls-perimeter" id="${room.id}_dw_total"></span>
+        </div>
+        <div class="cab-grid">
+          <label class="field"><span>🚪 Doors</span>
+            <input type="number" id="${room.id}_doorCount" value="${room.doorCount||''}" min="0" step="1"
+              inputmode="numeric" placeholder="0" aria-label="Doors ${isExt?'on this side':'in this room'}"
+              oninput="updateField('${room.id}','doorCount',this.value)"/></label>
+          <label class="field"><span>🪟 Windows</span>
+            <input type="number" id="${room.id}_winCount" value="${room.winCount||''}" min="0" step="1"
+              inputmode="numeric" placeholder="0" aria-label="Windows ${isExt?'on this side':'in this room'}"
+              oninput="updateField('${room.id}','winCount',this.value)"/></label>
+        </div>
       </div>
 
       ${dimSection}
@@ -5458,6 +5480,9 @@ function paintRoomSummary(id) {
   if(cabTot) cabTot.textContent = c.cab.pieces>0 ? `${c.cab.pieces} pcs · ${fmt(c.cab.total)}` : '';
   const crownTot=document.getElementById(`${id}_crown_total`);
   if(crownTot) crownTot.textContent = c.crown.lf>0 ? `${c.crown.lf} lf · ${fmt(c.crown.total)}` : '';
+  const dwTot=document.getElementById(`${id}_dw_total`);
+  if(dwTot){ const d=_posInt(room.doorCount), w=_posInt(room.winCount);
+    dwTot.textContent = (d||w) ? fmt(d*_pos(job.doorPrice) + w*_pos(job.winPrice)) : ''; }
   const trimTot=document.getElementById(`${id}_trim_total`);
   if(trimTot) trimTot.textContent = room.surfaces.trim && c.trimLF>0 ? `${+c.trimLF.toFixed(1)} lf · ${fmt(c.trimLF*((room.rates||modeRates(room.mode)).trim||0))}` : '';
   const trimBox=document.getElementById(`${id}_trimLF`);
@@ -5513,6 +5538,15 @@ function recalcAll() {
   // a $320 railing). The $/lf and $/step boxes stay: they set the price.
   const sideLF = rooms.reduce((a,r)=>a+(r.railSections||[]).reduce((t,x)=>t+_pos(x.lf),0),0);
   const sideTr = rooms.reduce((a,r)=>a+_posInt(r.treadCount),0);
+  const roomDoors = rooms.reduce((a,r)=>a+_posInt(r.doorCount),0);
+  const roomWins  = rooms.reduce((a,r)=>a+_posInt(r.winCount),0);
+  const roomWord  = estimatorMode === 'exterior' ? 'sides' : 'rooms';
+  [['job-door-count','job-door-rooms',_posInt(job.doorCount),roomDoors],['job-win-count','job-win-rooms',_posInt(job.winCount),roomWins]]
+    .forEach(([inId,spId,legacy,side]) => {
+      const inp = document.getElementById(inId), sp = document.getElementById(spId);
+      if (inp && document.activeElement !== inp) inp.style.display = legacy > 0 ? '' : 'none';
+      if (sp) { sp.style.display = legacy > 0 ? 'none' : ''; sp.textContent = side > 0 ? side + ' (' + roomWord + ')' : 'in each ' + roomWord.slice(0,-1); }
+    });
   [['job-rail-lf','job-rail-sides',_pos(job.railLF),sideLF,' lf'],['job-tread-count','job-tread-sides',_posInt(job.treadCount),sideTr,'']]
     .forEach(([inId,spId,legacy,side,unit]) => {
       const inp = document.getElementById(inId), sp = document.getElementById(spId);
@@ -7920,8 +7954,14 @@ function applyAIRoomResult(roomId, json, toastPrefix, quiet=false) {
       filled.push(`${newN} ${labelMap[field]||field.replace('Count','')}${newN>1?'s':''}`);
     }
   };
-  setJobCount('doorCount',    'job-door-count',    json.doors);
-  setJobCount('winCount',     'job-win-count',     json.windows);
+  // Doors and windows now live on the room, so a re-scan simply replaces them.
+  [['doorCount', json.doors, 'door'], ['winCount', json.windows, 'window']].forEach(([f, v, w]) => {
+    if (v === undefined || v === null || v === '') return;
+    const n = Math.max(0, parseInt(v) || 0);
+    room[f] = n ? String(n) : '';
+    const el = document.getElementById(`${roomId}_${f}`); if (el) el.value = room[f];
+    if (n > 0) filled.push(`${n} ${w}${n>1?'s':''}`);
+  });
   setJobCount('shutterCount', 'job-shutter-count', json.shutters);
   recalcRoom(roomId);
   markDirty();
@@ -10186,9 +10226,12 @@ function processVoiceCommand(transcript, measureOnly = false) {
     if (n !== null && n >= 0 && n < 1000) {
       const count = Math.round(n);
       if (!measureOnly) switchTab('estimate');
-      document.getElementById('job-door-count').value = count;
-      updateJobField('doorCount', String(count));
-      return showToast(`🚪 ${count} door${count===1?'':'s'}`);
+      const oi = rooms.findIndex(r => r.open);
+      const vr = rooms[oi >= 0 ? oi : (parseInt(document.getElementById('target-room')?.value) || 0)];
+      if (!vr) return;
+      const box = document.getElementById(`${vr.id}_doorCount`); if (box) box.value = count;
+      updateField(vr.id, 'doorCount', String(count)); markDirty();
+      return showToast(`🚪 ${count} door${count===1?'':'s'} · ${vr.name}`);
     }
   }
   const winMatch = dwText.match(/^windows?\s+(.+)$/i) || dwText.match(/^(.+?)\s+windows?$/i);
@@ -10197,9 +10240,12 @@ function processVoiceCommand(transcript, measureOnly = false) {
     if (n !== null && n >= 0 && n < 1000) {
       const count = Math.round(n);
       if (!measureOnly) switchTab('estimate');
-      document.getElementById('job-win-count').value = count;
-      updateJobField('winCount', String(count));
-      return showToast(`🪟 ${count} window${count===1?'':'s'}`);
+      const oi = rooms.findIndex(r => r.open);
+      const vr = rooms[oi >= 0 ? oi : (parseInt(document.getElementById('target-room')?.value) || 0)];
+      if (!vr) return;
+      const box = document.getElementById(`${vr.id}_winCount`); if (box) box.value = count;
+      updateField(vr.id, 'winCount', String(count)); markDirty();
+      return showToast(`🪟 ${count} window${count===1?'':'s'} · ${vr.name}`);
     }
   }
 

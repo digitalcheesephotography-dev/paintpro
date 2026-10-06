@@ -207,7 +207,7 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 3. **💲 Labor Rates card** (collapsible, whole-job default $/sf — see section 7.1)
 4. Room cards (each: name, walls with an "add every wall" hint and a two-wall warning, height with an inline 📐, surface toggles, **＋ Crown molding / Cabinets** fold (opens by itself when the room has any), product, coats, photos, **✓ DONE — NEXT ROOM** button, "Different prices for this room" override). On the folded screen the price badge sits on its own line under the room name.
 5. `+ ADD ROOM / AREA` button
-6. **🚪 🪟 Doors & Windows card** (whole-job, not per-room)
+6. **🚪 🪟 Doors & Windows card** - counts are entered **on each room card** (`room.doorCount` / `room.winCount`, Oct 6 2026, James: "too complicated to put the numbers in all at the end"); this card adds them up ("3 (rooms)") and holds the **price each**. `jobExtras()` sums the rooms **plus** the old whole-job count, whose box only shows for an older job that still has a number in it (same pattern as railings). Voice "six doors" and the AI photo scan set the open room's count
 7. Notes textarea
 8. **● Save indicator** (`#save-indicator`) — shows last-save time
 9. Materials/Labor/Total totals strip (auto-shows when there's data)
@@ -408,7 +408,7 @@ Interior: `name room kitchen` / `call this room master bedroom` / `room name liv
 Exterior: `front side` / `left side` / `name it garage` / `call it back`
 
 ### Other commands
-- Doors: `six doors` / `doors six` / `add seventeen doors`
+- Doors: `six doors` / `doors six` / `add seventeen doors` (sets the open room's count)
 - Windows: `eight windows` / `put twelve windows`
 - Navigation: `estimator` / `clients` / `materials` (the `projects`, `notes` and `apt` / `pricing` routes were removed; "pricing" used to open the retired APT screen)
 - Add new: `add room` / `add client` / `add material`

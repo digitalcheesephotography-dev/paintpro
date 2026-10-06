@@ -108,6 +108,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .room-body{display:none;padding:0 16px 16px}
 .room-card.open .room-body{display:block}
 .surface-row{display:flex;gap:8px;margin-bottom:12px}
+.laser-target{border-color:var(--blue)!important;box-shadow:0 0 0 2px var(--blue)!important}
 .closet-surf .surf-btn{line-height:1.1;padding-left:4px;padding-right:4px}
 .surf-btn{flex:1;height:46px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;text-transform:capitalize;letter-spacing:.5px;transition:all .15s}
 .surf-btn.on{border-color:var(--blue);background:#162535;color:var(--blue)}
@@ -2827,6 +2828,25 @@ function shotFt(feet) { return String(Math.round(feet)); }
 function applyMeasurement(feet, disp) {
   speakMeasurement(feet);
   document.getElementById('last-reading').textContent = disp;
+  // A box James tapped wins over everything: the reading goes into THAT box
+  // instead of adding a wall (Oct 2026). One shot per tap, except a
+  // width/length box hands the next shot to its partner (closet W -> D).
+  if (boxShotTarget) {
+    const el = document.getElementById(boxShotTarget);
+    if (el && document.body.contains(el)) {
+      el.value = shotFt(feet);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.classList.remove('bt-flash'); void el.offsetWidth; el.classList.add('bt-flash'); setTimeout(()=>el.classList.remove('bt-flash'),900);
+      if (document.activeElement === el) el.blur();
+      const label = _shotBoxName(el);
+      const next = /_l$/.test(el.id) ? document.getElementById(el.id.replace(/_l$/, '_w')) : null;
+      markDirty();
+      if (next && !next.value) { _setBoxTarget(next.id); showToast(`${disp} → ${label} · now shoot ${_shotBoxName(next)}`); }
+      else { _setBoxTarget(null); showToast(`${disp} → ${label}`); }
+      return;
+    }
+    _setBoxTarget(null);
+  }
   // A laser reading means hands on the laser, not the keyboard: drop focus
   // so the phone keyboard closes instead of covering the next measurement.
   const _ae = document.activeElement;
@@ -3559,6 +3579,36 @@ let deckShotTarget   = null;
 let soffitShotTarget = null;
 let porchShotTarget  = null; // {roomId, sectionId, field:'l'|'w'} for porch ceiling section shots
 let railShotTarget   = null; // {roomId, sectionId} for railing linear-foot shots
+// Tap a measurement box and the next laser reading fills that box (James,
+// Oct 2026: "when I click in there the tape measure measures those numbers and
+// stops adding walls"). Cleared by the shot, by tapping a non-measurement box,
+// or by pressing any 📐 button.
+let boxShotTarget = null;
+const _SHOT_BOX_RX = /_(ft|ht|l|w|lf|height|floorLength|floorWidth|trimLF|crownLF)$/;
+function _isShotBox(el) {
+  return !!(el && el.tagName === 'INPUT' && el.type === 'number' && el.id && _SHOT_BOX_RX.test(el.id) && el.closest('#rooms-container'));
+}
+function _shotBoxName(el) {
+  return el.getAttribute('aria-label') || el.closest('label')?.querySelector('span')?.textContent?.trim() || el.placeholder || 'box';
+}
+function _setBoxTarget(id) {
+  document.querySelectorAll('.laser-target').forEach(e => e.classList.remove('laser-target'));
+  boxShotTarget = id || null;
+  if (id) document.getElementById(id)?.classList.add('laser-target');
+}
+document.addEventListener('focusin', e => {
+  if (_isShotBox(e.target)) {
+    reshootTarget = null; wallHtTarget = null; deckShotTarget = null; soffitShotTarget = null;
+    porchShotTarget = null; railShotTarget = null; pergolaShotTarget = null; closetShotTarget = null;
+    document.querySelectorAll('.wall-reshoot.active, .dim-shoot.active, .deck-shoot.active, .soffit-shoot.active, .porch-shoot.active, .rail-shoot.active, .pergola-shoot.active, .closet-shoot.active').forEach(b=>b.classList.remove('active'));
+    _setBoxTarget(e.target.id);
+  } else if (e.target.matches && e.target.matches('input, textarea, select')) {
+    _setBoxTarget(null);
+  }
+});
+document.addEventListener('click', e => {
+  if (e.target.closest && e.target.closest('.dim-shoot, .deck-shoot, .wall-reshoot, .soffit-shoot, .porch-shoot, .rail-shoot, .pergola-shoot, .closet-shoot')) _setBoxTarget(null);
+}, true);
 let closetShotTarget = null; // {roomId, sectionId, field:'l'|'w'} for closet width/depth shots
 let pergolaShotTarget= null; // {roomId, sectionId, field:'l'|'w'} for pergola footprint shots
 const aiPhotoBatch = {}; // roomId → [{data: base64, type: 'image/jpeg'}]

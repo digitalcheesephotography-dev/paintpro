@@ -264,6 +264,7 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 - `setReshootTarget(roomId, wallId)` arms a specific wall for re-shoot
 - `armDimShot(roomId, field)` arms the Length or Width field for a shoot
 - Every measurable field should have its own 📐 shoot button (not just the dropdown)
+- **Tap a box, the laser fills that box** (Oct 6 2026, James: "when I click in there the tape measure measures those numbers and stops adding walls"). Tapping any measurement box on a room card (wall width/height, room height, footprint, baseboard, crown, deck/soffit/porch/pergola/closet sections, railing runs: ids matching `_SHOT_BOX_RX`) makes it `boxShotTarget`, outlined blue (`.laser-target`). The next reading goes into that box via its own `input` event, the keyboard closes, and the laser returns to adding walls; a `_l` box hands the next shot to its `_w` partner (closet width -> depth). Tapping a non-measurement box or pressing any 📐 button clears it. Checked first in `applyMeasurement`, ahead of every armed target.
 - **A laser reading never opens the keyboard.** `applyMeasurement` blurs any focused box first, and `addWall` only focuses the new wall box for a hand-tapped "+ Add Wall" (no value passed). Focusing after every shot covered the screen with the keyboard between measurements.
 
 ### 7.6 Auto-Print Hub — ⚠️ REMOVED FROM THE UI (see section 17)

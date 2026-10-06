@@ -422,6 +422,36 @@ const fresh=await p.evaluate(()=>{ rooms.length=0; roomCount=0; document.getElem
   const vis=x=>{const e=document.getElementById(x); return !!e && e.offsetParent!==null;};
   return vis(id+'_cs_walls') && vis(id+'_cs_ceiling') && vis(id+'_cs_trim') && !!document.querySelector('#'+id+'_closet_sections input') && vis(id+'_closetDoors') && calc(rooms[0]).closet.lab===0; });
 ok(fresh,'a new room shows Closet Walls / Ceiling / Baseboard, a size row and closet door boxes without tapping anything (and prices $0 until sized)');
+// Tap a box, the laser fills that box instead of adding a wall (James, Oct 2026)
+const tap=await p.evaluate(()=>{
+  const r=rooms[0]; const cid=r.closets[0].id; r.height='8';
+  r.walls.push({id:'tp1',ft:'14',ht:''}); renderWalls(r);
+  document.getElementById('target-field').value='wall';
+  const walls0=r.walls.length;
+  document.getElementById(cid+'_l').focus();
+  const glow=document.getElementById(cid+'_l').classList.contains('laser-target');
+  applyMeasurement(6.2,'6.2 ft');
+  const afterW={l:r.closets[0].l, walls:r.walls.length, kb:document.activeElement===document.getElementById(cid+'_l')};
+  applyMeasurement(2,'2 ft');
+  const afterD={w:r.closets[0].w, walls:r.walls.length};
+  applyMeasurement(12,'12 ft');
+  const afterNext=r.walls.length;
+  // a wall's own height box
+  const w0=r.walls[0].id; document.getElementById(w0+'_ht').focus(); applyMeasurement(9,'9 ft');
+  const ht=r.walls[0].ht, wallsAfterHt=r.walls.length;
+  // pressing a 📐 button after tapping a box hands control back to that button
+  document.getElementById(cid+'_l').focus(); document.getElementById(r.id+'_height_shoot').click();
+  const cleared=boxShotTarget===null;
+  document.activeElement.blur?.();
+  return {walls0, glow, afterW, afterD, afterNext, ht, wallsAfterHt, cleared, lab:+calc(r).closet.lab.toFixed(2)};
+});
+ok(tap.glow,'tapping a closet box lights it as the laser target');
+ok(+tap.afterW.l===6 && tap.afterW.walls===tap.walls0 && !tap.afterW.kb,'laser fills the tapped closet width (6) and adds no wall, keyboard closed');
+ok(+tap.afterD.w===2 && tap.afterD.walls===tap.walls0,'next shot goes to the closet depth (2), still no new wall');
+ok(tap.afterNext===tap.walls0+1,'after that the laser goes back to adding walls');
+ok(+tap.ht===9 && tap.wallsAfterHt===tap.walls0+1,'tapping a wall height box: laser fills that height, no new wall');
+ok(tap.cleared,'pressing a 📐 button after tapping a box gives the laser back to that button');
+ok(tap.lab===312.6,'the laser-filled closet prices like a typed one ($'+tap.lab+')');
 ok(cl.add===312.6,'a 6 x 2 closet at 8 ft adds walls $236.80 + ceiling $19.80 + baseboard $56 = $312.60 (got '+cl.add+')');
 ok(cl.sameBox,'typing a closet size does not rebuild the box being typed in');
 ok(cl.noCeil===292.8,'closet Ceiling button off takes the ceiling off (got '+cl.noCeil+')');

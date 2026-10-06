@@ -2819,6 +2819,10 @@ function shotFt(feet) { return String(Math.round(feet)); }
 function applyMeasurement(feet, disp) {
   speakMeasurement(feet);
   document.getElementById('last-reading').textContent = disp;
+  // A laser reading means hands on the laser, not the keyboard: drop focus
+  // so the phone keyboard closes instead of covering the next measurement.
+  const _ae = document.activeElement;
+  if (_ae && /^(INPUT|TEXTAREA|SELECT)$/.test(_ae.tagName)) _ae.blur();
 
   // Armed deck-section shot takes priority
   if (deckShotTarget) {
@@ -3476,8 +3480,10 @@ function addWall(roomId, ft='', ht='') {
   room.walls.push({id:wid, ft:ft.toString(), ht:ht.toString()});
   renderWalls(room);
   recalcRoom(roomId);
-  // Focus new wall input
-  setTimeout(()=>{ const el=document.getElementById(wid+'_ft'); if(el) el.focus(); }, 50);
+  // Focus the new box only for a hand-added wall. A laser or voice reading
+  // arrives with its value, and focusing then popped the keyboard over the
+  // screen after every shot.
+  if (ft === '') setTimeout(()=>{ const el=document.getElementById(wid+'_ft'); if(el) el.focus(); }, 50);
 }
 
 function removeWall(roomId, wallId) {

@@ -315,6 +315,17 @@ ok(f2.qbCabinet,'cabinets + crown job gets cabinet wording (primer, crown caulk)
 ok(f2.proCabinet,'cabinets + crown job gets cabinet scope bullets in the Pro Proposal');
 ok(f2.shareFlat,'Share / Text has no brackets inside brackets');
 ok(f2.railOnce,'railings entered on a side are not asked for again in Exterior Extras');
+// Laser shots must not pop the phone keyboard (James, Oct 2026)
+const kb=await p.evaluate(async()=>{
+  switchTab('estimate'); document.getElementById('target-field').value='wall';
+  document.getElementById('client-name').focus();
+  const before=rooms[0].walls.length;
+  applyMeasurement(3,'3.00 ft'); await new Promise(r=>setTimeout(r,150));
+  const a=document.activeElement, added=rooms[0].walls.length===before+1;
+  rooms[0].walls.pop(); renderWalls(rooms[0]); recalcAll();
+  return added && !(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+});
+ok(kb,'a laser reading adds the wall and leaves no text box focused (no keyboard pop-up)');
 
 console.log('5. Layout: no horizontal overflow, all tabs render');
 for (const w of [380,880]) {

@@ -264,6 +264,7 @@ These rules apply to bid PDFs/DOCX James generates **outside** the app (in chat)
 - `setReshootTarget(roomId, wallId)` arms a specific wall for re-shoot
 - `armDimShot(roomId, field)` arms the Length or Width field for a shoot
 - Every measurable field should have its own 📐 shoot button (not just the dropdown)
+- **A laser reading never opens the keyboard.** `applyMeasurement` blurs any focused box first, and `addWall` only focuses the new wall box for a hand-tapped "+ Add Wall" (no value passed). Focusing after every shot covered the screen with the keyboard between measurements.
 
 ### 7.6 Auto-Print Hub — ⚠️ REMOVED FROM THE UI (see section 17)
 - `const PRINT_HUB_TOPIC = ''` — set this to a hard-to-guess ntfy.sh topic name to enable

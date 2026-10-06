@@ -3164,7 +3164,7 @@ function renderRoom(room, idx) {
   const s1 = isExt ? 'Siding'  : 'Walls';
   const s2 = 'Ceiling';
   const s3 = isExt ? 'Deck'    : 'Floor';
-  const s4 = 'Trim';
+  const s4 = isExt ? 'Trim'    : 'Baseboard';
 
   // Migrate old soffit field → soffitSections array
   if (!room.soffitSections) {
@@ -3347,14 +3347,14 @@ function renderRoom(room, idx) {
         <button class="surf-btn${room.surfaces.walls?' on':''}" id="${room.id}_sw" onclick="toggleSurf('${room.id}','walls')" aria-label="Toggle ${s1}">${s1}</button>
         <button class="surf-btn${room.surfaces.ceiling?' on':''}" id="${room.id}_sc" onclick="toggleSurf('${room.id}','ceiling')" aria-label="Toggle ${isExt?'Porch Ceiling':'Ceiling'}">${isExt?'Porch Ceil':'Ceiling'}</button>
         <button class="surf-btn${room.surfaces.floor?' on':''}" id="${room.id}_sf" onclick="toggleSurf('${room.id}','floor')" aria-label="Toggle ${s3}">${s3}</button>
-        <button class="surf-btn${room.surfaces.trim?' on':''}" id="${room.id}_st" onclick="toggleSurf('${room.id}','trim')" aria-label="Toggle trim">${s4}</button>
+        <button class="surf-btn${room.surfaces.trim?' on':''}" id="${room.id}_st" onclick="toggleSurf('${room.id}','trim')" aria-label="Toggle ${s4}">${s4}</button>
       </div>
       <!-- Trim footage. Blank = the walls measured all the way around, which
            is how trim was always priced; a typed number replaces it for a room
            where the baseboard stops at cabinets, a tub or an opening. -->
       <div id="${room.id}_trim_row" style="display:${room.surfaces.trim?'':'none'};margin-bottom:12px">
         <div class="walls-header">
-          <span class="walls-label">${isExt?'Trim':'Baseboard / Trim'} (linear ft)</span>
+          <span class="walls-label">${isExt?'Trim':'Baseboard'} (linear ft)</span>
           <span class="walls-perimeter" id="${room.id}_trim_total"></span>
         </div>
         <input type="number" id="${room.id}_trimLF" value="${room.trimLF||''}" min="0" step="0.01"

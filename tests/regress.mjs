@@ -340,7 +340,7 @@ const tr=await p.evaluate(()=>{
   r.walls=[]; const only=calc(r);
   return {rowShown, auto, typedLF:typed.trimLF, typedLab:+(typed.lab-off).toFixed(2), onlyValid:only.valid, onlyLab:+only.lab.toFixed(2)};
 });
-ok(tr.rowShown,'turning on Trim shows a box to type the footage');
+ok(tr.rowShown,'turning on Trim (Baseboard) shows a box to type the footage');
 ok(tr.auto===52,'blank trim box uses the walls all the way around (52 ft)');
 ok(tr.typedLF===40 && tr.typedLab===140,'typed 40 ft of trim prices at 40 x $3.50 = $140 ('+tr.typedLab+')');
 ok(tr.onlyValid && tr.onlyLab===140,'a trim-only room with no walls still bids');
@@ -353,6 +353,8 @@ const tb=await p.evaluate(()=>{
 });
 ok(tb.match,'typed trim footage: proposal room lines add up to the bid ('+tb.labels+')');
 ok(tb.bidSays && !tb.bidOld,'interior bid says "Baseboard Trim", not just "Trim"');
+const btn=await p.evaluate(()=>({int:document.getElementById(rooms[0].id+'_st').textContent.trim()}));
+ok(btn.int==='Baseboard','interior trim button reads "Baseboard" (got '+btn.int+')');
 
 console.log('5. Layout: no horizontal overflow, all tabs render');
 for (const w of [380,880]) {

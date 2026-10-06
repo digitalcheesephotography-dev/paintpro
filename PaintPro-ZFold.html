@@ -1871,12 +1871,15 @@ function updateJobField(key, val) {
   recalcAll();
 }
 
+// A room's doors / windows include the ones counted in its closets.
+const _roomDoors = r => _posInt(r.doorCount) + _posInt(r.closetDoors);
+const _roomWins  = r => _posInt(r.winCount)  + _posInt(r.closetWins);
 function jobExtras() {
   // Doors and windows are counted per room. The whole-job count boxes still
   // add on top, so a job saved before this totals exactly as it did.
-  const dc  = _posInt(job.doorCount) + rooms.reduce((a,r)=>a+_posInt(r.doorCount),0);
+  const dc  = _posInt(job.doorCount) + rooms.reduce((a,r)=>a+_roomDoors(r),0);
   const dp  = _pos(job.doorPrice);
-  const wc  = _posInt(job.winCount)  + rooms.reduce((a,r)=>a+_posInt(r.winCount),0);
+  const wc  = _posInt(job.winCount)  + rooms.reduce((a,r)=>a+_roomWins(r),0);
   const wp  = _pos(job.winPrice);
   const sc  = _posInt(job.shutterCount);
   const sp  = _pos(job.shutterPrice);
@@ -3421,6 +3424,16 @@ function renderRoom(room, idx) {
           <button class="surf-btn${cs.trim?' on':''}" id="${room.id}_cs_trim" onclick="toggleClosetSurf('${room.id}','trim')" aria-label="Closet baseboard">Baseboard</button>
         </div>
         <div id="${room.id}_closet_sections"></div>
+        <div class="cab-grid" id="${room.id}_closet_dw" style="display:${(room.closets||[]).length?'':'none'};margin:8px 0">
+          <label class="field"><span>🚪 Closet doors</span>
+            <input type="number" id="${room.id}_closetDoors" value="${room.closetDoors||''}" min="0" step="1"
+              inputmode="numeric" placeholder="0" aria-label="Doors in this room's closets"
+              oninput="updateField('${room.id}','closetDoors',this.value)"/></label>
+          <label class="field"><span>🪟 Closet windows</span>
+            <input type="number" id="${room.id}_closetWins" value="${room.closetWins||''}" min="0" step="1"
+              inputmode="numeric" placeholder="0" aria-label="Windows in this room's closets"
+              oninput="updateField('${room.id}','closetWins',this.value)"/></label>
+        </div>
         <button class="add-wall-btn" onclick="addCloset('${room.id}')">+ Add Closet</button>
       </div>`}
 
@@ -3829,8 +3842,10 @@ function renderClosets(roomId) {
       <button class="wall-remove" onclick="removeCloset('${roomId}','${sec.id}')" aria-label="Remove closet">✕</button>`;
     container.appendChild(row);
   });
-  const surf = document.getElementById(`${roomId}_closet_surf`);
-  if (surf) surf.style.display = list.length ? '' : 'none';
+  ['closet_surf','closet_dw'].forEach(k => {
+    const el = document.getElementById(`${roomId}_${k}`);
+    if (el) el.style.display = list.length ? '' : 'none';
+  });
 }
 function armClosetShot(roomId, sectionId, field) {
   reshootTarget = null; wallHtTarget = null; deckShotTarget = null;
@@ -5627,7 +5642,8 @@ function paintRoomSummary(id) {
   const crownTot=document.getElementById(`${id}_crown_total`);
   if(crownTot) crownTot.textContent = c.crown.lf>0 ? `${c.crown.lf} lf · ${fmt(c.crown.total)}` : '';
   const clTot=document.getElementById(`${id}_closet_total`);
-  if(clTot) clTot.textContent = c.closet.lab>0 ? fmt(c.closet.lab) : '';
+  if(clTot){ const cdw = _posInt(room.closetDoors)*_pos(job.doorPrice) + _posInt(room.closetWins)*_pos(job.winPrice);
+    clTot.textContent = (c.closet.lab + cdw) > 0 ? fmt(c.closet.lab + cdw) : ''; }
   const dwTot=document.getElementById(`${id}_dw_total`);
   if(dwTot){ const d=_posInt(room.doorCount), w=_posInt(room.winCount);
     dwTot.textContent = (d||w) ? fmt(d*_pos(job.doorPrice) + w*_pos(job.winPrice)) : ''; }
@@ -5686,8 +5702,8 @@ function recalcAll() {
   // a $320 railing). The $/lf and $/step boxes stay: they set the price.
   const sideLF = rooms.reduce((a,r)=>a+(r.railSections||[]).reduce((t,x)=>t+_pos(x.lf),0),0);
   const sideTr = rooms.reduce((a,r)=>a+_posInt(r.treadCount),0);
-  const roomDoors = rooms.reduce((a,r)=>a+_posInt(r.doorCount),0);
-  const roomWins  = rooms.reduce((a,r)=>a+_posInt(r.winCount),0);
+  const roomDoors = rooms.reduce((a,r)=>a+_roomDoors(r),0);
+  const roomWins  = rooms.reduce((a,r)=>a+_roomWins(r),0);
   const roomWord  = estimatorMode === 'exterior' ? 'sides' : 'rooms';
   [['job-door-count','job-door-rooms',_posInt(job.doorCount),roomDoors],['job-win-count','job-win-rooms',_posInt(job.winCount),roomWins]]
     .forEach(([inId,spId,legacy,side]) => {

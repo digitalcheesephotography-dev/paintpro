@@ -425,6 +425,19 @@ ok(cl.bidSays,'bid lists "Closet (walls, ceiling, baseboard)" on the room');
 ok(cl.proSum===cl.lab,'proposal room lines add up to the bid with a closet ('+cl.proSum+' vs '+cl.lab+')');
 ok(cl.reload===312.6 && cl.boxBack==='6','closet survives a save and reload with its boxes filled');
 ok(+cl.shot[0]===5 && +cl.shot[1]===3,'laser shoots closet width then depth (got '+cl.shot.join(' x ')+')');
+const cdw=await p.evaluate(()=>{
+  const r=rooms[0]; const before=jobExtras();
+  const shown=document.getElementById(r.id+'_closet_dw').style.display!=='none';
+  const d=document.getElementById(r.id+'_closetDoors'); d.value='2'; d.dispatchEvent(new Event('input',{bubbles:true}));
+  const w=document.getElementById(r.id+'_closetWins'); w.value='1'; w.dispatchEvent(new Event('input',{bubbles:true}));
+  const after=jobExtras();
+  const snap=JSON.parse(JSON.stringify(getJobSnapshot())); applyJobData(snap);
+  return {shown, dAdd:after.doorCount-before.doorCount, wAdd:after.winCount-before.winCount, money:+(after.total-before.total).toFixed(2), reload:jobExtras().doorCount===after.doorCount,
+          card:document.getElementById('job-door-rooms').textContent};
+});
+ok(cdw.shown,'closet section shows Closet doors / Closet windows boxes once a closet is added');
+ok(cdw.dAdd===2 && cdw.wAdd===1 && cdw.money===200,'2 closet doors + 1 closet window add $150 + $50 to the job (got $'+cdw.money+')');
+ok(cdw.reload && /\(rooms\)/.test(cdw.card),'closet doors survive reload and count in the Doors & Windows total ('+cdw.card+')');
 
 console.log('5. Layout: no horizontal overflow, all tabs render');
 for (const w of [380,880]) {

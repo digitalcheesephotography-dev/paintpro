@@ -108,6 +108,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .room-body{display:none;padding:0 16px 16px}
 .room-card.open .room-body{display:block}
 .surface-row{display:flex;gap:8px;margin-bottom:12px}
+.closet-surf .surf-btn{line-height:1.1;padding-left:4px;padding-right:4px}
 .surf-btn{flex:1;height:46px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;text-transform:capitalize;letter-spacing:.5px;transition:all .15s}
 .surf-btn.on{border-color:var(--blue);background:#162535;color:var(--blue)}
 .prod-row{display:grid;grid-template-columns:1fr 90px;gap:10px;margin-bottom:12px}
@@ -3418,13 +3419,13 @@ function renderRoom(room, idx) {
           <span class="walls-label">Closets (width × depth)</span>
           <span class="walls-perimeter" id="${room.id}_closet_total"></span>
         </div>
-        <div class="surface-row" id="${room.id}_closet_surf" style="display:${(room.closets||[]).length?'':'none'};margin-bottom:8px">
-          <button class="surf-btn${cs.walls?' on':''}" id="${room.id}_cs_walls" onclick="toggleClosetSurf('${room.id}','walls')" aria-label="Closet walls">Walls</button>
-          <button class="surf-btn${cs.ceiling?' on':''}" id="${room.id}_cs_ceiling" onclick="toggleClosetSurf('${room.id}','ceiling')" aria-label="Closet ceiling">Ceiling</button>
-          <button class="surf-btn${cs.trim?' on':''}" id="${room.id}_cs_trim" onclick="toggleClosetSurf('${room.id}','trim')" aria-label="Closet baseboard">Baseboard</button>
+        <div class="surface-row closet-surf" id="${room.id}_closet_surf" style="margin-bottom:8px">
+          <button class="surf-btn${cs.walls?' on':''}" id="${room.id}_cs_walls" onclick="toggleClosetSurf('${room.id}','walls')" aria-label="Closet walls">Closet Walls</button>
+          <button class="surf-btn${cs.ceiling?' on':''}" id="${room.id}_cs_ceiling" onclick="toggleClosetSurf('${room.id}','ceiling')" aria-label="Closet ceiling">Closet Ceiling</button>
+          <button class="surf-btn${cs.trim?' on':''}" id="${room.id}_cs_trim" onclick="toggleClosetSurf('${room.id}','trim')" aria-label="Closet baseboard">Closet Baseboard</button>
         </div>
         <div id="${room.id}_closet_sections"></div>
-        <div class="cab-grid" id="${room.id}_closet_dw" style="display:${(room.closets||[]).length?'':'none'};margin:8px 0">
+        <div class="cab-grid" id="${room.id}_closet_dw" style="margin:8px 0">
           <label class="field"><span>🚪 Closet doors</span>
             <input type="number" id="${room.id}_closetDoors" value="${room.closetDoors||''}" min="0" step="1"
               inputmode="numeric" placeholder="0" aria-label="Doors in this room's closets"
@@ -3434,7 +3435,7 @@ function renderRoom(room, idx) {
               inputmode="numeric" placeholder="0" aria-label="Windows in this room's closets"
               oninput="updateField('${room.id}','closetWins',this.value)"/></label>
         </div>
-        <button class="add-wall-btn" onclick="addCloset('${room.id}')">+ Add Closet</button>
+        <button class="add-wall-btn" onclick="addCloset('${room.id}')">+ Add Another Closet</button>
       </div>`}
 
       ${dimSection}
@@ -3821,7 +3822,9 @@ function toggleClosetSurf(roomId, key) {
 function renderClosets(roomId) {
   const room = rooms.find(r=>r.id===roomId); if(!room) return;
   const container = document.getElementById(`${roomId}_closet_sections`); if(!container) return;
-  const list = room.closets || [];
+  // Always one row ready to type into; a blank closet prices nothing.
+  if (!(room.closets||[]).length) room.closets = [{id:'cls_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), l:'', w:''}];
+  const list = room.closets;
   container.innerHTML = '';
   list.forEach((sec, i) => {
     const sf = (parseFloat(sec.l)||0) * (parseFloat(sec.w)||0);
@@ -3831,21 +3834,18 @@ function renderClosets(roomId) {
       <span class="deck-sec-num">#${i+1}</span>
       <div style="display:flex;align-items:center;gap:4px;flex:1">
         <input type="number" id="${sec.id}_l" value="${sec.l||''}" min="0" step="0.01" inputmode="decimal"
-          placeholder="W ft" aria-label="Closet width" oninput="updateCloset('${roomId}','${sec.id}','l',this.value)" class="deck-sec-input"/>
+          placeholder="W" aria-label="Closet width" oninput="updateCloset('${roomId}','${sec.id}','l',this.value)" class="deck-sec-input"/>
         <button class="deck-shoot closet-shoot" id="${sec.id}_l_shoot" onclick="armClosetShot('${roomId}','${sec.id}','l')" aria-label="Shoot closet width">📐</button>
         <span style="color:var(--muted);font-size:12px">×</span>
         <input type="number" id="${sec.id}_w" value="${sec.w||''}" min="0" step="0.01" inputmode="decimal"
-          placeholder="D ft" aria-label="Closet depth" oninput="updateCloset('${roomId}','${sec.id}','w',this.value)" class="deck-sec-input"/>
+          placeholder="D" aria-label="Closet depth" oninput="updateCloset('${roomId}','${sec.id}','w',this.value)" class="deck-sec-input"/>
         <button class="deck-shoot closet-shoot" id="${sec.id}_w_shoot" onclick="armClosetShot('${roomId}','${sec.id}','w')" aria-label="Shoot closet depth">📐</button>
         <span class="deck-sec-sf">${sf>0?sf.toFixed(1)+' sf':''}</span>
       </div>
       <button class="wall-remove" onclick="removeCloset('${roomId}','${sec.id}')" aria-label="Remove closet">✕</button>`;
     container.appendChild(row);
   });
-  ['closet_surf','closet_dw'].forEach(k => {
-    const el = document.getElementById(`${roomId}_${k}`);
-    if (el) el.style.display = list.length ? '' : 'none';
-  });
+
 }
 function armClosetShot(roomId, sectionId, field) {
   reshootTarget = null; wallHtTarget = null; deckShotTarget = null;

@@ -418,6 +418,10 @@ const cl=await p.evaluate(()=>{
   const shot=[r2.closets[1].l, r2.closets[1].w];
   return {add, sameBox, noCeil, bidSays:/Closet \(walls, ceiling, baseboard\)/.test(bid), proSum, lab:+c1.lab.toFixed(2), reload, boxBack, shot};
 });
+const fresh=await p.evaluate(()=>{ rooms.length=0; roomCount=0; document.getElementById('rooms-container').innerHTML=''; addRoom(); const id=rooms[0].id;
+  const vis=x=>{const e=document.getElementById(x); return !!e && e.offsetParent!==null;};
+  return vis(id+'_cs_walls') && vis(id+'_cs_ceiling') && vis(id+'_cs_trim') && !!document.querySelector('#'+id+'_closet_sections input') && vis(id+'_closetDoors') && calc(rooms[0]).closet.lab===0; });
+ok(fresh,'a new room shows Closet Walls / Ceiling / Baseboard, a size row and closet door boxes without tapping anything (and prices $0 until sized)');
 ok(cl.add===312.6,'a 6 x 2 closet at 8 ft adds walls $236.80 + ceiling $19.80 + baseboard $56 = $312.60 (got '+cl.add+')');
 ok(cl.sameBox,'typing a closet size does not rebuild the box being typed in');
 ok(cl.noCeil===292.8,'closet Ceiling button off takes the ceiling off (got '+cl.noCeil+')');

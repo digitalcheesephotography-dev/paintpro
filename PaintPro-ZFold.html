@@ -11005,6 +11005,8 @@ async function forceRefresh() {
       const keys = await caches.keys();
       await Promise.all(keys.map(k => caches.delete(k)));
     }
+    // Pull the page itself past every cache before reloading.
+    await fetch(location.pathname, { cache: 'reload' }).catch(() => {});
   } catch (_) { /* reload anyway — HTML is network-first */ }
   setTimeout(() => location.reload(), 300);
 }

@@ -4,7 +4,7 @@
 // Bump CACHE version only when the service worker logic itself changes — not for
 // routine HTML edits (those are handled by network-first already).
 
-const CACHE = 'paintpro-v11';
+const CACHE = 'paintpro-v12';
 
 // Cache that briefly holds a file shared in from the Android share sheet,
 // handed off to the app on the next page load. Kept separate so the app-shell
@@ -83,8 +83,10 @@ self.addEventListener('fetch', evt => {
 
   // Network-first for the main HTML file — ensures updates are picked up
   if (url.pathname.endsWith('PaintPro-ZFold.html') || url.pathname.endsWith('/')) {
+    // cache:'no-store' skips Chrome's own HTTP cache, so a page served with
+    // max-age (GitHub Pages sends 10 minutes) can't keep showing an old copy.
     evt.respondWith(
-      fetch(request)
+      fetch(request, { cache: 'no-store' })
         .then(res => {
           // Only cache good responses — a 404/500 page must never replace the
           // known-good copy of the app in the offline cache.

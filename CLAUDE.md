@@ -631,6 +631,7 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
 
 ### Service worker cache
 - Bumping `CACHE = 'paintpro-v1'` to `v2` forces a re-install for all existing PWA users. Use this when service worker logic changes, NOT for routine HTML edits (those are network-first).
+- **The app is published twice:** Netlify (`https://lovely-kitsune-6c5c82.netlify.app/`) and GitHub Pages (`https://digitalcheesephotography-dev.github.io/paintpro/`), both from `main`. GitHub Pages sends `max-age=600`, so since Oct 7 2026 (`paintpro-v12`) the SW fetches the HTML with `cache:'no-store'` and `forceRefresh()` does a `cache:'reload'` fetch before reloading; before that, Refresh App could keep showing a copy up to 10 minutes old (James saw no Research button right after a deploy).
 - **Manual refresh:** Settings → 🔄 Refresh App runs `forceRefresh()` — updates the SW registration, clears all caches (only when online, so an offline user isn't stranded), and reloads fresh from the network. For when an installed PWA is showing a stale copy. Job data is untouched.
 
 ### Bluetooth

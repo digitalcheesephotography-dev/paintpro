@@ -466,6 +466,8 @@ const rc=await p.evaluate(async()=>{
   return {btn, hasRoom:/Bedroom: walls/.test(t), hasCloset:/Closet/.test(t), hasNotes:/check ceiling stain/.test(t), hasTotal:t.includes('estimate total '+fmt(grand)), ends:/What I want to research:$/.test(t), shared:!!(shared&&shared.text===t), opened:!!(opened&&opened.startsWith('https://claude.ai/new?q='))};
 });
 ok(rc.btn,'bid shows a 🤖 Research in Claude button');
+const rc2=await p.evaluate(()=>{ const b=document.getElementById('claude-btn'); return !!b && b.offsetParent!==null && getComputedStyle(b).display!=='none'; });
+ok(rc2,'🤖 Research in Claude also shows under SHOW BID without opening the bid');
 ok(rc.hasRoom && rc.hasCloset && rc.hasNotes,'research text carries rooms, closets and notes');
 ok(rc.hasTotal,'research text total matches the bid total');
 ok(rc.ends,'research text ends with "What I want to research:" for James to finish');

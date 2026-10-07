@@ -452,6 +452,24 @@ ok(tap.afterNext===tap.walls0+1,'after that the laser goes back to adding walls'
 ok(+tap.ht===9 && tap.wallsAfterHt===tap.walls0+1,'tapping a wall height box: laser fills that height, no new wall');
 ok(tap.cleared,'pressing a 📐 button after tapping a box gives the laser back to that button');
 ok(tap.lab===312.6,'the laser-filled closet prices like a typed one ($'+tap.lab+')');
+// 🤖 Research in Claude: the whole estimate goes out as text with the same total as the bid
+const rc=await p.evaluate(async()=>{
+  const r=rooms[0]; r.name='Bedroom'; r.product=r.product||'BM Regal Select (Int)';
+  document.getElementById('client-name').value='Test Client'; document.getElementById('notes').value='check ceiling stain';
+  recalcAll(); renderBid();
+  const t=buildClaudeResearchText();
+  const btn=[...document.querySelectorAll('#bid-out button')].some(b=>/Research in Claude/.test(b.textContent));
+  const cs=rooms.map(calc), ex=jobExtras(); const grand=cs.reduce((a,c)=>a+c.mat+c.lab,0)+ex.total;
+  let shared=null, opened=null;
+  navigator.share=async(o)=>{shared=o;}; await sendEstimateToClaude();
+  navigator.share=undefined; window.open=(u)=>{opened=u;}; await sendEstimateToClaude();
+  return {btn, hasRoom:/Bedroom: walls/.test(t), hasCloset:/Closet/.test(t), hasNotes:/check ceiling stain/.test(t), hasTotal:t.includes('estimate total '+fmt(grand)), ends:/What I want to research:$/.test(t), shared:!!(shared&&shared.text===t), opened:!!(opened&&opened.startsWith('https://claude.ai/new?q='))};
+});
+ok(rc.btn,'bid shows a 🤖 Research in Claude button');
+ok(rc.hasRoom && rc.hasCloset && rc.hasNotes,'research text carries rooms, closets and notes');
+ok(rc.hasTotal,'research text total matches the bid total');
+ok(rc.ends,'research text ends with "What I want to research:" for James to finish');
+ok(rc.shared && rc.opened,'sends through the phone share sheet, or opens claude.ai when there is no share sheet');
 ok(cl.add===312.6,'a 6 x 2 closet at 8 ft adds walls $236.80 + ceiling $19.80 + baseboard $56 = $312.60 (got '+cl.add+')');
 ok(cl.sameBox,'typing a closet size does not rebuild the box being typed in');
 ok(cl.noCeil===292.8,'closet Ceiling button off takes the ceiling off (got '+cl.noCeil+')');

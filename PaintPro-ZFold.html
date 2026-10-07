@@ -6075,6 +6075,7 @@ function renderBid() {
           <button onclick="saveBidPDF()" class="bid-act">⬇️ Save PDF</button>
           <button onclick="openProProposal()" class="bid-act">📄 Pro Proposal</button>
         </div>
+        <button onclick="sendEstimateToClaude()" class="bid-act">🤖 Research in Claude</button>
         <details class="bid-more"${(_bidMoreOpen || bidAgentOpen) ? ' open' : ''} ontoggle="_bidMoreOpen=this.open">
           <summary class="bid-act">More</summary>
           ${loadQbPayLink() ? `<button onclick="payByCardQuickBooks()" class="bid-act">💳 Pay by Card (QuickBooks)</button>` : ''}
@@ -7324,6 +7325,74 @@ function _bidPlainBreakdown() {
   (ex.lineItems || []).forEach(li => { if (li.amount) lines.push(`${li.label}: ${fmt(li.amount)}`); });
   const grand = cs.reduce((a,c)=>a+c.mat+c.lab,0) + ex.total;
   return { text: lines.join('\n'), grand };
+}
+
+// 🤖 Research in Claude (James, Oct 2026): hand the whole estimate to a
+// Claude chat so he can research products, prices or scope with it. This is
+// James's own working copy, so it carries the measurements, rates and notes
+// that never go on a customer document. Copied to the clipboard as well, so a
+// chat that opens empty only needs a paste.
+function buildClaudeResearchText() {
+  const client = (document.getElementById('client-name')?.value || '').trim();
+  const addr   = (document.getElementById('job-address')?.value || '').trim();
+  const notes  = (document.getElementById('notes')?.value || '').trim();
+  const cs = rooms.map(calc), ex = jobExtras();
+  const mat = cs.reduce((a,c)=>a+c.mat,0), roomLab = cs.reduce((a,c)=>a+c.lab,0);
+  const isExt = estimatorMode === 'exterior';
+  const L = [];
+  L.push(`Here is a painting estimate from my PaintPro app (Ingersoll Painting, Hannibal NY). I want to use it to do some research.`);
+  L.push('');
+  L.push(`JOB: ${client || '(no client name)'}${addr ? ', ' + addr : ''}`);
+  L.push(`Type: ${isExt ? 'Exterior' : 'Interior'}`);
+  L.push('');
+  L.push(isExt ? 'SIDES' : 'ROOMS');
+  rooms.forEach((r, i) => {
+    const c = cs[i];
+    const name = (r.name || '').trim() || (isExt ? 'Side ' : 'Room ') + (i+1);
+    if (!c.valid) { L.push(`- ${name}: not measured yet`); return; }
+    const walls = (r.walls||[]).map(w => (parseFloat(w.ft)||0) + (w.ht ? 'x' + w.ht : '')).filter(x => x !== '0').join(', ');
+    const bits = [];
+    if (walls) bits.push(`${isExt ? 'siding runs' : 'walls'} ${walls} ft${r.height ? ' at ' + r.height + ' ft high' : ''}`);
+    if (!isExt && (r.floorLength || r.floorWidth)) bits.push(`footprint ${r.floorLength||0} x ${r.floorWidth||0}`);
+    const doing = _bidAreaDesc(r, c); if (doing) bits.push('painting: ' + doing);
+    if (r.surfaces.trim && c.trimLF > 0) bits.push(`${isExt ? 'trim' : 'baseboard'} ${+c.trimLF.toFixed(1)} lin ft`);
+    const d = _roomDoors(r), w = _roomWins(r);
+    if (d || w) bits.push(`${d} door${d===1?'':'s'}, ${w} window${w===1?'':'s'}`);
+    bits.push(`${r.product || 'no product picked'}, ${r.coats || 1} coat${(r.coats||1)==1?'':'s'}, ${c.gal} gal`);
+    bits.push(`${Math.round(c.totalSF)} sq ft, labor ${fmt(c.lab)}, materials ${fmt(c.mat)}`);
+    L.push(`- ${name}: ${bits.join('; ')}`);
+  });
+  const extra = [];
+  if (ex.doorTotal)    extra.push(`Doors: ${ex.doorCount} @ ${fmt(ex.doorPrice)} = ${fmt(ex.doorTotal)}`);
+  if (ex.winTotal)     extra.push(`Windows: ${ex.winCount} @ ${fmt(ex.winPrice)} = ${fmt(ex.winTotal)}`);
+  if (ex.shutterTotal) extra.push(`Shutters: ${ex.shutterCount} = ${fmt(ex.shutterTotal)}`);
+  if (ex.washTotal)    extra.push(`Power washing: ${ex.washSF} sq ft = ${fmt(ex.washTotal)}`);
+  if (ex.railTotal)    extra.push(`Railings: ${ex.railLF} lin ft = ${fmt(ex.railTotal)}`);
+  if (ex.treadTotal)   extra.push(`Stair treads: ${ex.treadCount} = ${fmt(ex.treadTotal)}`);
+  ex.lineItems.forEach(li => extra.push(`${li.label}: ${fmt(li.amount)}`));
+  if (extra.length) { L.push(''); L.push('EXTRAS'); extra.forEach(x => L.push('- ' + x)); }
+  const rr = modeRates(estimatorMode);
+  L.push('');
+  L.push(`MY RATES: walls ${fmt(rr.walls)}/sf, ceiling ${fmt(rr.ceiling)}/sf, floor ${fmt(rr.floor)}/sf, trim ${fmt(rr.trim)}/lin ft${isExt ? '' : ', crown ' + fmt(rr.crown) + '/lin ft'}. Paint is priced at cost plus 20%.`);
+  L.push('');
+  L.push(`TOTALS: labor ${fmt(roomLab + ex.total)}, paint and materials ${fmt(mat)}, estimate total ${fmt(mat + roomLab + ex.total)}`);
+  if (notes) { L.push(''); L.push('MY NOTES'); L.push(notes); }
+  L.push('');
+  L.push('What I want to research:');
+  return L.join('\n');
+}
+async function sendEstimateToClaude() {
+  if (!rooms.some(r => calc(r).valid) && !jobExtras().total) { showToast('Measure something first', 'warn'); return; }
+  const text = buildClaudeResearchText();
+  let copied = false;
+  try { await navigator.clipboard.writeText(text); copied = true; } catch {}
+  // Android share sheet: the Claude app is one of the targets.
+  if (navigator.share) {
+    try { await navigator.share({ title: 'Estimate for research', text }); return; }
+    catch (e) { if (e && e.name === 'AbortError') { if (copied) showToast('📋 Copied - paste it into Claude'); return; } }
+  }
+  window.open('https://claude.ai/new?q=' + encodeURIComponent(text), '_blank');
+  showToast(copied ? '📋 Also copied - paste it if Claude opens empty' : 'Opening Claude');
 }
 
 function shareBid() {

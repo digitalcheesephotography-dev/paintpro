@@ -27,13 +27,17 @@ service cloud.firestore {
 
     // Client e-signature proposals. The document ID is a 128-bit random value
     // that acts as a capability (the shareable link) — like a DocuSign link.
-    // - Anyone with the link can READ it (the homeowner has no account).
+    // - Anyone with the link can READ that one proposal (the homeowner has no
+    //   account), but only the signed-in owner can LIST/search proposals.
+    //   A bare `allow read: if true` also allowed listing, so anyone with the
+    //   public Firebase config could pull every client's bid (fixed Oct 9 2026).
     // - Only the signed-in owner can CREATE or DELETE their own proposals.
     // - A client (unauthenticated) may accept exactly ONCE: the update is
     //   allowed only while status is 'sent', flips it to 'accepted', supplies a
     //   non-empty signer name, and cannot change the owner or the bid body.
     match /proposals/{id} {
-      allow read: if true;
+      allow get: if true;
+      allow list: if request.auth != null && resource.data.ownerUid == request.auth.uid;
       allow create: if request.auth != null
                     && request.resource.data.ownerUid == request.auth.uid
                     && request.resource.data.status == 'sent';

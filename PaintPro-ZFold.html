@@ -5098,7 +5098,8 @@ function showClientImport(incoming) {
   btn.onclick = () => {
     const contacts = loadContacts();
     const today = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-    fresh.forEach(c => contacts.push({
+    fresh.forEach((c, i) => contacts.push({
+      id: 'c' + Date.now() + '_' + i,
       name: c.name, phone: c.phone || '', address: c.address || '', email: c.email || '',
       status: c.status || 'pending', estimate: c.estimate || '',
       estimateDate: c.estimateDate || today, followUpDate: c.followUpDate || null,
@@ -6610,6 +6611,7 @@ async function _sendProposal(bodyHtml, client, address, totalForDeposit){
   proposalsSave(list);
   proposalWatch(id);
   updateProposalBadge();
+  if (typeof renderContacts === 'function') renderContacts();   // the client's card lists it
   showProposalLinkModal(url, doc.client, depositInfo);
 }
 
@@ -7852,8 +7854,22 @@ const CONTACTS_KEY = 'ingersoll_contacts_v1';
 let activeStatusFilter = 'all';
 
 function loadContacts() {
-  try { return JSON.parse(localStorage.getItem(CONTACTS_KEY)) || []; }
+  let list;
+  try { list = JSON.parse(localStorage.getItem(CONTACTS_KEY)) || []; }
   catch { return []; }
+  // Clients added from a ?clients= link were saved with no id, so every card's
+  // Edit / Estimate button pointed at "undefined" and opened whichever client
+  // had last been saved under that id - somebody else's name. Give every
+  // client a unique id and keep it.
+  const seen = new Set();
+  let fixed = false;
+  list.forEach((c, i) => {
+    if (!c || typeof c !== 'object') return;
+    if (!c.id || c.id === 'undefined' || seen.has(c.id)) { c.id = 'c' + Date.now() + '_' + i; fixed = true; }
+    seen.add(c.id);
+  });
+  if (fixed) saveContacts(list);
+  return list;
 }
 function saveContacts(contacts) {
   safeSet(CONTACTS_KEY, JSON.stringify(contacts));
@@ -7912,6 +7928,7 @@ function buildContactCard(c) {
       ${c.estimateDate?`<span>Date: <strong>${_esc(c.estimateDate)}</strong></span>`:''}
       ${c.notes?`<span style="color:var(--muted);font-size:12px">${_esc(c.notes.substring(0,60))}${c.notes.length>60?'…':''}</span>`:''}
     </div>
+    ${_contactProposalsHtml(c)}
     <div class="contact-actions">
       <button class="ca-btn ca-text" onclick="toggleQuickTexts('${c.id}')" aria-label="Quick text ${_esc(c.name)}">💬 Quick Text</button>
       <button class="ca-btn ca-edit" onclick="openContactModal('${c.id}')" aria-label="Edit ${_esc(c.name)}">✏️ Edit</button>
@@ -7921,6 +7938,33 @@ function buildContactCard(c) {
       ${buildQuickTexts(c)}
     </div>`;
   return div;
+}
+
+// The proposals sent to this client, shown on their card so a signable
+// proposal stays with the client's name instead of only in Menu -> Proposals.
+// Matched on the name typed when the proposal was created.
+function _contactProposalsHtml(c) {
+  const norm = v => String(v || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const want = norm(c.name);
+  if (!want) return '';
+  const mine = proposalsLoad().filter(pr => norm(pr.client) === want);
+  if (!mine.length) return '';
+  return '<div style="margin:6px 0 2px">' + mine.map(pr => {
+    const signed = pr.status === 'accepted';
+    const when = new Date(signed && pr.acceptedAt ? pr.acceptedAt : pr.createdAt || Date.now())
+      .toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    return `<div style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:4px">
+      <span style="flex:1;color:${signed ? '#5cc24e' : 'var(--muted)'};font-weight:700">✍️ Proposal ${signed ? 'signed' : 'sent'} ${when}</span>
+      <button class="ca-btn" style="flex:0 0 auto;padding:0 12px;background:var(--panel);border:1px solid var(--border);color:var(--blue)" onclick="event.stopPropagation();_contactProposalOpen('${_esc(pr.id)}')">${signed ? 'View Signed' : 'Copy Link'}</button>
+    </div>`;
+  }).join('') + '</div>';
+}
+function _contactProposalOpen(id) {
+  const pr = proposalsLoad().find(x => x.id === id);
+  if (!pr) return;
+  if (pr.status === 'accepted') return viewSignedEstimate(pr);
+  if (navigator.clipboard) navigator.clipboard.writeText(pr.url).then(() => showToast('Proposal link copied'), () => showToast(pr.url));
+  else showToast(pr.url);
 }
 
 function startEstimateFromClient(id) {

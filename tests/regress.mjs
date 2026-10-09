@@ -492,6 +492,23 @@ const cdw=await p.evaluate(()=>{
 ok(cdw.shown,'closet section shows Closet doors / Closet windows boxes once a closet is added');
 ok(cdw.dAdd===2 && cdw.wAdd===1 && cdw.money===200,'2 closet doors + 1 closet window add $150 + $50 to the job (got $'+cdw.money+')');
 ok(cdw.reload && /\(rooms\)/.test(cdw.card),'closet doors survive reload and count in the Doors & Windows total ('+cdw.card+')');
+// Clients from a ?clients= link were saved with no id, so every card's Edit
+// opened whoever was last saved under "undefined" - somebody else's name.
+const cid=await p.evaluate(()=>{
+  const keep=localStorage.getItem('ingersoll_contacts_v1'), keepP=localStorage.getItem('ingersoll_proposals_v1');
+  localStorage.setItem('ingersoll_contacts_v1', JSON.stringify([{id:'undefined',name:'Tom Other'},{name:'Lisa Test'},{name:'Bob Test'}]));
+  localStorage.setItem('ingersoll_proposals_v1', JSON.stringify([{id:'pz1',client:'Lisa Test',createdAt:Date.now(),status:'sent',url:'x'}]));
+  const ids=loadContacts().map(c=>c.id);
+  const lisa=loadContacts().find(c=>c.name==='Lisa Test');
+  openContactModal(lisa.id); const opened=document.getElementById('modal-name').value; closeContactModal();
+  const card=buildContactCard(lisa).textContent;
+  keep===null?localStorage.removeItem('ingersoll_contacts_v1'):localStorage.setItem('ingersoll_contacts_v1',keep);
+  keepP===null?localStorage.removeItem('ingersoll_proposals_v1'):localStorage.setItem('ingersoll_proposals_v1',keepP);
+  return {unique:new Set(ids).size===3 && !ids.includes('undefined') && ids.every(Boolean), opened, card:/Proposal sent/.test(card)};
+});
+ok(cid.unique,'every client gets its own id (link-imported clients had none)');
+ok(cid.opened==='Lisa Test','Edit on a client card opens that client, not somebody else (got '+cid.opened+')');
+ok(cid.card,'a client card lists the proposal sent to that client');
 
 console.log('5. Layout: no horizontal overflow, all tabs render');
 for (const w of [380,880]) {

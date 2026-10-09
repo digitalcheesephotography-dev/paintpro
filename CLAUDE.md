@@ -305,6 +305,8 @@ Three ways a bid written in a Claude chat reaches the app, all landing in `sendW
 - **Deep link** — `checkBidDeepLink()` (runs before `checkSharedFile`) reads `?bid=<uri-encoded>` or `?bid64=<url-safe base64>` plus optional `&client=`, opens the composer prefilled, and `history.replaceState`s the URL clean so a reload can't re-fire it. Base64 form survives messaging apps that mangle long query strings.
 - **Share sheet text** — a text-only share whose body is ≥120 chars is treated as a bid and goes STRAIGHT to the composer; anything shorter (a link, a stray line) still files to the docs inbox as before.
 - **Manual** — 📥 BRING IN A BID → Paste Text From Claude.
+**Job deep link (Oct 9 2026):** `?job=<url-safe base64 of a job snapshot>` (`checkJobDeepLink`, runs first in `checkSharedFile`) shows an **Add to Jobs** sheet; on tap it keeps the job on screen (`_keepCurrentJob`), `applyJobData`s the snapshot and `_writeSnapshotAs(name)`s it into 📁 Jobs. Snapshot needs `name` and `rooms`; `job` is merged over `JOB_DEFAULTS` as usual (so `job.doorPrice` sets that job's door price). A chat that prices a job hands it over with this, together with `?clients=` and `?bid64=`. **The app can take data from a chat this way - don't tell James it can't.**
+
 `_guessClientFromBid()` pulls the client name from "Prepared For:", "Customer/Client:", "Estimate for", or "Proposal for" headings (rejects lines starting with a digit, containing `$`, or >5 words) so the composer arrives filled in.
 
 ### 7.10 Share into PaintPro (Android share target) — built

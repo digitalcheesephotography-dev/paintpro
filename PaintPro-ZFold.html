@@ -5112,7 +5112,59 @@ function showClientImport(incoming) {
   s.appendChild(btn);
 }
 
+// Deep link: add a whole estimate to Jobs from a link.
+//   ?job=<url-safe base64 of a job snapshot {name, client, address, notes, rooms, job, jobLineItems, estimatorMode}>
+// Lets a Claude chat hand over a job it priced (rooms, rates, doors) so it
+// lands in 📁 Jobs exactly like one entered by hand. Nothing is written until
+// the sheet is tapped, and the job on screen is kept first (_keepCurrentJob).
+function _decodeB64Json(raw) {
+  const norm = raw.replace(/-/g, '+').replace(/_/g, '/');
+  const bin  = atob(norm + '==='.slice((norm.length + 3) % 4));
+  return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))));
+}
+function checkJobDeepLink() {
+  const raw = new URLSearchParams(location.search).get('job');
+  if (!raw) return false;
+  let snap;
+  try { snap = _decodeB64Json(raw); } catch (_) { return false; }
+  if (!snap || !Array.isArray(snap.rooms) || !String(snap.name || '').trim()) return false;
+  try { history.replaceState(null, '', location.pathname); } catch (_) {}
+  const name = String(snap.name).trim();
+  const exists = jobsLoad().some(j => j.name === name);
+
+  const s = _ppModal();
+  const t = document.createElement('div');
+  t.setAttribute('style', 'font-family:var(--head);font-size:22px;color:var(--blue);margin-bottom:6px');
+  t.textContent = '📁 Add to Jobs';
+  const sub = document.createElement('p');
+  sub.setAttribute('style', 'color:var(--muted);font-size:13px;line-height:1.5;margin-bottom:14px');
+  sub.textContent = exists
+    ? `"${name}" is already in your Jobs. Adding replaces it with this copy.`
+    : 'Nothing is changed until you tap Add. The job on screen now is saved to Jobs first.';
+  const row = document.createElement('div');
+  row.setAttribute('style', 'background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px');
+  const n = snap.rooms.length;
+  row.innerHTML = `<div style="font-weight:700;font-size:14px">${_esc(name)}</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.5">${[snap.client, snap.address].filter(Boolean).map(_esc).join(' · ')}</div>
+    <div style="font-size:12px;color:var(--muted)">${n} room${n===1?'':'s'}</div>`;
+  const btn = document.createElement('button');
+  btn.setAttribute('style', 'width:100%;height:52px;margin-top:8px;background:var(--green);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer');
+  btn.textContent = exists ? '➕ Replace Job' : '➕ Add Job';
+  btn.onclick = () => {
+    if (currentJobName !== name && !_keepCurrentJob()) return;
+    applyJobData({ ...snap, name, roomCount: snap.roomCount || snap.rooms.length });
+    _writeSnapshotAs(name);
+    saveActiveJob();
+    _ppCloseModals();
+    switchTab('estimate');
+    showToast(`📁 Added "${name}" to Jobs`);
+  };
+  s.append(t, sub, row, btn);
+  return true;
+}
+
 async function checkSharedFile() {
+  if (checkJobDeepLink()) return;
   if (checkClientsDeepLink()) return;
   if (checkBidDeepLink()) return;
   if (!/[?&]shared=1\b/.test(location.search)) return;

@@ -25,6 +25,7 @@ re-teach you any of the following. It is all already decided.**
 | 10 | **Bid documents:** Georgia font only, **no em dashes**, Project Services is ONE number, never show hourly rates / man-hours / crew size. Full rules in section 5. |
 | 11 | **No secrets in the app or the repo.** API keys are device-local; `STRIPE_SECRET_KEY` lives only as a Cloudflare env var. |
 | 12 | **He talks to you by voice-to-text.** Messages are short and sometimes garbled ("stores" = doors). Lead with the answer, skip preamble, don't ask five questions when one will do, and don't ask anything you could reasonably infer. |
+| 13 | **Social media videos:** James posts weekly for Ingersoll Painting and wants Claude to make the reels. Read [`CLAUDE-social-reels.md`](CLAUDE-social-reels.md) first - it has the Drive drop folder, the house style, and three setup walls the first attempt hit. |
 
 **If you are a new session and unsure whether something was removed on purpose:** it probably
 was. Check section 17 and `git log` before offering to build it.
@@ -85,6 +86,7 @@ paintpro/
 │  ── Docs ────────────────────────────────────────────
 ├── CLAUDE.md                 # This file - read first
 ├── CLAUDE-quickbooks-clients.md  # Companion: rebuilding the Clients tab from QuickBooks
+├── CLAUDE-social-reels.md    # Companion: weekly social media reels (ASMR job clips) - workflow, style, what blocked the first one
 ├── README.md                 # Effectively empty
 │
 │  ── Dev only (never shipped to the phone) ────────────

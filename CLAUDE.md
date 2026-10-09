@@ -19,7 +19,7 @@ re-teach you any of the following. It is all already decided.**
 | 4 | **No live Lowe's / price lookup in the app.** Materials list → copy → paste into a Claude chat. Settled. |
 | 5 | **Every URL you give James must be a full `https://…` link** so it's tappable on his phone. Never a bare domain. This is a standing rule he has asked for repeatedly. |
 | 6 | The app has **three tabs**: ESTIMATE, CLIENTS, ☰ MENU. Clients sub-nav is **Clients \| Materials** only. |
-| 7 | **Deploy = commit to `main`.** Netlify picks it up in ~60s. Then tell him: **☰ MENU → 🔄 Refresh App** — he cannot see a change until he taps it. |
+| 7 | **Deploy = commit to `main`.** ⚠️ **Netlify ran out of credits (Oct 9 2026) and stopped publishing; the live app is GitHub Pages: `https://digitalcheesephotography-dev.github.io/paintpro/PaintPro-ZFold.html`.** Give James that link, not the Netlify one, until he says Netlify is back. GitHub Pages picks up `main` within a few minutes. Then tell him: **☰ MENU → 🔄 Refresh App** — he cannot see a change until he taps it. |
 | 8 | **Never ask him to paste the HTML.** Read it yourself. Other sessions push here too — if a push is rejected, fetch and rebase. Never force over someone else's work. |
 | 9 | **Verify before you claim.** This app prices real jobs; a wrong number costs money. **Run `node tests/regress.mjs` before every push** (serve the folder on :8123 first; see the file's header). It checks the Robin Caster benchmark, totals agreement, persistence, data safety and layout at **380px** (Fold cover) and **880px** (unfolded). Then look at screenshots yourself. |
 | 10 | **Bid documents:** Georgia font only, **no em dashes**, Project Services is ONE number, never show hourly rates / man-hours / crew size. Full rules in section 5. |
@@ -682,6 +682,8 @@ Build the most reasonable interpretation, deliver it, and offer to adjust. Don't
   - Gallons round up per surface per room, so a multi-room job runs ~2 gallons high (10 gal for two 12x14 bedrooms). Conservative, and changing it changes every materials figure, so left alone.
   - Room names start as the real value "Room 1" (tapping now selects it all, so speaking a name replaces it); a true placeholder would need a fallback everywhere a name is printed.
 - **Tom Skeffington's $9,169 exterior proposal is deliberately NOT in QuickBooks** — James asked to hold. There is no "Skeffington" customer there, and the connector's fuzzy search confidently offers three *wrong* Toms (McConkey 99.6%, Johnston, Needle). **Never trust `best_match` on a name that isn't an exact hit.**
+- **Proposals are listable by anyone (found Oct 9 2026, not yet fixed).** `firestore.rules` has `allow read: if true` on `proposals/{id}`, which covers queries too, so anyone with the public Firebase config could list every client's bid. The fix is `allow get: if true;` plus `allow list: if request.auth != null && resource.data.ownerUid == request.auth.uid;` (the app's `_restoreProposalsFromCloud` query matches that), and James must publish it in the Firebase console. Ask before changing.
+- **Sent Proposals list restores from the cloud** (`_restoreProposalsFromCloud`, run from `watchAllProposals`): a new web address or phone started with an empty list.
 - **Most of James's estimates from the last 8–10 months live in past Claude chats**, not in QuickBooks or the app.
 
 ---

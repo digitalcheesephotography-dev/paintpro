@@ -234,6 +234,26 @@ ok(nj.jones===90,'Start New Job leaves the other saved job alone (Jones perimete
 ok(nj.smith===35,'Start New Job saves the open job under its own name (Smith perimeter '+nj.smith+')');
 ok(nj.brownKept,'an unnamed job with a client name is kept in Jobs, not thrown away');
 
+// Save in Jobs offers a blank job; the top-bar New Job button empties the screen
+const sv=await p.evaluate(()=>{
+  localStorage.removeItem('ingersoll_jobs_v1'); currentJobName='';
+  rooms.length=0; roomCount=0; document.getElementById('rooms-container').innerHTML=''; jobLineItems=[]; addRoom();
+  document.getElementById('client-name').value='Green'; document.getElementById('job-address').value='1 Main St';
+  ['14','12','14','12'].forEach(v=>addWall(rooms[0].id,v)); recalcAll(); bidOpen=true; renderBid();
+  document.getElementById('job-snapshot-name').value='Green';
+  const c=window.confirm; let asks=0; window.confirm=()=>{asks++; return true;};
+  saveSnapshot(undefined,true); window.confirm=c;
+  const g=jobsLoad().find(j=>j.name==='Green');
+  return { asks, saved: !!g && g.rooms[0].walls.length===4,
+    blank: rooms.length===1 && !(rooms[0].walls||[]).some(w=>parseFloat(w.ft)>0)
+      && !document.getElementById('client-name').value && !document.getElementById('job-address').value
+      && !currentJobName && !document.getElementById('bid-out').textContent.trim(),
+    btn: !!document.getElementById('new-job-btn') };
+});
+ok(sv.saved && sv.asks===1,'Save in Jobs keeps the job and asks once to start a new one');
+ok(sv.blank,'after Save -> new job, the screen is blank (no walls, client, address or old bid)');
+ok(sv.btn,'New Job button is on the Estimate screen');
+
 console.log('9. Round-two fixes (each one a bug found in review)');
 const r2=await p.evaluate(()=>{
   const out={};

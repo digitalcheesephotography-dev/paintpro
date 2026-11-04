@@ -1,5 +1,5 @@
 // PaintPro Measure service worker. Scope is only this folder, so it never touches the main PaintPro app.
-const CACHE = 'ppm-v1';
+const CACHE = 'ppm-v2';
 const SHELL = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', (e) => {

@@ -69,7 +69,7 @@ textarea{width:100%;min-height:90px}
 .roomtop{display:flex;gap:8px;align-items:center}
 .done{flex:0 0 auto;min-height:46px;padding:0 12px;border-radius:10px;border:2px solid var(--border);background:var(--card);font-weight:700}
 .done.on{background:var(--green);border-color:var(--green)}
-.sumstrip{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:10px 0}
+.sumstrip{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0}
 .sumstrip div{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:6px 2px;text-align:center;font-size:14px;color:var(--muted);line-height:1.15}
 .sumstrip b{display:block;font-size:22px;color:var(--text);font-family:var(--head);font-weight:400;letter-spacing:.5px}
 
@@ -92,6 +92,8 @@ textarea{width:100%;min-height:90px}
 .counter .val{min-width:44px;text-align:center;font-family:var(--head);font-size:40px}
 .hint{font-size:16px;color:var(--muted)}
 .pend{color:var(--amber);font-weight:700;margin:6px 0}
+input.laser-target{border-color:var(--blue);box-shadow:0 0 0 3px #2baae188;background:#0b2533}
+#boxHint{display:none;position:fixed;left:0;right:0;top:0;z-index:30;background:var(--blue);color:#06202d;font-weight:700;text-align:center;padding:8px 10px;font-size:18px}
 
 #bottom{position:fixed;left:0;right:0;bottom:0;z-index:15;background:var(--panel);border-top:2px solid var(--border);padding:8px 12px calc(8px + env(safe-area-inset-bottom));display:none}
 #bottom .in{max-width:760px;margin:0 auto;display:flex;gap:8px}
@@ -113,6 +115,7 @@ textarea{width:100%;min-height:90px}
   </div>
   <div class="bar-row2"><span id="btStatus">DISTO not connected</span><span id="saveInd">Saved ✓</span></div>
 </div>
+<div id="boxHint">● Next laser shot replaces this box</div>
 <div id="app"></div>
 <div id="bottom"><div class="in">
   <button onclick="undoShot()">↶ Undo last shot</button>
@@ -127,6 +130,8 @@ var KEY = 'ppm_data_v1', BAK = 'ppm_data_bak_v1';
 var state = { v:1, jobs:[], view:'home', jobId:null, roomId:null, target:'walls', mute:false };
 var ui = { addingRoom:false };
 var undoStack = [];
+var shotBox = null; // a tapped number box the next laser shot replaces
+var APP_VERSION = 'v2 · Nov 4 2026';
 
 function uid(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
@@ -145,6 +150,7 @@ function load(){
   }
   if (parsed && Array.isArray(parsed.jobs)) {
     state = Object.assign(state, parsed);
+    state.jobs.forEach(function(j){ (j.rooms||[]).forEach(fixRoom); });
     if (restored) setTimeout(function(){ toast('Main save was damaged. Restored the previous save.','warn'); },400);
   }
 }
@@ -167,6 +173,18 @@ function save(){
   }
 }
 
+// Older saves (v1) have no crown or other-walls lists. Fill in anything missing.
+function fixRoom(r){
+  ['walls','ceil','base','crown','xw'].forEach(function(k){ if(!Array.isArray(r[k])) r[k]=[]; });
+  if(r.ceilPending===undefined) r.ceilPending=null;
+  if(r.xwPending===undefined) r.xwPending=null;
+  if(typeof r.doors!=='number') r.doors=0;
+  if(typeof r.wins!=='number') r.wins=0;
+  if(typeof r.height!=='number') r.height=8;
+  if(r.notes==null) r.notes='';
+  return r;
+}
+
 // ───────────────────────── helpers ─────────────────────────
 function curJob(){ return state.jobs.find(function(j){return j.id===state.jobId;}) || null; }
 function curRoom(){ var j=curJob(); return j ? (j.rooms.find(function(r){return r.id===state.roomId;})||null) : null; }
@@ -185,9 +203,13 @@ function parseFt(v){
 
 function roomTotals(r){
   var per = sum(r.walls);
+  var mainSF = per * (r.height||0);
+  var xwSF = (r.xw||[]).reduce(function(a,x){return a + x.w*x.h;},0);
   return {
     per: per,
-    wallSF: per * (r.height||0),
+    mainSF: mainSF, xwSF: xwSF,
+    wallSF: mainSF + xwSF,
+    crownLF: sum(r.crown||[]),
     ceilSF: r.ceil.reduce(function(a,c){return a + c.l*c.w;},0),
     baseLF: sum(r.base),
     doors: r.doors||0, wins: r.wins||0
@@ -195,7 +217,7 @@ function roomTotals(r){
 }
 function roomStatus(r){
   if (r.done) return 'done';
-  return (r.walls.length||r.ceil.length||r.base.length||r.doors||r.wins) ? 'wip' : 'empty';
+  return (r.walls.length||r.ceil.length||r.base.length||(r.crown||[]).length||(r.xw||[]).length||r.doors||r.wins) ? 'wip' : 'empty';
 }
 
 var toastT=null;
@@ -215,7 +237,7 @@ function newJob(){
 function addRoom(name){
   var j=curJob(); if(!j) return;
   var base = name || 'Room', n = j.rooms.filter(function(r){return r.name===base||r.name.indexOf(base+' ')===0;}).length;
-  var r = { id:uid('r'), name: n ? base+' '+(n+1) : base, height:j.lastHeight||8, walls:[], ceil:[], ceilPending:null, base:[], doors:0, wins:0, notes:'', done:false };
+  var r = { id:uid('r'), name: n ? base+' '+(n+1) : base, height:j.lastHeight||8, walls:[], ceil:[], ceilPending:null, base:[], crown:[], xw:[], xwPending:null, doors:0, wins:0, notes:'', done:false };
   j.rooms.push(r); ui.addingRoom=false; touch(); openRoom(r.id);
 }
 function doneRoom(){ var r=curRoom(); if(r){ r.done=true; } touch(); save(); openJob(state.jobId); toast('Room marked done ✓'); }
@@ -234,6 +256,45 @@ function setTarget(key){
   save();
 }
 
+// Tapping a number box (data-shot="walls:2", "ceil:0:w", "xw:1:h", "height") arms it for the laser.
+function clearBox(){
+  shotBox=null;
+  document.querySelectorAll('input.laser-target').forEach(function(e){ e.classList.remove('laser-target'); });
+  var h=document.getElementById('boxHint'); if(h) h.style.display='none';
+}
+document.addEventListener('focusin',function(e){
+  var el=e.target;
+  if(!el || !el.dataset || !el.dataset.shot || state.view!=='room') return;
+  clearBox();
+  var p=el.dataset.shot.split(':');
+  shotBox={key:p[0], i:p[1]==null?null:+p[1], which:p[2]||null, el:el};
+  el.classList.add('laser-target');
+  document.getElementById('boxHint').style.display='block';
+});
+document.addEventListener('focusout',function(e){
+  if(shotBox && e.target===shotBox.el) setTimeout(function(){ if(shotBox && document.activeElement!==shotBox.el) clearBox(); },0);
+});
+function shotIntoBox(r, ft){
+  var b=shotBox, j=curJob(), prev, label;
+  if(b.key==='height'){
+    prev=r.height; var prevLH=j.lastHeight;
+    r.height=ft; j.lastHeight=ft;
+    undoStack.push(function(){ r.height=prev; j.lastHeight=prevLH; });
+    label='Ceiling height';
+  } else if(b.key==='ceil' || b.key==='xw'){
+    var o=r[b.key][b.i]; if(!o) return null;
+    prev=o[b.which]; o[b.which]=ft;
+    undoStack.push(function(){ o[b.which]=prev; });
+    label=(b.key==='ceil'?'Ceiling ':'Other wall ')+(b.i+1)+(b.which==='l'?' length':b.which==='w'?' width':' height');
+  } else {
+    var list=r[b.key]; if(!list || b.i==null || b.i>=list.length) return null;
+    prev=list[b.i]; list[b.i]=ft;
+    undoStack.push(function(){ list[b.i]=prev; });
+    label=({walls:'Wall ',base:'Baseboard run ',crown:'Crown run '})[b.key]+(b.i+1);
+  }
+  return label+' changed to '+ft+' ft';
+}
+
 function onShot(feetRaw){
   var ft = Math.round(feetRaw);
   if (!(ft > 0)) { toast('Reading too small','warn'); return; }
@@ -242,6 +303,12 @@ function onShot(feetRaw){
   var r = curRoom();
   if (state.view !== 'room' || !r) { toast('Shot ' + ft + ' ft was NOT saved. Open a room first.','warn'); return; }
   var msg='';
+  if (shotBox) {
+    var bmsg = shotIntoBox(r, ft);
+    if (shotBox.el) shotBox.el.blur();
+    clearBox();
+    if (bmsg) { commit(true); toast(bmsg + '  ✓ Saved'); return; }
+  }
   if (state.target==='height') {
     var prevH=r.height, prevT='height', j=curJob(), prevLH=j.lastHeight;
     r.height=ft; j.lastHeight=ft; state.target='walls';
@@ -257,9 +324,22 @@ function onShot(feetRaw){
       undoStack.push(function(){ r.ceil.pop(); r.ceilPending=l; });
       msg='Ceiling ' + l + ' x ' + ft + ' = ' + (l*ft) + ' sf';
     }
+  } else if (state.target==='xw') {
+    if (r.xwPending==null) {
+      r.xwPending = ft;
+      undoStack.push(function(){ r.xwPending=null; });
+      msg='Wall width ' + ft + '. Now shoot the height.';
+    } else {
+      var w=r.xwPending; r.xw.push({w:w,h:ft}); r.xwPending=null;
+      undoStack.push(function(){ r.xw.pop(); r.xwPending=w; });
+      msg='Other wall ' + w + ' x ' + ft + ' = ' + (w*ft) + ' sf';
+    }
   } else if (state.target==='base') {
     r.base.push(ft); undoStack.push(function(){ r.base.pop(); });
     msg='Baseboard run ' + ft + ' ft';
+  } else if (state.target==='crown') {
+    r.crown.push(ft); undoStack.push(function(){ r.crown.pop(); });
+    msg='Crown run ' + ft + ' ft';
   } else {
     r.walls.push(ft); undoStack.push(function(){ r.walls.pop(); });
     msg='Wall ' + r.walls.length + ': ' + ft + ' ft';
@@ -301,6 +381,17 @@ function basePerimeter(){
   var r=curRoom(), p=sum(r.walls); if(!p){ toast('Measure the walls first','warn'); return; }
   r.base.push(Math.round(p*10)/10); commit(true);
 }
+function crownPerimeter(){
+  var r=curRoom(), p=sum(r.walls); if(!p){ toast('Measure the walls first','warn'); return; }
+  r.crown.push(Math.round(p*10)/10); commit(true);
+}
+function editXw(i,which,el){ var r=curRoom(), n=parseFt(el.value); if(n==null){ el.value=r.xw[i][which]; return; } r.xw[i][which]=n; commit(false); }
+function delXw(i){ curRoom().xw.splice(i,1); commit(true); }
+function addXw(){
+  var w=parseFt(document.getElementById('xW').value), h=parseFt(document.getElementById('xH').value);
+  if(!w||!h){ toast('Type width and height','warn'); return; }
+  curRoom().xw.push({w:w,h:h}); commit(true);
+}
 function bump(key,d){
   var r=curRoom(); r[key]=Math.max(0,(r[key]||0)+d);
   document.getElementById('n_'+key).textContent=r[key]; commit(false);
@@ -311,15 +402,17 @@ function updateTotals(){
   var r=curRoom(); if(!r||state.view!=='room') return;
   var t=roomTotals(r);
   function set(id,txt){ var e=document.getElementById(id); if(e) e.textContent=txt; }
-  set('sum_walls',fmt(t.wallSF)); set('sum_ceil',fmt(t.ceilSF)); set('sum_base',fmt(t.baseLF));
+  set('sum_walls',fmt(t.wallSF)); set('sum_ceil',fmt(t.ceilSF)); set('sum_base',fmt(t.baseLF)); set('sum_crown',fmt(t.crownLF));
+  set('tot_xw', fmt(t.xwSF)+' sf'); set('tot_crown', fmt(t.crownLF)+' lf'); set('btnCrownPerim','Add perimeter ('+fmt(t.per)+' ft) as one run');
   set('sum_doors',t.doors); set('sum_wins',t.wins);
-  set('tot_walls', fmt(t.per)+' ft around · '+fmt(t.wallSF)+' sf');
+  set('tot_walls', fmt(t.per)+' ft around · '+fmt(t.mainSF)+' sf');
   set('tot_ceil', fmt(t.ceilSF)+' sf'); set('tot_base', fmt(t.baseLF)+' lf');
   set('tot_dw', t.doors+' doors · '+t.wins+' windows');
   set('btnPerim','Add perimeter ('+fmt(t.per)+' ft) as one run');
 }
 
 function render(){
+  clearBox();
   var app=document.getElementById('app'), bottom=document.getElementById('bottom');
   var j=curJob(), r=curRoom();
   if (state.view==='room' && j && r) { app.innerHTML=roomHtml(j,r); bottom.style.display='block'; }
@@ -337,7 +430,8 @@ function homeHtml(){
   });
   h+='<div class="foot">Safety</div>'+
      '<button class="big" onclick="backupAll()">⬇ Backup all jobs (file)</button>'+
-     '<label class="big" style="display:flex;align-items:center;justify-content:center;border:2px solid var(--border);border-radius:var(--r);background:var(--card);font-weight:700">⬆ Restore from backup file<input type="file" accept=".json,application/json" style="display:none" onchange="restoreFile(this)"></label>';
+     '<label class="big" style="display:flex;align-items:center;justify-content:center;border:2px solid var(--border);border-radius:var(--r);background:var(--card);font-weight:700">⬆ Restore from backup file<input type="file" accept=".json,application/json" style="display:none" onchange="restoreFile(this)"></label>'+
+     '<div class="foot" style="text-align:center">PaintPro Measure '+APP_VERSION+'</div>';
   return h;
 }
 
@@ -348,7 +442,7 @@ function jobHtml(j){
   if(!j.rooms.length) h+='<p class="muted">No rooms yet.</p>';
   j.rooms.forEach(function(r){
     var t=roomTotals(r), st=roomStatus(r);
-    var s = st==='empty' ? 'Nothing measured yet' : 'Walls '+fmt(t.wallSF)+' sf · Ceiling '+fmt(t.ceilSF)+' sf · Base '+fmt(t.baseLF)+' lf';
+    var s = st==='empty' ? 'Nothing measured yet' : 'Walls '+fmt(t.wallSF)+' sf · Ceiling '+fmt(t.ceilSF)+' sf · Base '+fmt(t.baseLF)+' lf'+(t.crownLF?' · Crown '+fmt(t.crownLF)+' lf':'');
     h+='<div class="roomrow" onclick="openRoom(\''+r.id+'\')"><div class="dot s-'+st+'"></div><div class="t">'+esc(r.name)+'<div class="s">'+s+'</div></div><div>›</div></div>';
   });
   if(ui.addingRoom){
@@ -360,9 +454,9 @@ function jobHtml(j){
   } else {
     h+='<button class="big primary" onclick="ui.addingRoom=true;render()">+ Add Room</button>';
   }
-  var T={wallSF:0,ceilSF:0,baseLF:0,doors:0,wins:0};
-  j.rooms.forEach(function(r){ var t=roomTotals(r); T.wallSF+=t.wallSF;T.ceilSF+=t.ceilSF;T.baseLF+=t.baseLF;T.doors+=t.doors;T.wins+=t.wins; });
-  h+='<h2>Job totals</h2><div class="card">Walls <b>'+fmt(T.wallSF)+' sf</b> · Ceilings <b>'+fmt(T.ceilSF)+' sf</b> · Baseboard <b>'+fmt(T.baseLF)+' lf</b> · Doors <b>'+T.doors+'</b> · Windows <b>'+T.wins+'</b></div>'+
+  var T={wallSF:0,ceilSF:0,baseLF:0,crownLF:0,doors:0,wins:0};
+  j.rooms.forEach(function(r){ var t=roomTotals(r); T.wallSF+=t.wallSF;T.ceilSF+=t.ceilSF;T.baseLF+=t.baseLF;T.crownLF+=t.crownLF;T.doors+=t.doors;T.wins+=t.wins; });
+  h+='<h2>Job totals</h2><div class="card">Walls <b>'+fmt(T.wallSF)+' sf</b> · Ceilings <b>'+fmt(T.ceilSF)+' sf</b> · Baseboard <b>'+fmt(T.baseLF)+' lf</b>'+(T.crownLF?' · Crown <b>'+fmt(T.crownLF)+' lf</b>':'')+' · Doors <b>'+T.doors+'</b> · Windows <b>'+T.wins+'</b></div>'+
     '<h2>Send it</h2>'+
     '<button class="big primary" onclick="sendToClaude()">📤 Send to Claude</button>'+
     '<div class="row"><button class="btn" style="flex:1" onclick="copyExport()">Copy text</button><button class="btn" style="flex:1" onclick="saveTxt()">Save .txt</button><button class="btn" style="flex:1" onclick="backupJob()">Backup</button></div>'+
@@ -377,23 +471,32 @@ function roomHtml(j,r){
   }
   function items(key,list){
     return list.map(function(v,i){
-      return '<div class="item"><span class="n">'+(i+1)+'</span><input class="num" type="text" inputmode="decimal" value="'+v+'" onchange="editList(\''+key+'\','+i+',this)"><span class="times">ft</span><button class="x" onclick="delList(\''+key+'\','+i+')" aria-label="Delete">✕</button></div>';
+      return '<div class="item"><span class="n">'+(i+1)+'</span><input class="num" type="text" inputmode="decimal" data-shot="'+key+':'+i+'" value="'+v+'" onchange="editList(\''+key+'\','+i+',this)"><span class="times">ft</span><button class="x" onclick="delList(\''+key+'\','+i+')" aria-label="Delete">✕</button></div>';
     }).join('');
   }
   var h='<button class="back" onclick="openJob(\''+j.id+'\')">← '+esc(j.client||'Rooms')+'</button>'+
     '<div class="roomtop"><input type="text" class="name" value="'+esc(r.name)+'" oninput="renameRoom(this.value)"><button class="done'+(r.done?' on':'')+'" onclick="toggleDone()">'+(r.done?'✓ DONE':'Mark done')+'</button></div>'+
-    '<div class="sumstrip"><div><b id="sum_walls">'+fmt(t.wallSF)+'</b>wall sf</div><div><b id="sum_ceil">'+fmt(t.ceilSF)+'</b>ceiling sf</div><div><b id="sum_base">'+fmt(t.baseLF)+'</b>base lf</div><div><b id="sum_doors">'+t.doors+'</b>doors</div><div><b id="sum_wins">'+t.wins+'</b>windows</div></div>';
+    '<div class="sumstrip"><div><b id="sum_walls">'+fmt(t.wallSF)+'</b>wall sf</div><div><b id="sum_ceil">'+fmt(t.ceilSF)+'</b>ceiling sf</div><div><b id="sum_base">'+fmt(t.baseLF)+'</b>base lf</div><div><b id="sum_crown">'+fmt(t.crownLF)+'</b>crown lf</div><div><b id="sum_doors">'+t.doors+'</b>doors</div><div><b id="sum_wins">'+t.wins+'</b>windows</div></div>'+
+    '<div class="hint">Tap any number box, then shoot, to re-measure just that box.</div>';
 
   h+=sec('height','Ceiling height','tot_h',r.height+' ft',
-    '<div class="row"><input class="num" type="text" inputmode="decimal" value="'+r.height+'" onchange="setHeight(this)"> <span class="times">ft</span> <span class="hint">Tap this card, then shoot the height.</span></div>');
+    '<div class="row"><input class="num" type="text" inputmode="decimal" data-shot="height" value="'+r.height+'" onchange="setHeight(this)"> <span class="times">ft</span> <span class="hint">Tap this card, then shoot the height.</span></div>');
 
-  h+=sec('walls','Walls','tot_walls',fmt(t.per)+' ft around · '+fmt(t.wallSF)+' sf',
+  h+=sec('walls','Walls','tot_walls',fmt(t.per)+' ft around · '+fmt(t.mainSF)+' sf',
     '<div class="hint">Shoot each wall. Every shot adds a wall.</div><div class="row">'+items('walls',r.walls)+'</div>'+
     '<div class="row"><input class="num" id="wallAdd" type="text" inputmode="decimal" placeholder="ft"><button class="btn blue" onclick="addList(\'walls\',\'wallAdd\')">+ Add wall by hand</button></div>');
 
+  var xpend = r.xwPending!=null ? '<div class="pend">Width '+r.xwPending+' ft taken. Shoot the height.</div>' : '';
+  var xits = r.xw.map(function(x,i){
+    return '<div class="item"><input class="num" type="text" inputmode="decimal" data-shot="xw:'+i+':w" value="'+x.w+'" onchange="editXw('+i+',\'w\',this)"><span class="times">×</span><input class="num" type="text" inputmode="decimal" data-shot="xw:'+i+':h" value="'+x.h+'" onchange="editXw('+i+',\'h\',this)"><button class="x" onclick="delXw('+i+')" aria-label="Delete">✕</button></div>';
+  }).join('');
+  h+=sec('xw','Other walls (W × H)','tot_xw',fmt(t.xwSF)+' sf',
+    '<div class="hint">For walls not at the room height: stairwells, gables, half walls. Shoot width, then height.</div>'+xpend+'<div class="row">'+xits+'</div>'+
+    '<div class="row"><input class="num" id="xW" type="text" inputmode="decimal" placeholder="W"><span class="times">×</span><input class="num" id="xH" type="text" inputmode="decimal" placeholder="H"><button class="btn blue" onclick="addXw()">+ Add by hand</button></div>');
+
   var pend = r.ceilPending!=null ? '<div class="pend">Length '+r.ceilPending+' ft taken. Shoot the width.</div>' : '';
   var cits = r.ceil.map(function(c,i){
-    return '<div class="item"><input class="num" type="text" inputmode="decimal" value="'+c.l+'" onchange="editCeil('+i+',\'l\',this)"><span class="times">×</span><input class="num" type="text" inputmode="decimal" value="'+c.w+'" onchange="editCeil('+i+',\'w\',this)"><button class="x" onclick="delCeil('+i+')" aria-label="Delete">✕</button></div>';
+    return '<div class="item"><input class="num" type="text" inputmode="decimal" data-shot="ceil:'+i+':l" value="'+c.l+'" onchange="editCeil('+i+',\'l\',this)"><span class="times">×</span><input class="num" type="text" inputmode="decimal" data-shot="ceil:'+i+':w" value="'+c.w+'" onchange="editCeil('+i+',\'w\',this)"><button class="x" onclick="delCeil('+i+')" aria-label="Delete">✕</button></div>';
   }).join('');
   h+=sec('ceil','Ceiling','tot_ceil',fmt(t.ceilSF)+' sf',
     '<div class="hint">Shoot length, then width. For an L-shaped room add a second box.</div>'+pend+'<div class="row">'+cits+'</div>'+
@@ -404,6 +507,11 @@ function roomHtml(j,r){
     '<div class="hint">Shoot each run, or take the whole perimeter.</div><div class="row">'+items('base',r.base)+'</div>'+
     '<div class="row"><button class="btn blue" id="btnPerim" onclick="basePerimeter()">Add perimeter ('+fmt(t.per)+' ft) as one run</button></div>'+
     '<div class="row"><input class="num" id="baseAdd" type="text" inputmode="decimal" placeholder="ft"><button class="btn blue" onclick="addList(\'base\',\'baseAdd\')">+ Add run by hand</button></div>');
+
+  h+=sec('crown','Crown molding','tot_crown',fmt(t.crownLF)+' lf',
+    '<div class="hint">Shoot each run, or take the whole perimeter. Leave empty if there is no crown.</div><div class="row">'+items('crown',r.crown)+'</div>'+
+    '<div class="row"><button class="btn blue" id="btnCrownPerim" onclick="crownPerimeter()">Add perimeter ('+fmt(t.per)+' ft) as one run</button></div>'+
+    '<div class="row"><input class="num" id="crownAdd" type="text" inputmode="decimal" placeholder="ft"><button class="btn blue" onclick="addList(\'crown\',\'crownAdd\')">+ Add run by hand</button></div>');
 
   h+='<div class="sec"><div class="sec-head"><span class="sec-title">Doors &amp; Windows</span><span class="sec-total" id="tot_dw">'+t.doors+' doors · '+t.wins+' windows</span></div><div class="sec-body">'+
     '<div class="counter"><span class="lbl">Doors</span><button onclick="bump(\'doors\',-1)">−</button><span class="val" id="n_doors">'+t.doors+'</span><button onclick="bump(\'doors\',1)">+</button></div>'+
@@ -428,16 +536,21 @@ function buildExport(j){
   L.push('Rooms: '+j.rooms.length);
   L.push('Units: feet. Laser shots are rounded to whole feet.');
   L.push('');
-  var T={wallSF:0,ceilSF:0,baseLF:0,doors:0,wins:0};
+  var T={wallSF:0,ceilSF:0,baseLF:0,crownLF:0,doors:0,wins:0};
   j.rooms.forEach(function(r,i){
     var t=roomTotals(r);
-    T.wallSF+=t.wallSF;T.ceilSF+=t.ceilSF;T.baseLF+=t.baseLF;T.doors+=t.doors;T.wins+=t.wins;
+    T.wallSF+=t.wallSF;T.ceilSF+=t.ceilSF;T.baseLF+=t.baseLF;T.crownLF+=t.crownLF;T.doors+=t.doors;T.wins+=t.wins;
     L.push('ROOM '+(i+1)+': '+r.name+(r.done?'':' (not marked done)'));
     L.push('  Ceiling height: '+fmt(r.height)+' ft');
     L.push('  Walls: '+(r.walls.length ? r.walls.map(fmt).join(', ')+' ft (perimeter '+fmt(t.per)+' ft)' : 'none'));
-    if(r.walls.length) L.push('  Wall area: '+fmt(t.wallSF)+' sf (perimeter x height)');
+    if(r.walls.length) L.push('  Wall area: '+fmt(t.mainSF)+' sf (perimeter x height)');
+    if(r.xw.length){
+      L.push('  Other walls (W x H): '+r.xw.map(function(x){return fmt(x.w)+' x '+fmt(x.h)+' = '+fmt(x.w*x.h)+' sf';}).join('; '));
+      L.push('  Total wall area: '+fmt(t.wallSF)+' sf');
+    }
     L.push('  Ceiling: '+(r.ceil.length ? r.ceil.map(function(c){return fmt(c.l)+' x '+fmt(c.w)+' = '+fmt(c.l*c.w)+' sf';}).join('; ')+(r.ceil.length>1?' (total '+fmt(t.ceilSF)+' sf)':'') : 'none'));
     L.push('  Baseboard: '+(r.base.length ? r.base.map(fmt).join(', ')+' ft (total '+fmt(t.baseLF)+' lf)' : 'none'));
+    if(r.crown.length) L.push('  Crown molding: '+r.crown.map(fmt).join(', ')+' ft (total '+fmt(t.crownLF)+' lf)');
     L.push('  Doors: '+t.doors);
     L.push('  Windows: '+t.wins);
     if(r.notes && r.notes.trim()) L.push('  Notes: '+r.notes.trim().replace(/\n+/g,' '));
@@ -447,12 +560,13 @@ function buildExport(j){
   L.push('  Wall area: '+fmt(T.wallSF)+' sf');
   L.push('  Ceiling area: '+fmt(T.ceilSF)+' sf');
   L.push('  Baseboard: '+fmt(T.baseLF)+' lf');
+  if(T.crownLF) L.push('  Crown molding: '+fmt(T.crownLF)+' lf');
   L.push('  Doors: '+T.doors+'   Windows: '+T.wins);
   return L.join('\n');
 }
 function slug(s){ return (s||'job').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'job'; }
 function copyText(text){
-  function fallback(){ var ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); var ok=false; try{ ok=document.execCommand('copy'); }catch(e){} ta.remove(); toast(ok?'Copied. Paste it into Claude.':'Could not copy','err'); }
+  function fallback(){ var ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); var ok=false; try{ ok=document.execCommand('copy'); }catch(e){} ta.remove(); toast(ok?'Copied. Paste it into Claude.':'Could not copy',ok?'':'err'); }
   if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function(){ toast('Copied. Paste it into Claude.'); },fallback); else fallback();
 }
 async function sendToClaude(){
@@ -482,7 +596,7 @@ function restoreFile(inp){
   rd.onload=function(){
     try{
       var d=JSON.parse(rd.result); if(!d||!Array.isArray(d.jobs)) throw new Error('bad');
-      d.jobs.forEach(function(nj){ var i=state.jobs.findIndex(function(x){return x.id===nj.id;}); if(i>=0) state.jobs[i]=nj; else state.jobs.push(nj); });
+      d.jobs.forEach(function(nj){ (nj.rooms||[]).forEach(fixRoom); var i=state.jobs.findIndex(function(x){return x.id===nj.id;}); if(i>=0) state.jobs[i]=nj; else state.jobs.push(nj); });
       save(); render(); toast('Restored '+d.jobs.length+' job(s)');
     }catch(e){ toast('That file is not a Measure backup','err'); }
   };

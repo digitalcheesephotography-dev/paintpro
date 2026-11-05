@@ -356,7 +356,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .contact-meta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
 .contact-meta span{font-size:12px;color:var(--muted)}
 .contact-meta strong{color:var(--text)}
-.contact-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.contact-actions{display:grid;grid-template-columns:1fr 1fr 1fr 48px;gap:8px}
 .ca-btn{height:44px;border-radius:8px;border:none;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer}
 .ca-text{background:var(--green);color:#fff}
 .ca-edit{background:var(--panel);color:var(--text);border:1px solid var(--border)!important;border:none}
@@ -1071,7 +1071,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     </button>
     <div id="refresh-status" style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px"></div>
     <!-- Bump with every user-visible fix so James can see his phone has it. -->
-    <div id="app-build" style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px">Version: Oct 29 2026 (New Job button)</div>
+    <div id="app-build" style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px">Version: Nov 5 2026 (Schedule in Outlook)</div>
     <!-- Setup status — shows at a glance what still needs connecting -->
     <div id="setup-status" style="margin-top:16px"></div>
 
@@ -6148,6 +6148,7 @@ function renderBid() {
           <button onclick="openProProposal()" class="bid-act">📄 Pro Proposal</button>
         </div>
         <button onclick="sendEstimateToClaude()" class="bid-act">🤖 Research in Claude</button>
+        <button onclick="openScheduleSheet()" class="bid-act">📅 Schedule in Outlook</button>
         <details class="bid-more"${(_bidMoreOpen || bidAgentOpen) ? ' open' : ''} ontoggle="_bidMoreOpen=this.open">
           <summary class="bid-act">More</summary>
           ${loadQbPayLink() ? `<button onclick="payByCardQuickBooks()" class="bid-act">💳 Pay by Card (QuickBooks)</button>` : ''}
@@ -7498,6 +7499,199 @@ async function sendEstimateToClaude() {
   showToast(copied ? '📋 Also copied - paste it if Claude opens empty' : 'Opening Claude');
 }
 
+// 📅 Schedule in Outlook (James, Nov 2026): put an estimate visit or a paint
+// job on his Outlook / Exchange calendar. Three ways out, because the phone
+// may or may not have signal or the Outlook app signed in:
+//   1. Outlook - opens Outlook's own "new event" page filled in (needs signal)
+//   2. Calendar file - an .ics any calendar app imports (works offline)
+//   3. Send to Claude - text a Claude chat with the Microsoft 365 connector
+//      turns into the event (same bridge as the QuickBooks copy)
+// No client is invited: the event goes on James's calendar only.
+const SCHED_KINDS = { estimate: 'Estimate', job: 'Paint Job', followup: 'Follow-up' };
+const SCHED_LENGTHS = [
+  ['30m','30 minutes'],['1h','1 hour'],['2h','2 hours'],['4h','4 hours'],
+  ['1d','All day'],['2d','2 days'],['3d','3 days'],['4d','4 days'],['5d','5 days'],['7d','1 week'],['10d','2 work weeks']
+];
+let _schedCtx = null;
+function openScheduleSheet(contactId) {
+  let name = '', addr = '', phone = '', kind = 'job';
+  if (contactId) {
+    const c = loadContacts().find(x => x.id === contactId) || {};
+    name = c.name || ''; addr = c.address || ''; phone = c.phone || '';
+    kind = (c.status === 'pending' || !c.status) ? 'estimate' : 'job';
+  } else {
+    name = (document.getElementById('client-name')?.value || '').trim();
+    addr = (document.getElementById('job-address')?.value || '').trim();
+    const c = name && loadContacts().find(x => (x.name || '').trim().toLowerCase() === name.toLowerCase());
+    if (c) { phone = c.phone || ''; if (!addr) addr = c.address || ''; }
+  }
+  _schedCtx = { contactId: contactId || null };
+  const t = new Date(); t.setDate(t.getDate() + 1);
+  const ymd = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+  const sheet = _ppModal();
+  const inp = 'width:100%;box-sizing:border-box;height:48px;padding:0 12px;border-radius:10px;border:1px solid var(--border);background:var(--dark);color:var(--text);font-family:var(--font);font-size:17px';
+  const lab = 'display:block;font-size:13px;color:var(--muted);margin:10px 0 4px';
+  sheet.innerHTML = `
+    <div style="font-family:var(--head);font-size:24px;color:var(--blue);letter-spacing:.04em">📅 SCHEDULE IN OUTLOOK</div>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      ${Object.entries(SCHED_KINDS).map(([k,v]) => `<button type="button" class="bid-act sched-kind" data-k="${k}" onclick="_schedKind('${k}')" style="flex:1;min-height:44px">${v}</button>`).join('')}
+    </div>
+    <label style="${lab}">Client<input id="sched-name" style="${inp}" value="${_esc(name)}" placeholder="Client name"></label>
+    <label style="${lab}">Address<input id="sched-addr" style="${inp}" value="${_esc(addr)}" placeholder="Job address"></label>
+    <div style="display:flex;gap:8px">
+      <label style="${lab};flex:1.3">Date<input id="sched-date" type="date" style="${inp}" value="${ymd}"></label>
+      <label style="${lab};flex:1">Start<input id="sched-time" type="time" style="${inp}" value="09:00"></label>
+    </div>
+    <label style="${lab}">How long<select id="sched-len" style="${inp}">${SCHED_LENGTHS.map(([v,l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>
+    <label style="${lab}">Notes (only you see these)<textarea id="sched-notes" rows="2" style="${inp};height:auto;padding:10px 12px" placeholder="Gate code, colors, what to bring"></textarea></label>
+    <input type="hidden" id="sched-phone" value="${_esc(phone)}">
+    <div class="bid-actions" style="margin-top:14px">
+      <button type="button" class="bid-act primary" onclick="schedToOutlook()">📅 Add to Outlook</button>
+      <div class="bid-act-grid">
+        <button type="button" class="bid-act" onclick="schedToClaude()">🤖 Send to Claude</button>
+        <button type="button" class="bid-act" onclick="schedToIcs()">📄 Calendar File</button>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.4">Add to Outlook opens your Outlook calendar filled in - tap Save there. No signal? Use Calendar File. Send to Claude puts it in a Claude chat that adds it for you.</div>`;
+  _schedKind(kind);
+}
+function _schedKind(k) {
+  if (!_schedCtx) return;
+  _schedCtx.kind = k;
+  document.querySelectorAll('.sched-kind').forEach(b => {
+    const on = b.dataset.k === k;
+    b.style.background = on ? 'var(--blue)' : ''; b.style.color = on ? '#fff' : '';
+  });
+  const len = document.getElementById('sched-len');
+  if (len && !_schedCtx.lenTouched) len.value = k === 'job' ? '1d' : k === 'estimate' ? '1h' : '30m';
+  if (len && !len._w) { len._w = 1; len.addEventListener('change', () => { _schedCtx.lenTouched = true; }); }
+}
+// Reads the sheet into one event. Times are local (the phone's clock, which is
+// New York time for James); all-day events use dates with an exclusive end.
+function _schedEvent() {
+  const g = id => (document.getElementById(id)?.value || '').trim();
+  const name = g('sched-name'), addr = g('sched-addr'), date = g('sched-date');
+  if (!date) { showToast('Pick a date', 'warn'); return null; }
+  const kind = SCHED_KINDS[_schedCtx?.kind || 'job'];
+  const len = g('sched-len') || '1h';
+  const n = parseInt(len, 10) || 1;
+  const allDay = len.endsWith('d');
+  const [y, mo, d] = date.split('-').map(Number);
+  let start, end;
+  if (allDay) {
+    start = new Date(y, mo - 1, d); end = new Date(y, mo - 1, d + n);
+  } else {
+    const [hh, mm] = (g('sched-time') || '09:00').split(':').map(Number);
+    start = new Date(y, mo - 1, d, hh, mm);
+    end = new Date(start.getTime() + (len.endsWith('m') ? n : n * 60) * 60000);
+  }
+  const title = `${kind}${name ? ' - ' + name : ''}`;
+  const body = [
+    name && `Client: ${name}`,
+    g('sched-phone') && `Phone: ${g('sched-phone')}`,
+    addr && `Address: ${addr}`,
+    g('sched-notes'),
+    'From PaintPro - Ingersoll Painting LLC'
+  ].filter(Boolean).join('\n');
+  return { title, name, addr, body, start, end, allDay, days: allDay ? n : 0, lenLabel: (SCHED_LENGTHS.find(x => x[0] === len) || [,''])[1] };
+}
+const _p2 = v => String(v).padStart(2, '0');
+function _ymd(dt) { return `${dt.getFullYear()}-${_p2(dt.getMonth()+1)}-${_p2(dt.getDate())}`; }
+function _localIso(dt) {
+  const off = -dt.getTimezoneOffset(), s = off >= 0 ? '+' : '-', a = Math.abs(off);
+  return `${_ymd(dt)}T${_p2(dt.getHours())}:${_p2(dt.getMinutes())}:00${s}${_p2(Math.floor(a/60))}:${_p2(a%60)}`;
+}
+function schedOutlookUrl(ev) {
+  const q = new URLSearchParams({ path: '/calendar/action/compose', rru: 'addevent', subject: ev.title, body: ev.body, location: ev.addr });
+  if (ev.allDay) { q.set('allday', 'true'); q.set('startdt', _ymd(ev.start)); q.set('enddt', _ymd(ev.end)); }
+  else { q.set('startdt', _localIso(ev.start)); q.set('enddt', _localIso(ev.end)); }
+  // outlook.office.com is the work/Exchange (Microsoft 365) calendar.
+  return 'https://outlook.office.com/calendar/0/deeplink/compose?' + q.toString();
+}
+function schedToOutlook() {
+  const ev = _schedEvent(); if (!ev) return;
+  window.open(schedOutlookUrl(ev), '_blank');
+  _schedLogToContact(ev);
+}
+function buildIcs(ev) {
+  const esc = s => String(s || '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/([,;])/g, '\\$1');
+  const utc = dt => dt.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const dOnly = dt => _ymd(dt).replace(/-/g, '');
+  const uid = 'pp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8) + '@paintpro';
+  const lines = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Ingersoll Painting//PaintPro//EN', 'METHOD:PUBLISH',
+    'BEGIN:VEVENT', 'UID:' + uid, 'DTSTAMP:' + utc(new Date()),
+    ev.allDay ? 'DTSTART;VALUE=DATE:' + dOnly(ev.start) : 'DTSTART:' + utc(ev.start),
+    ev.allDay ? 'DTEND;VALUE=DATE:' + dOnly(ev.end) : 'DTEND:' + utc(ev.end),
+    'SUMMARY:' + esc(ev.title),
+    ev.addr ? 'LOCATION:' + esc(ev.addr) : '',
+    'DESCRIPTION:' + esc(ev.body),
+    'BEGIN:VALARM', ev.allDay ? 'TRIGGER:-PT3H' : 'TRIGGER:-PT1H', 'ACTION:DISPLAY', 'DESCRIPTION:' + esc(ev.title), 'END:VALARM',
+    'END:VEVENT', 'END:VCALENDAR'
+  ].filter(Boolean);
+  return lines.join('\r\n') + '\r\n';
+}
+async function schedToIcs() {
+  const ev = _schedEvent(); if (!ev) return;
+  const fname = (ev.title.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') || 'event') + '.ics';
+  const file = new File([buildIcs(ev)], fname, { type: 'text/calendar' });
+  _schedLogToContact(ev);
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: ev.title }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = fname;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  showToast('📄 Saved - open it to add to your calendar');
+}
+function buildScheduleClaudeText(ev) {
+  const day = ev.start.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const tm = dt => dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const lastDay = new Date(ev.end.getTime() - 86400000);
+  const when = ev.allDay
+    ? (ev.days > 1 ? `All day, ${day} through ${lastDay.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} (${ev.days} days)` : `All day, ${day}`)
+    : `${day}, ${tm(ev.start)} to ${tm(ev.end)} (${ev.lenLabel})`;
+  return [
+    'Add this to my Outlook calendar using the Microsoft 365 connector. Time zone America/New_York. Do not invite anyone or email the client. Show busy.',
+    '',
+    `Title: ${ev.title}`,
+    `When: ${when}`,
+    ev.addr ? `Location: ${ev.addr}` : '',
+    '',
+    'Notes:',
+    ev.body,
+    '',
+    'Before adding it, check my Outlook calendar for anything that overlaps and tell me if something does.'
+  ].filter((l, i, a) => l !== '' || a[i - 1] !== '').join('\n');
+}
+async function schedToClaude() {
+  const ev = _schedEvent(); if (!ev) return;
+  const text = buildScheduleClaudeText(ev);
+  _schedLogToContact(ev);
+  let copied = false;
+  try { await navigator.clipboard.writeText(text); copied = true; } catch {}
+  if (navigator.share) {
+    try { await navigator.share({ title: 'Add to my Outlook calendar', text }); return; }
+    catch (e) { if (e && e.name === 'AbortError') { if (copied) showToast('📋 Copied - paste it into Claude'); return; } }
+  }
+  window.open('https://claude.ai/new?q=' + encodeURIComponent(text), '_blank');
+  showToast(copied ? '📋 Also copied - paste it if Claude opens empty' : 'Opening Claude');
+}
+// Remember the booked date on the client's card (the existing "Date" line).
+function _schedLogToContact(ev) {
+  try {
+    const list = loadContacts();
+    const id = _schedCtx && _schedCtx.contactId;
+    const c = id ? list.find(x => x.id === id)
+      : ev.name && list.find(x => (x.name || '').trim().toLowerCase() === ev.name.toLowerCase());
+    if (!c) return;
+    c.estimateDate = ev.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' (' + SCHED_KINDS[_schedCtx.kind || 'job'] + ')';
+    saveContacts(list);
+    if (typeof renderContacts === 'function') renderContacts();
+  } catch {}
+}
+
 function shareBid() {
   const client = document.getElementById('client-name').value.trim();
   const addr   = document.getElementById('job-address').value || '';
@@ -7977,6 +8171,7 @@ function buildContactCard(c) {
       <button class="ca-btn ca-text" onclick="toggleQuickTexts('${c.id}')" aria-label="Quick text ${_esc(c.name)}">💬 Quick Text</button>
       <button class="ca-btn ca-edit" onclick="openContactModal('${c.id}')" aria-label="Edit ${_esc(c.name)}">✏️ Edit</button>
       <button class="ca-btn ca-estimate" onclick="startEstimateFromClient('${c.id}')" aria-label="Start estimate for ${_esc(c.name)}">📋 Estimate</button>
+      <button class="ca-btn ca-edit" onclick="openScheduleSheet('${c.id}')" aria-label="Schedule ${_esc(c.name)} in Outlook">📅</button>
     </div>
     <div class="quick-texts" id="qt_${c.id}">
       ${buildQuickTexts(c)}

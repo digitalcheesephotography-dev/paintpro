@@ -367,6 +367,9 @@ Every interior room card has a **Closets (width x depth)** section that is **alw
 - **Closet doors / Closet windows** boxes (`room.closetDoors` / `room.closetWins`) appear once a closet is added; they count into the job's Doors and Windows at the same price each (`_roomDoors(r)` / `_roomWins(r)` = room + its closets, used by `jobExtras()` and the Doors & Windows card). The closet total on the card includes them.
 - Helpers: `addCloset`, `removeCloset`, `updateCloset` (updates labels only, never rebuilds the box being typed in), `toggleClosetSurf`, `renderClosets`, `armClosetShot`.
 
+### 7.16 Schedule in Outlook - built (Nov 5 2026)
+**📅 Schedule in Outlook** on the bid actions (under Research in Claude) and a **📅** button on every client card open `openScheduleSheet(contactId?)`: Estimate / Paint Job / Follow-up, client, address, date, start, how long (30 min to 2 work weeks; day lengths are all-day events), private notes. Three ways out: **Add to Outlook** (`schedOutlookUrl` -> `https://outlook.office.com/calendar/0/deeplink/compose?...`, his Exchange/M365 calendar, he taps Save), **Calendar File** (`buildIcs`, shared or downloaded, works offline) and **Send to Claude** (`buildScheduleClaudeText`: a Claude chat with the Microsoft 365 connector creates the event, checks overlaps, invites nobody). His Outlook account is jebailey@digitalcheese.us. The booked date is written to the client's card Date line (`_schedLogToContact`). No client is ever invited.
+
 ### 7.7 Backup & Restore
 - `buildBackup()` serializes all localStorage keys + IndexedDB photos into a JSON blob
 - `backupToDrive()` triggers a download of the backup JSON

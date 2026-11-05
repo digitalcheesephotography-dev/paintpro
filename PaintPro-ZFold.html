@@ -7653,7 +7653,8 @@ function buildScheduleClaudeText(ev) {
     ? (ev.days > 1 ? `All day, ${day} through ${lastDay.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} (${ev.days} days)` : `All day, ${day}`)
     : `${day}, ${tm(ev.start)} to ${tm(ev.end)} (${ev.lenLabel})`;
   return [
-    'Add this to my Outlook calendar (my Microsoft 365 / Exchange account, jebailey@digitalcheese.us). Time zone America/New_York. Do not invite anyone or email the client. Show busy.',
+    'Add this to my Outlook calendar (my Microsoft 365 / Exchange account, jebailey@digitalcheese.us). Time zone America/New_York. Do not invite or email the client. Show busy.',
+    'If you cannot reach Outlook, create it on my Google Calendar instead and invite jebailey@digitalcheese.us as the only guest, so it lands in my Outlook for me to accept.',
     '',
     `Title: ${ev.title}`,
     `When: ${when}`,

@@ -529,6 +529,24 @@ const cid=await p.evaluate(()=>{
 ok(cid.unique,'every client gets its own id (link-imported clients had none)');
 ok(cid.opened==='Lisa Test','Edit on a client card opens that client, not somebody else (got '+cid.opened+')');
 ok(cid.card,'a client card lists the proposal sent to that client');
+// Ask for a Google Review: texts the saved review link, never an em dash, and
+// stamps the card so James can see who was already asked.
+const rv=await p.evaluate(()=>{
+  const keepC=localStorage.getItem('ingersoll_contacts_v1'), keepL=localStorage.getItem('ingersoll_review_link_v1');
+  localStorage.setItem('ingersoll_contacts_v1', JSON.stringify([{id:'rv1',name:'Mary Jones',phone:'(315) 555-1212'}]));
+  localStorage.setItem('ingersoll_review_link_v1','https://g.page/r/TEST/review');
+  const c=loadContacts()[0];
+  const body=reviewRequestText(c);
+  const btn=/Ask for a Google Review/.test(buildContactCard(c).textContent);
+  c.reviewAskedAt=Date.now(); const stamped=/\(asked /.test(buildContactCard(c).textContent);
+  keepC===null?localStorage.removeItem('ingersoll_contacts_v1'):localStorage.setItem('ingersoll_contacts_v1',keepC);
+  keepL===null?localStorage.removeItem('ingersoll_review_link_v1'):localStorage.setItem('ingersoll_review_link_v1',keepL);
+  return {btn, stamped, hasLink:body.includes('https://g.page/r/TEST/review'), first:body.startsWith('Hi Mary,'), dash:body.includes('\u2014'),
+          synced:SYNC_KEYS.includes('ingersoll_review_link_v1'), backed:BACKUP_KEYS.includes('ingersoll_review_link_v1')};
+});
+ok(rv.btn && rv.stamped,'client card has an Ask for a Google Review button and shows when the client was asked');
+ok(rv.hasLink && rv.first && !rv.dash,'review text greets by first name, carries the review link, no em dash');
+ok(rv.synced && rv.backed,'review link syncs with the account and is in backups');
 
 console.log('5. Layout: no horizontal overflow, all tabs render');
 for (const w of [380,880]) {

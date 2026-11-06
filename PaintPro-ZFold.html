@@ -361,6 +361,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
 .ca-text{background:var(--green);color:#fff}
 .ca-edit{background:var(--panel);color:var(--text);border:1px solid var(--border)!important;border:none}
 .ca-estimate{background:var(--blue);color:#fff}
+.ca-review{display:block;width:100%;margin-top:8px;background:var(--panel);color:#f5c518;border:1px solid #f5c518!important}
 .quick-texts{margin-top:10px;display:none}
 .quick-texts.open{display:block}
 .qt-btn{display:block;width:100%;text-align:left;padding:10px 14px;background:var(--dark);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:13px;cursor:pointer;margin-bottom:6px;line-height:1.4}
@@ -1071,7 +1072,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     </button>
     <div id="refresh-status" style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px"></div>
     <!-- Bump with every user-visible fix so James can see his phone has it. -->
-    <div id="app-build" style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px">Version: Oct 29 2026 (New Job button)</div>
+    <div id="app-build" style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px">Version: Nov 6 2026 (Google review button)</div>
     <!-- Setup status — shows at a glance what still needs connecting -->
     <div id="setup-status" style="margin-top:16px"></div>
 
@@ -1133,6 +1134,21 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
       Save Payment Link
     </button>
     <div id="qb-paylink-status" style="font-size:13px;color:var(--muted);text-align:center;margin-top:10px"></div>
+  </div>
+
+  <!-- Google Review link (used by the Ask for Google Review button on every client card) -->
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px">
+    <div style="font-family:var(--head);font-size:20px;color:var(--blue);margin-bottom:4px">⭐ Google Review Link</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      Paste your Google review link once and every client card gets a <strong style="color:var(--text)">⭐ Ask for a Google Review</strong> button that texts it to them. To get the link: open the <em>Google Business Profile</em> (or Google Maps) app, go to your business, tap <em>Ask for reviews</em> (or <em>Get more reviews</em>), then <em>Copy link</em>. It looks like https://g.page/r/…/review.
+    </div>
+    <input type="text" id="review-link" inputmode="url" placeholder="https://g.page/r/…/review" autocomplete="off"
+           style="width:100%;background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:10px"/>
+    <button onclick="saveReviewLink()"
+            style="width:100%;height:50px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer">
+      Save Review Link
+    </button>
+    <div id="review-link-status" style="font-size:13px;color:var(--muted);text-align:center;margin-top:10px"></div>
   </div>
 
   <!-- AI Photo Estimator -->
@@ -1948,6 +1964,7 @@ const SYNC_KEYS = [
   // file, so the secret stays out of it.
   'ingersoll_anthropic_key_v1',
   'ingersoll_bcc_email_v1',
+  'ingersoll_review_link_v1',
 ];
 
 let _db = null;        // Firestore instance (null = local-only mode)
@@ -2248,6 +2265,56 @@ function syncDepositUI(){
   if (qbEl) qbEl.value = loadQbPayLink();
   const st = document.getElementById('qb-paylink-status');
   if (st && loadQbPayLink()) { st.textContent = '✓ Pay by Card button is on'; st.style.color = 'var(--green)'; }
+  syncReviewLinkUI();
+}
+
+// ── Google review request ─────────────────────
+// One saved link (Google Business Profile -> Ask for reviews -> Copy link);
+// every client card texts it to that client in one tap.
+const REVIEW_LINK_KEY = 'ingersoll_review_link_v1';
+function loadReviewLink(){ return (localStorage.getItem(REVIEW_LINK_KEY) || '').trim(); }
+function saveReviewLink(){
+  const el = document.getElementById('review-link');
+  const st = document.getElementById('review-link-status');
+  const set = (m, ok) => { if (st) { st.textContent = m; st.style.color = ok ? 'var(--green)' : 'var(--red)'; } };
+  if (!el) return;
+  const url = (el.value || '').trim();
+  if (!url) { localStorage.removeItem(REVIEW_LINK_KEY); set('Review link cleared.', true); showToast('Review link cleared'); return; }
+  if (!/^https:\/\/\S+$/i.test(url)) { set('The link must start with https://'); return; }
+  localStorage.setItem(REVIEW_LINK_KEY, url);
+  set('✓ Saved. Every client card now has an Ask for a Google Review button.', true);
+  showToast('✓ Google review link saved');
+}
+function syncReviewLinkUI(){
+  const el = document.getElementById('review-link');
+  if (el) el.value = loadReviewLink();
+  const st = document.getElementById('review-link-status');
+  if (st && loadReviewLink()) { st.textContent = '✓ Review button is on'; st.style.color = 'var(--green)'; }
+}
+function reviewRequestText(c){
+  const first = (c && c.name || '').trim().split(/\s+/)[0] || 'there';
+  return `Hi ${first}, this is James Bailey with Ingersoll Painting LLC. Thank you for choosing us for your project. If you were happy with the work, would you take a minute to leave us a Google review? It really helps a small local business like ours.\n\n${loadReviewLink()}\n\nThank you!\nIngersoll Painting LLC\n(315) 952-8259`;
+}
+function askForReview(id){
+  const link = loadReviewLink();
+  if (!link) {
+    showToast('Add your Google review link first', 'warn');
+    switchTab('settings'); openSettingsCard(/Google Review Link/i);
+    return;
+  }
+  const contacts = loadContacts();
+  const c = contacts.find(x => x.id === id);
+  if (!c) return;
+  const body = reviewRequestText(c);
+  const digits = (c.phone || '').replace(/\D/g, '');
+  // Remember when we asked, so the card can say so and nobody gets asked twice by accident.
+  c.reviewAskedAt = Date.now();
+  saveContacts(contacts);
+  renderContacts();
+  if (digits) { location.href = `sms:${digits}?body=${encodeURIComponent(body)}`; return; }
+  // No phone on file: hand the text to the share sheet (email, Messenger...) or copy it.
+  if (navigator.share) { navigator.share({ text: body }).catch(()=>{}); return; }
+  if (navigator.clipboard) navigator.clipboard.writeText(body).then(() => showToast('Review request copied. Paste it into a text.'), () => showToast(link));
 }
 
 
@@ -7673,7 +7740,7 @@ const SETTINGS_GROUPS = [
   { name: '🧰 TOOLS',              match: [/Color Visualizer/i, /Saved Passwords/i] },
   { name: '💾 BACKUP',             match: [/Backup/i] },
   { name: '⚙️ SETUP (SET ONCE)',   collapsed: true,
-    match: [/AI Key/i, /QuickBooks Pay Link/i, /Email Client/i, /App Lock/i, /Sign In/i, /Erase All Data/i, /About/i] },
+    match: [/AI Key/i, /QuickBooks Pay Link/i, /Google Review Link/i, /Email Client/i, /App Lock/i, /Sign In/i, /Erase All Data/i, /About/i] },
 ];
 function _settingsCardTitle(card) {
   const h = card.firstElementChild;
@@ -7978,6 +8045,7 @@ function buildContactCard(c) {
       <button class="ca-btn ca-edit" onclick="openContactModal('${c.id}')" aria-label="Edit ${_esc(c.name)}">✏️ Edit</button>
       <button class="ca-btn ca-estimate" onclick="startEstimateFromClient('${c.id}')" aria-label="Start estimate for ${_esc(c.name)}">📋 Estimate</button>
     </div>
+    <button class="ca-btn ca-review" onclick="event.stopPropagation();askForReview('${c.id}')" aria-label="Ask ${_esc(c.name)} for a Google review">⭐ Ask for a Google Review${c.reviewAskedAt ? ` <span style="color:var(--muted);font-weight:400">(asked ${new Date(c.reviewAskedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'})})</span>` : ''}</button>
     <div class="quick-texts" id="qt_${c.id}">
       ${buildQuickTexts(c)}
     </div>`;
@@ -9346,6 +9414,7 @@ const BACKUP_KEYS = [
   'ingersoll_proxy_url_v1',
   'ingersoll_deposit_v1',
   'ingersoll_qb_paylink_v1',
+  'ingersoll_review_link_v1',
   // ingersoll_anthropic_key_v1 and ingersoll_accounts_v1 excluded — contain secrets
 ];
 

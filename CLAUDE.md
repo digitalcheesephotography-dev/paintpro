@@ -440,6 +440,7 @@ Exterior: `front side` / `left side` / `name it garage` / `call it back`
 - Crown molding = **$4.00/linear ft** (James's own rate — covers caulking and painting), charged on top of Trim (see 7.14)
 - Cabinet door front = **$100 each**, drawer front = **$40 each** (James's own rates — off, sand, prime, two coats, rehang); box/frame = **$50 each**, still a placeholder (see 7.13)
 - Paint markup = **1.20× (20%)** — `const MARKUP = 1.20`
+- **Paint included in my price** (Nov 11 2026): a checkbox in the 💲 Labor Rates card sets `job.paintIncluded = '1'` (whole job, saved with it, in `JOB_DEFAULTS`). `calc()` then returns `mat = 0` while still counting gallons, so the $/sf price stands alone and nothing is added for paint. The bid, totals strip and Share text say "Included" for Paint & Materials. James asked for this on the Melissa Chioda job: "I want the square foot price to be what it is, but I don't want to add extra for the paint."
 - Do not change defaults; James edits per job when needed
 
 ---

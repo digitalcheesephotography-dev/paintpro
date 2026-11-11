@@ -518,6 +518,9 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
       </div>
       <div id="rates-body" style="display:none;padding:0 14px 14px">
         <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.4">Set your default $/sf here (trim is $/linear ft). These apply to every room unless you turn on custom rates inside a room.</div>
+        <label style="display:flex;align-items:center;gap:10px;min-height:44px;margin-bottom:10px;font-size:14px;color:var(--text);cursor:pointer">
+          <input type="checkbox" id="job-paint-included" onchange="updateJobField('paintIncluded',this.checked?'1':'')" style="width:22px;height:22px;flex:none"/>
+          <span>Paint included in my price (don't add paint on top)</span></label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <label class="field"><span id="rate-label-walls">Walls $/sf</span>
             <input type="text" inputmode="decimal" id="rate-walls" oninput="updateGlobalRate('walls',this.value)"/></label>
@@ -1072,7 +1075,7 @@ input.bt-flash{border-color:var(--blue);background:#0d2035;animation:btflash .5s
     </button>
     <div id="refresh-status" style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px"></div>
     <!-- Bump with every user-visible fix so James can see his phone has it. -->
-    <div id="app-build" style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px">Version: Nov 6 2026 (Google review button)</div>
+    <div id="app-build" style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px">Version: Nov 11 2026 (paint included option)</div>
     <!-- Setup status — shows at a glance what still needs connecting -->
     <div id="setup-status" style="margin-top:16px"></div>
 
@@ -1876,7 +1879,10 @@ const JOB_DEFAULTS = { doorCount:'', doorPrice:'75', winCount:'', winPrice:'50',
             shutterCount:'', shutterPrice:'25', washSF:'', washRate:'0.20',
             // Deck railings are priced by the linear foot and stair treads by
             // the piece — how James already writes them on his paper sheet.
-            railLF:'', railRate:'8.00', treadCount:'', treadPrice:'15' };
+            railLF:'', railRate:'8.00', treadCount:'', treadPrice:'15',
+            // '1' = the $/sf price already covers the paint, so no paint is
+            // charged on top. Gallons are still counted for the shopping list.
+            paintIncluded:'' };
 let job = { ...JOB_DEFAULTS };
 // Push every whole-job extras value into its input box. Start New Job and
 // Clear used to reset the numbers but leave some boxes showing the old ones
@@ -1886,6 +1892,7 @@ function _syncJobInputs() {
     'job-shutter-count':'shutterCount', 'job-shutter-price':'shutterPrice', 'job-wash-sf':'washSF', 'job-wash-rate':'washRate',
     'job-rail-lf':'railLF', 'job-rail-rate':'railRate', 'job-tread-count':'treadCount', 'job-tread-price':'treadPrice' };
   Object.entries(map).forEach(([id,k]) => { const el = document.getElementById(id); if (el) el.value = job[k] ?? ''; });
+  const pi = document.getElementById('job-paint-included'); if (pi) pi.checked = !!job.paintIncluded;
 }
 // Custom whole-job charges the Estimate Assistant (or manual add) puts on the
 // bid — e.g. Sheetrock repair, staining. [{label, amount}]
@@ -4584,7 +4591,7 @@ function calcExt(room) {
   const gal   = gSid + gSof + gPorch + gDck + gPerg + gTrim;
 
   const r   = room.rates || extRates;
-  const mat = gal * p.price * MARKUP;
+  const mat = job.paintIncluded ? 0 : gal * p.price * MARKUP;
   // Labor is the $/sf rate for the FINISHED job — coats do NOT multiply labor
   // (a second coat is not a second full labor charge). Coats still scale
   // materials (more gallons) above.
@@ -4636,7 +4643,7 @@ function calc(room) {
   const gCrown = crown.lf > 0 ? Math.ceil(crown.lf*c/p.cov) : 0;
   const gal    = gWall + gCeil + gFloor + gTrim + gCab + gCrown;
 
-  const mat = gal * p.price * MARKUP;
+  const mat = job.paintIncluded ? 0 : gal * p.price * MARKUP;
   // Labor is the $/sf rate for the FINISHED job — coats do NOT multiply labor
   // (a second coat is not a second full labor charge). Coats still scale
   // materials (more gallons) above. Cabinets are a flat price per piece, so
@@ -5908,7 +5915,7 @@ function recalcAll() {
   document.getElementById('totals-strip').classList.toggle('visible',any);
   document.getElementById('gen-btn').classList.toggle('visible',any);
   document.getElementById('claude-btn')?.classList.toggle('visible',any);
-  document.getElementById('tot-mat').textContent=fmt(mat);
+  document.getElementById('tot-mat').textContent=job.paintIncluded?'Included':fmt(mat);
   document.getElementById('tot-lab').textContent=fmt(lab);
   document.getElementById('tot-grand').textContent=fmt(grand);
   if(bidOpen) renderBid();
@@ -6156,7 +6163,7 @@ function renderBid() {
       <!-- TOTALS -->
       <div style="border-top:2px solid #111;padding-top:10px;margin-bottom:16px">
         <div style="display:flex;justify-content:space-between;font-size:13px;color:#555;margin-bottom:4px">
-          <span>Paint &amp; Materials</span><span>${fmt(mat)}</span>
+          <span>Paint &amp; Materials</span><span>${job.paintIncluded ? 'Included' : fmt(mat)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:13px;color:#555;margin-bottom:8px">
           <span>Project Services</span><span>${fmt(lab)}</span>
@@ -7665,7 +7672,7 @@ async function printAtHome() {
     `${roomLines}\n` +
     (doorLine || winLine ? `\nDOORS & WINDOWS\n${doorLine}${winLine}` : '') +
     `\n` +
-    `Materials: ${fmt(mat)}\n` +
+    `Materials: ${job.paintIncluded ? 'Included' : fmt(mat)}\n` +
     `Labor:     ${fmt(lab)}\n` +
     `─────────────────────\n` +
     `TOTAL:     ${fmt(grand)}\n\n` +

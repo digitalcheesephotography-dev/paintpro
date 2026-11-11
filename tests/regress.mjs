@@ -548,6 +548,23 @@ ok(rv.btn && rv.stamped,'client card has an Ask for a Google Review button and s
 ok(rv.hasLink && rv.first && !rv.dash,'review text greets by first name, carries the review link, no em dash');
 ok(rv.synced && rv.backed,'review link syncs with the account and is in backups');
 
+// Paint included in the price (James, Nov 2026): labor stays, no paint on top
+const pin=await p.evaluate(()=>{
+  switchMode('interior'); rooms.length=0; roomCount=0; document.getElementById('rooms-container').innerHTML='';
+  job={...JOB_DEFAULTS}; _syncJobInputs(); addRoom();
+  ['14','12','14','12'].forEach((f,i)=>rooms[0].walls.push({id:'pi'+i,ft:f,ht:''}));
+  const c1=calc(rooms[0]);
+  const cb=document.getElementById('job-paint-included'); cb.checked=true; cb.dispatchEvent(new Event('change'));
+  const c2=calc(rooms[0]); recalcAll();
+  const strip=document.getElementById('tot-mat').textContent;
+  const snap=getJobSnapshot(); job={...JOB_DEFAULTS}; _syncJobInputs(); applyJobData(snap);
+  const kept=job.paintIncluded==='1' && document.getElementById('job-paint-included').checked;
+  job.paintIncluded=''; _syncJobInputs();
+  return {lab1:c1.lab,lab2:c2.lab,mat1:c1.mat,mat2:c2.mat,gal:c2.gal,strip,kept};
+});
+ok(pin.mat1>0 && pin.mat2===0 && pin.lab1===pin.lab2 && pin.gal>0,'paint included: labor unchanged, paint $0, gallons still counted');
+ok(pin.strip==='Included' && pin.kept,'paint included shows "Included" and survives save/load');
+
 console.log('5. Layout: no horizontal overflow, all tabs render');
 for (const w of [380,880]) {
   const q = w===380 ? p : await mk(880);

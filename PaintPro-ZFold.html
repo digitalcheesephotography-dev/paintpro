@@ -9326,7 +9326,7 @@ function buildEstimateSummary(){
   const liLines = jobLineItems.length ? jobLineItems.map(li => `- ${li.label}: ${fmt(parseFloat(li.amount)||0)}`).join('\n') : '(none)';
   const mat = cs.reduce((a,c)=>a+c.mat,0);
   const lab = cs.reduce((a,c)=>a+c.lab,0) + ex.total;
-  return `Mode: ${estimatorMode}\nRooms:\n${roomLines}\nDoors: ${ex.doorCount}, Windows: ${ex.winCount}${ex.shutterCount ? ', Shutters: ' + ex.shutterCount : ''}\nCustom charges:\n${liLines}\nCurrent estimate total: ${fmt(mat + lab)}`;
+  return `Mode: ${estimatorMode}\nPaint included switch: ${job.paintIncluded ? 'ON (materials $0, bid says Included)' : 'OFF (materials charged)'}\nRooms:\n${roomLines}\nDoors: ${ex.doorCount}, Windows: ${ex.winCount}${ex.shutterCount ? ', Shutters: ' + ex.shutterCount : ''}\nCustom charges:\n${liLines}\nCurrent estimate total: ${fmt(mat + lab)}`;
 }
 function renderAssistantMsgs(){
   const box = document.getElementById('assistant-msgs');
@@ -9358,8 +9358,10 @@ Rooms you can target by name: ${roomNames}
 Be brief and practical. When the user asks to add or change something, DO it and confirm in ONE short sentence, then put a JSON action block on its own final line — no markdown, no code fences:
 {"actions":[{"type":"addLineItem","label":"Sheetrock repair - kitchen","amount":400}]}
 Action types:
+- {"type":"setPaintIncluded","on":true} — turn the Paint included switch ON (materials become $0, labor untouched). Use this whenever the user says take off / remove / drop / no materials, no paint, client supplies paint, or materials included. {"on":false} puts materials back.
 - {"type":"addLineItem","label":"<short label>","amount":<dollars, number>} — add a charge to the estimate.
 - {"type":"updateRoom","room":"<room name>","update":{"height":9,"walls":[12,10,12,10],"floorLength":14,"floorWidth":12,"doors":2,"windows":3,"surfaceNotes":"..."}} — change a room's numbers (only include fields that changed).
+NEVER add a negative or $0 line item, and never use a line item to remove, discount or credit anything. Line items count as LABOR, so a minus line cuts his labor. To remove materials use setPaintIncluded. If he asks for a discount, tell him to adjust the rates instead.
 Only include the JSON line when you actually changed something. If the user just asks a question, answer briefly with NO JSON.`;
 
   const history = assistantChat.slice(-12);
@@ -9373,13 +9375,23 @@ Only include the JSON line when you actually changed something. If the user just
     // Pull a trailing {"actions":[...]} line if present (tolerate ``` fences).
     const lines = responseText.split('\n').map(l => l.trim()).filter(l => l && !/^```/.test(l));
     const last = lines.at(-1) || '';
-    let applied = 0;
+    let applied = 0, blocked = 0;
     if (last.startsWith('{') && last.indexOf('"actions"') !== -1) {
       try {
         const parsed = JSON.parse(last);
         if (Array.isArray(parsed.actions)) {
           parsed.actions.forEach(a => {
-            if (a.type === 'addLineItem' && (a.amount || a.label)) { addJobLineItem(a.label, a.amount); applied++; }
+            if (a.type === 'setPaintIncluded') {
+              job.paintIncluded = a.on === false ? '' : '1';
+              const pi = document.getElementById('job-paint-included'); if (pi) pi.checked = !!job.paintIncluded;
+              applied++;
+            }
+            else if (a.type === 'addLineItem' && (a.amount || a.label)) {
+              // A minus line silently came out of LABOR (Nov 25 2026: "take off
+              // materials" cut $777 from labor). Positive charges only.
+              if ((parseFloat(a.amount) || 0) > 0) { addJobLineItem(a.label, a.amount); applied++; }
+              else blocked++;
+            }
             else if (a.type === 'updateRoom' && a.room && a.update) {
               const want = String(a.room).toLowerCase().trim();
               const rm = rooms.find(r => (r.name||'').toLowerCase().trim() === want)
@@ -9389,6 +9401,7 @@ Only include the JSON line when you actually changed something. If the user just
           });
         }
         responseText = responseText.slice(0, responseText.lastIndexOf(last)).replace(/```(?:json)?\s*$/, '').trim() || (applied ? '✓ Done.' : responseText);
+        if (blocked) responseText += ' (Skipped a minus charge: it would have come out of labor. To drop materials, say "paint included".)';
       } catch(_) { /* leave text as-is if the JSON doesn't parse */ }
     }
     assistantChat.push({ role: 'assistant', text: responseText });
